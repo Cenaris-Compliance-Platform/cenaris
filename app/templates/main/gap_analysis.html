@@ -1,0 +1,512 @@
+{% extends "base.html" %} {% block content %}
+<div class="fade-in">
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h2 fw-bold text-dark mb-1">Compliance Gap Analysis</h1>
+          <p class="text-muted mb-0">
+            Identify and track compliance requirements and gaps across
+            frameworks
+          </p>
+        </div>
+        <div class="d-none d-md-block">
+          <i class="bi bi-graph-up text-primary" style="font-size: 2.5rem"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="row mb-4">
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                <i
+                  class="bi bi-list-check text-primary"
+                  style="font-size: 1.5rem"
+                ></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ summary_stats.total }}</div>
+              <div class="text-muted small">Total Requirements</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-success bg-opacity-10 rounded-3 p-3">
+                <i
+                  class="bi bi-check-circle text-success"
+                  style="font-size: 1.5rem"
+                ></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ summary_stats.met }}</div>
+              <div class="text-muted small">Requirements Met</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-warning bg-opacity-10 rounded-3 p-3">
+                <i
+                  class="bi bi-clock text-warning"
+                  style="font-size: 1.5rem"
+                ></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ summary_stats.pending }}</div>
+              <div class="text-muted small">Pending Review</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-danger bg-opacity-10 rounded-3 p-3">
+                <i
+                  class="bi bi-x-circle text-danger"
+                  style="font-size: 1.5rem"
+                ></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ summary_stats.not_met }}</div>
+              <div class="text-muted small">Gaps Identified</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="row mb-4">
+    <!-- Compliance Overview Chart -->
+    <div class="col-lg-6 mb-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-pie-chart me-2 text-primary"></i>Compliance Overview
+          </h5>
+        </div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <!-- Placeholder for Pie Chart -->
+          <div class="text-center">
+            <div class="position-relative d-inline-block mb-3">
+              <svg width="200" height="200" class="compliance-chart">
+                <!-- Met (Green) -->
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="80"
+                  fill="none"
+                  stroke="#e9ecef"
+                  stroke-width="20"
+                />
+                {% if summary_stats.total > 0 %}
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="80"
+                  fill="none"
+                  stroke="#28a745"
+                  stroke-width="20"
+                  stroke-dasharray="{{ (summary_stats.met / summary_stats.total * 502)|round }}, 502"
+                  stroke-linecap="round"
+                  transform="rotate(-90 100 100)"
+                />
+                <!-- Pending (Yellow) -->
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="80"
+                  fill="none"
+                  stroke="#ffc107"
+                  stroke-width="20"
+                  stroke-dasharray="{{ (summary_stats.pending / summary_stats.total * 502)|round }}, 502"
+                  stroke-dashoffset="-{{ (summary_stats.met / summary_stats.total * 502)|round }}"
+                  stroke-linecap="round"
+                  transform="rotate(-90 100 100)"
+                />
+                <!-- Not Met (Red) -->
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="80"
+                  fill="none"
+                  stroke="#dc3545"
+                  stroke-width="20"
+                  stroke-dasharray="{{ (summary_stats.not_met / summary_stats.total * 502)|round }}, 502"
+                  stroke-dashoffset="-{{ ((summary_stats.met + summary_stats.pending) / summary_stats.total * 502)|round }}"
+                  stroke-linecap="round"
+                  transform="rotate(-90 100 100)"
+                />
+                {% endif %}
+              </svg>
+              <div
+                class="position-absolute top-50 start-50 translate-middle text-center"
+              >
+                <div class="h2 fw-bold mb-0 text-primary">
+                  {{ summary_stats.compliance_percentage }}%
+                </div>
+                <small class="text-muted">Compliant</small>
+              </div>
+            </div>
+            <div class="d-flex justify-content-center gap-3">
+              <div class="text-center">
+                <div class="d-flex align-items-center mb-1">
+                  <div
+                    class="bg-success rounded-circle me-2"
+                    style="width: 12px; height: 12px"
+                  ></div>
+                  <small class="fw-medium">Met</small>
+                </div>
+                <div class="fw-bold">{{ summary_stats.met }}</div>
+              </div>
+              <div class="text-center">
+                <div class="d-flex align-items-center mb-1">
+                  <div
+                    class="bg-warning rounded-circle me-2"
+                    style="width: 12px; height: 12px"
+                  ></div>
+                  <small class="fw-medium">Pending</small>
+                </div>
+                <div class="fw-bold">{{ summary_stats.pending }}</div>
+              </div>
+              <div class="text-center">
+                <div class="d-flex align-items-center mb-1">
+                  <div
+                    class="bg-danger rounded-circle me-2"
+                    style="width: 12px; height: 12px"
+                  ></div>
+                  <small class="fw-medium">Gaps</small>
+                </div>
+                <div class="fw-bold">{{ summary_stats.not_met }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress by Framework -->
+    <div class="col-lg-6 mb-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-bar-chart me-2 text-primary"></i>Progress by
+            Framework
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="fw-medium">SOX Compliance</span>
+              <span class="text-muted">85%</span>
+            </div>
+            <div class="progress mb-1" style="height: 8px">
+              <div class="progress-bar bg-success" style="width: 85%"></div>
+            </div>
+            <small class="text-muted">3 of 4 requirements met</small>
+          </div>
+
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="fw-medium">GDPR</span>
+              <span class="text-muted">60%</span>
+            </div>
+            <div class="progress mb-1" style="height: 8px">
+              <div class="progress-bar bg-warning" style="width: 60%"></div>
+            </div>
+            <small class="text-muted">1 of 2 requirements pending</small>
+          </div>
+
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="fw-medium">ISO 27001</span>
+              <span class="text-muted">100%</span>
+            </div>
+            <div class="progress mb-1" style="height: 8px">
+              <div class="progress-bar bg-success" style="width: 100%"></div>
+            </div>
+            <small class="text-muted">1 of 1 requirements met</small>
+          </div>
+
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="fw-medium">PCI DSS</span>
+              <span class="text-muted">30%</span>
+            </div>
+            <div class="progress mb-1" style="height: 8px">
+              <div class="progress-bar bg-danger" style="width: 30%"></div>
+            </div>
+            <small class="text-muted">1 of 1 requirements not met</small>
+          </div>
+
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="fw-medium">HIPAA</span>
+              <span class="text-muted">100%</span>
+            </div>
+            <div class="progress mb-1" style="height: 8px">
+              <div class="progress-bar bg-success" style="width: 100%"></div>
+            </div>
+            <small class="text-muted">1 of 1 requirements met</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gap Analysis Table -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-table me-2 text-primary"></i>
+              Compliance Requirements Analysis
+            </h5>
+            <div class="d-flex gap-2">
+              <div class="dropdown">
+                <button
+                  class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                >
+                  <i class="bi bi-funnel me-1"></i>Filter
+                </button>
+                <ul class="dropdown-menu">
+                  <li>
+                    <a
+                      class="dropdown-item"
+                      href="#"
+                      onclick="filterTable('all')"
+                      >All Status</a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      class="dropdown-item"
+                      href="#"
+                      onclick="filterTable('Met')"
+                      >Met Only</a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      class="dropdown-item"
+                      href="#"
+                      onclick="filterTable('Pending')"
+                      >Pending Only</a
+                    >
+                  </li>
+                  <li>
+                    <a
+                      class="dropdown-item"
+                      href="#"
+                      onclick="filterTable('Not Met')"
+                      >Gaps Only</a
+                    >
+                  </li>
+                </ul>
+              </div>
+              <button
+                class="btn btn-sm btn-primary"
+                onclick="showComingSoon('Generate Report')"
+              >
+                <i class="bi bi-file-earmark-text me-1"></i>Generate Report
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle" id="gapAnalysisTable">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-list-check me-1"></i>Requirement Name
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-check-circle me-1"></i>Status
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-graph-up me-1"></i>Progress
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-file-earmark me-1"></i>Supporting Evidence
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-calendar me-1"></i>Last Updated
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-gear me-1"></i>Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in gap_data %}
+                <tr data-status="{{ item.status }}">
+                  <td>
+                    <div class="fw-medium">{{ item.requirement_name }}</div>
+                  </td>
+                  <td>
+                    {% set status_class = 'bg-success' if item.status == 'Met' else 'bg-warning' if item.status == 'Pending' else 'bg-danger' %}
+                    <span class="badge {{ status_class }}">
+                      {% if item.status == 'Met' %}
+                      <i class="bi bi-check-circle me-1"></i>
+                      {% elif item.status == 'Pending' %}
+                      <i class="bi bi-clock me-1"></i>
+                      {% else %}
+                      <i class="bi bi-x-circle me-1"></i>
+                      {% endif %} {{ item.status }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <div
+                        class="progress me-2"
+                        style="width: 80px; height: 6px"
+                      >
+                        {% set progress_class = 'bg-success' if item.completion_percentage >= 100 else 'bg-info' if item.completion_percentage >= 75 else 'bg-warning' if item.completion_percentage >= 50 else 'bg-danger' %}
+                        <div class="progress-bar {{ progress_class }}" 
+                             style="width: {{ item.completion_percentage }}%"></div>
+                      </div>
+                      <small class="fw-medium"
+                        >{{ item.completion_percentage }}%</small
+                      >
+                    </div>
+                  </td>
+                  <td>
+                    <small class="text-muted"
+                      >{{ item.supporting_evidence }}</small
+                    >
+                  </td>
+                  <td>
+                    <small
+                      >{{ item.last_updated | datetime_format('%b %d, %Y')
+                      }}</small
+                    >
+                  </td>
+                  <td>
+                    <div class="dropdown">
+                      <button
+                        class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                        type="button"
+                        data-bs-toggle="dropdown"
+                      >
+                        <i class="bi bi-three-dots"></i>
+                      </button>
+                      <ul class="dropdown-menu">
+                        <li>
+                          <a
+                            class="dropdown-item"
+                            href="#"
+                            onclick="showComingSoon('View Details')"
+                          >
+                            <i class="bi bi-eye me-2"></i>View Details
+                          </a>
+                        </li>
+                        <li>
+                          <a
+                            class="dropdown-item"
+                            href="#"
+                            onclick="showComingSoon('Update Status')"
+                          >
+                            <i class="bi bi-pencil me-2"></i>Update Status
+                          </a>
+                        </li>
+                        <li>
+                          <a
+                            class="dropdown-item"
+                            href="#"
+                            onclick="showComingSoon('Add Evidence')"
+                          >
+                            <i class="bi bi-plus-circle me-2"></i>Add Evidence
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  function filterTable(status) {
+    const table = document.getElementById("gapAnalysisTable");
+    const rows = table.querySelectorAll("tbody tr");
+
+    rows.forEach((row) => {
+      const rowStatus = row.getAttribute("data-status");
+      if (status === "all" || rowStatus === status) {
+        row.style.display = "";
+      } else {
+        row.style.display = "none";
+      }
+    });
+  }
+
+  // Add missing showComingSoon function
+  function showComingSoon(feature) {
+    // Create and show a professional toast notification instead of alert
+    const toastDiv = document.createElement("div");
+    toastDiv.className =
+      "toast align-items-center text-white bg-info border-0 position-fixed";
+    toastDiv.style.cssText = "top: 20px; right: 20px; z-index: 9999;";
+    toastDiv.setAttribute("role", "alert");
+    toastDiv.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-info-circle me-2"></i>${feature} functionality is coming soon!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+
+    document.body.appendChild(toastDiv);
+    const toast = new bootstrap.Toast(toastDiv);
+    toast.show();
+
+    // Remove element after toast is hidden
+    toastDiv.addEventListener("hidden.bs.toast", () => {
+      toastDiv.remove();
+    });
+  }
+</script>
+{% endblock %}

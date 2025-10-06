@@ -19,18 +19,18 @@ with app.app_context():
         print("Database initialized successfully!")
 
 if __name__ == '__main__':
-    print("🚀 Starting Compliance Document Management System...")
-    print("📊 Dashboard will be available at: http://127.0.0.1:5000")
+    print("🚀 Starting Cenaris Compliance Management System...")
+    print("📊 Dashboard will be available at: http://127.0.0.1:8080")
     print("🔐 Create an account or use sample users:")
     print("   • admin@compliance.com / admin123")
     print("   • user@compliance.com / user123")
-    print("\n⚠️  Note: Azure Storage is not configured. File uploads will show an error.")
-    print("   To enable uploads, set AZURE_STORAGE_CONNECTION_STRING in your .env file")
+    print("\n✅ Azure Storage is configured and ready!")
+    print("   Files will be stored in: cenarisblobstorage/user-uploads")
     print("\n🛑 Press Ctrl+C to stop the server\n")
     
     app.run(
         host='127.0.0.1',
-        port=5000,
+        port=8080,
         debug=True,
         use_reloader=True
     )

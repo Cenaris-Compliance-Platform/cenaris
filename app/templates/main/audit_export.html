@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 fw-bold text-dark mb-1">Audit Export & Reporting</h1>
+                    <p class="text-muted mb-0">Generate and export comprehensive compliance reports and audit documentation</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" onclick="showComingSoon('Schedule Export')">
+                        <i class="bi bi-calendar-plus me-2"></i>Schedule Export
+                    </button>
+                    <button class="btn btn-primary" onclick="showComingSoon('Custom Report')">
+                        <i class="bi bi-plus-lg me-2"></i>Custom Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Summary Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-file-earmark-text text-primary" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">{{ export_stats.total_reports }}</div>
+                            <div class="text-muted small">Available Reports</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-success bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-check-circle text-success" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">{{ export_stats.ready_reports }}</div>
+                            <div class="text-muted small">Ready to Export</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-info bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-download text-info" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">{{ export_stats.recent_exports }}</div>
+                            <div class="text-muted small">Recent Exports</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-warning bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-hdd text-warning" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">{{ export_stats.total_size }}</div>
+                            <div class="text-muted small">Total Size</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Available Reports -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-file-earmark-arrow-down me-2 text-primary"></i>
+                            Available Reports
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-funnel me-1"></i>Filter
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="filterReports('all')">All Reports</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="filterReports('Ready')">Ready Only</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="filterReports('Needs Update')">Needs Update</a></li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showComingSoon('Refresh All')">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Refresh All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        {% for report in available_reports %}
+                            <div class="col-lg-6 col-xl-4" data-status="{{ report.status }}">
+                                <div class="card h-100 border shadow-sm">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <div class="flex-grow-1">
+                                                <h6 class="card-title fw-bold mb-1">{{ report.name }}</h6>
+                                                <span class="badge 
+                                                    {% if report.status == 'Ready' %}bg-success
+                                                    {% else %}bg-warning{% endif %} mb-2">
+                                                    {{ report.status }}
+                                                </span>
+                                            </div>
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                        type="button" data-bs-toggle="dropdown">
+                                                    <i class="bi bi-three-dots"></i>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    {% for format in report.format %}
+                                                        <li>
+                                                            <a class="dropdown-item" href="#" onclick="exportReport({{ report.id }}, '{{ format }}')">
+                                                                <i class="bi bi-file-earmark-{{ format.lower() }} me-2"></i>Export as {{ format }}
+                                                            </a>
+                                                        </li>
+                                                    {% endfor %}
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="#" onclick="showComingSoon('Preview')">
+                                                            <i class="bi bi-eye me-2"></i>Preview
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        
+                                        <p class="card-text text-muted small mb-3">{{ report.description }}</p>
+                                        
+                                        <div class="mb-3">
+                                            <div class="d-flex flex-wrap gap-1">
+                                                {% for framework in report.frameworks %}
+                                                    <span class="badge bg-light text-dark border">{{ framework }}</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row g-2 text-center small text-muted mb-3">
+                                            <div class="col-6">
+                                                <div class="fw-medium">{{ report.file_size }}</div>
+                                                <div>Size</div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="fw-medium">{{ report.estimated_time }}</div>
+                                                <div>Est. Time</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="d-grid gap-2">
+                                            {% if report.status == 'Ready' %}
+                                                <div class="btn-group" role="group">
+                                                    <button class="btn btn-primary btn-sm" onclick="exportReport({{ report.id }}, 'PDF')">
+                                                        <i class="bi bi-download me-1"></i>Export PDF
+                                                    </button>
+                                                    <div class="btn-group" role="group">
+                                                        <button class="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" 
+                                                                data-bs-toggle="dropdown"></button>
+                                                        <ul class="dropdown-menu">
+                                                            {% for format in report.format %}
+                                                                <li>
+                                                                    <a class="dropdown-item" href="#" onclick="exportReport({{ report.id }}, '{{ format }}')">
+                                                                        {{ format }}
+                                                                    </a>
+                                                                </li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            {% else %}
+                                                <button class="btn btn-outline-warning btn-sm" onclick="showComingSoon('Update Report')">
+                                                    <i class="bi bi-arrow-clockwise me-1"></i>Update Required
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <div class="mt-2 text-center">
+                                            <small class="text-muted">
+                                                Last generated: {{ report.last_generated | datetime_format('%b %d, %Y') }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Exports -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-clock-history me-2 text-primary"></i>
+                            Recent Exports
+                        </h5>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="showComingSoon('View All')">
+                            <i class="bi bi-list me-1"></i>View All
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if recent_exports %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col" class="border-0">
+                                            <i class="bi bi-file-earmark me-1"></i>Report Name
+                                        </th>
+                                        <th scope="col" class="border-0">
+                                            <i class="bi bi-person me-1"></i>Exported By
+                                        </th>
+                                        <th scope="col" class="border-0">
+                                            <i class="bi bi-calendar me-1"></i>Export Date
+                                        </th>
+                                        <th scope="col" class="border-0">
+                                            <i class="bi bi-file-type me-1"></i>Format
+                                        </th>
+                                        <th scope="col" class="border-0">
+                                            <i class="bi bi-hdd me-1"></i>Size
+                                        </th>
+                                        <th scope="col" class="border-0">
+                                            <i class="bi bi-gear me-1"></i>Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for export in recent_exports %}
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <div class="flex-shrink-0 me-3">
+                                                        <i class="bi bi-file-earmark-check text-success" style="font-size: 1.2rem;"></i>
+                                                    </div>
+                                                    <div class="fw-medium">{{ export.report_name }}</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <small>{{ export.exported_by }}</small>
+                                            </td>
+                                            <td>
+                                                <small>{{ export.export_date | datetime_format('%b %d, %Y') }}</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-light text-dark">{{ export.format }}</span>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">{{ export.file_size }}</small>
+                                            </td>
+                                            <td>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                            type="button" data-bs-toggle="dropdown">
+                                                        <i class="bi bi-three-dots"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu">
+                                                        <li>
+                                                            <a class="dropdown-item" href="#" onclick="showComingSoon('Download')">
+                                                                <i class="bi bi-download me-2"></i>Download
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item" href="#" onclick="showComingSoon('Share')">
+                                                                <i class="bi bi-share me-2"></i>Share
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger" href="#" onclick="showComingSoon('Delete')">
+                                                                <i class="bi bi-trash me-2"></i>Delete
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-inbox text-muted" style="font-size: 3rem; opacity: 0.3;"></i>
+                            <p class="text-muted mt-3 mb-0">No recent exports</p>
+                            <small class="text-muted">Export your first report to see it here</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Progress Modal -->
+<div class="modal fade" id="exportProgressModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-download me-2"></i>Exporting Report
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <h6 id="exportReportName">Generating Report...</h6>
+                <p class="text-muted mb-3" id="exportStatus">Preparing data and formatting document</p>
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         id="exportProgress" style="width: 0%"></div>
+                </div>
+                <small class="text-muted">This may take a few minutes depending on report size</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="cancelExport()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function filterReports(status) {
+        const cards = document.querySelectorAll('[data-status]');
+        cards.forEach(card => {
+            const cardStatus = card.getAttribute('data-status');
+            if (status === 'all' || cardStatus === status) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+    
+    function exportReport(reportId, format) {
+        // Show progress modal
+        const modal = new bootstrap.Modal(document.getElementById('exportProgressModal'));
+        modal.show();
+        
+        // Simulate export progress
+        const reportNames = {
+            1: 'SOX Compliance Report',
+            2: 'GDPR Data Protection Audit',
+            3: 'ISO 27001 Security Assessment',
+            4: 'PCI DSS Compliance Gap Analysis',
+            5: 'Comprehensive Compliance Dashboard'
+        };
+        
+        document.getElementById('exportReportName').textContent = reportNames[reportId] || 'Report';
+        document.getElementById('exportStatus').textContent = `Generating ${format} format...`;
+        
+        let progress = 0;
+        const progressBar = document.getElementById('exportProgress');
+        
+        const interval = setInterval(() => {
+            progress += Math.random() * 20;
+            if (progress >= 100) {
+                progress = 100;
+                clearInterval(interval);
+                
+                // Simulate completion
+                setTimeout(() => {
+                    modal.hide();
+                    showSuccessMessage(`${reportNames[reportId]} exported successfully as ${format}!`);
+                }, 500);
+            }
+            progressBar.style.width = progress + '%';
+        }, 300);
+    }
+    
+    function cancelExport() {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('exportProgressModal'));
+        modal.hide();
+    }
+    
+    function showSuccessMessage(message) {
+        // Create and show success alert
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed';
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alertDiv.innerHTML = `
+            <i class="bi bi-check-circle-fill me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(alertDiv);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+</script>
+{% endblock %}

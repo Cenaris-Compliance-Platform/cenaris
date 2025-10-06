@@ -1,263 +1,341 @@
-{% extends "base.html" %}
-
-{% block content %}
+{% extends "base.html" %} {% block content %}
 <div class="fade-in">
-    <!-- Welcome Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h1 class="h2 fw-bold text-dark mb-1">Welcome back, {{ current_user.email.split('@')[0].title() }}</h1>
-                    <p class="text-muted mb-0">Manage your compliance documents securely and efficiently</p>
-                </div>
-                <div class="d-none d-md-block">
-                    <i class="bi bi-speedometer2 text-primary" style="font-size: 2.5rem;"></i>
-                </div>
-            </div>
+  <!-- Welcome Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h2 fw-bold text-dark mb-1">
+            Welcome back, {{ current_user.email.split('@')[0].title() }}
+          </h1>
+          <p class="text-muted mb-0">
+            Manage your compliance documents securely and efficiently
+          </p>
         </div>
+        <div class="d-none d-md-block">
+          <i
+            class="bi bi-speedometer2 text-primary"
+            style="font-size: 2.5rem"
+          ></i>
+        </div>
+      </div>
     </div>
-    
-    <!-- Stats Cards -->
-    <div class="row mb-4">
-        <div class="col-md-6 col-lg-3 mb-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0">
-                            <div class="bg-primary bg-opacity-10 rounded-3 p-3">
-                                <i class="bi bi-files text-primary" style="font-size: 1.5rem;"></i>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <div class="fw-bold h4 mb-0">{{ total_documents }}</div>
-                            <div class="text-muted small">Total Documents</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-6 col-lg-3 mb-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0">
-                            <div class="bg-success bg-opacity-10 rounded-3 p-3">
-                                <i class="bi bi-cloud-check text-success" style="font-size: 1.5rem;"></i>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <div class="fw-bold h4 mb-0">{{ total_documents }}</div>
-                            <div class="text-muted small">Stored Securely</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-6 col-lg-3 mb-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0">
-                            <div class="bg-info bg-opacity-10 rounded-3 p-3">
-                                <i class="bi bi-shield-check text-info" style="font-size: 1.5rem;"></i>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <div class="fw-bold h4 mb-0">100%</div>
-                            <div class="text-muted small">Compliant</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-6 col-lg-3 mb-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0">
-                            <div class="bg-warning bg-opacity-10 rounded-3 p-3">
-                                <i class="bi bi-clock text-warning" style="font-size: 1.5rem;"></i>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <div class="fw-bold h4 mb-0">24/7</div>
-                            <div class="text-muted small">Available</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Main Content Row -->
-    <div class="row">
-        <!-- Upload Section -->
-        <div class="col-lg-8 mb-4">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-bottom">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-cloud-upload me-2 text-primary"></i>Upload Documents
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="text-center py-5">
-                        <div class="mb-4">
-                            <i class="bi bi-cloud-upload text-primary" style="font-size: 4rem; opacity: 0.7;"></i>
-                        </div>
-                        <h6 class="fw-bold mb-3">Upload Your Compliance Documents</h6>
-                        <p class="text-muted mb-4">
-                            Securely upload PDF and DOCX files to your compliance repository. 
-                            All files are encrypted and stored in Azure Blob Storage.
-                        </p>
-                        
-                        <!-- Upload Form -->
-                        <form id="uploadForm" action="{{ url_for('upload.upload_file') }}" method="post" enctype="multipart/form-data">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            
-                            <div class="mb-3">
-                                <input type="file" class="form-control form-control-lg" id="fileInput" name="file" 
-                                       accept=".pdf,.docx" required>
-                            </div>
-                            
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-                                <button type="submit" class="btn btn-primary btn-lg px-4">
-                                    <i class="bi bi-upload me-2"></i>Upload Document
-                                </button>
-                                <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-primary btn-lg px-4">
-                                    <i class="bi bi-folder2-open me-2"></i>View Repository
-                                </a>
-                            </div>
-                        </form>
-                        
-                        <div class="mt-3">
-                            <small class="text-muted">
-                                <i class="bi bi-info-circle me-1"></i>
-                                Supported formats: PDF, DOCX • Maximum file size: 16MB
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Recent Documents -->
-        <div class="col-lg-4 mb-4">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-bottom">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-clock-history me-2 text-primary"></i>Recent Documents
-                        </h5>
-                        <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-sm btn-outline-primary">
-                            View All
-                        </a>
-                    </div>
-                </div>
-                <div class="card-body">
-                    {% if recent_documents %}
-                        <div class="list-group list-group-flush">
-                            {% for document in recent_documents %}
-                                <div class="list-group-item border-0 px-0">
-                                    <div class="d-flex align-items-center">
-                                        <div class="flex-shrink-0 me-3">
-                                            {% if document.content_type == 'application/pdf' %}
-                                                <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 1.5rem;"></i>
-                                            {% else %}
-                                                <i class="bi bi-file-earmark-word text-primary" style="font-size: 1.5rem;"></i>
-                                            {% endif %}
-                                        </div>
-                                        <div class="flex-grow-1 min-w-0">
-                                            <div class="fw-medium text-truncate">{{ document.original_filename }}</div>
-                                            <small class="text-muted">
-                                                {{ document.uploaded_at | datetime_format('%b %d, %Y at %I:%M %p') }}
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="text-center py-4">
-                            <i class="bi bi-inbox text-muted" style="font-size: 3rem; opacity: 0.5;"></i>
-                            <p class="text-muted mt-3 mb-0">No documents uploaded yet</p>
-                            <small class="text-muted">Upload your first document to get started</small>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Quick Actions -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-lightning me-2 text-primary"></i>Quick Actions
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6 col-lg-3">
-                            <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
-                                <i class="bi bi-folder2-open mb-2" style="font-size: 1.5rem;"></i>
-                                <span>Evidence Repository</span>
-                            </a>
-                        </div>
-                        <div class="col-md-6 col-lg-3">
-                            <button class="btn btn-outline-secondary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3" 
-                                    onclick="showComingSoon('AI Evidence')">
-                                <i class="bi bi-robot mb-2" style="font-size: 1.5rem;"></i>
-                                <span>AI Evidence</span>
-                            </button>
-                        </div>
-                        <div class="col-md-6 col-lg-3">
-                            <button class="btn btn-outline-secondary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3" 
-                                    onclick="showComingSoon('Gap Analysis')">
-                                <i class="bi bi-graph-up mb-2" style="font-size: 1.5rem;"></i>
-                                <span>Gap Analysis</span>
-                            </button>
-                        </div>
-                        <div class="col-md-6 col-lg-3">
-                            <button class="btn btn-outline-secondary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3" 
-                                    onclick="showComingSoon('Audit Export')">
-                                <i class="bi bi-download mb-2" style="font-size: 1.5rem;"></i>
-                                <span>Audit Export</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
+  </div>
 
-{% block extra_js %}
+  <!-- Stats Cards -->
+  <div class="row mb-4">
+    <div class="col-md-6 col-lg-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                <i
+                  class="bi bi-files text-primary"
+                  style="font-size: 1.5rem"
+                ></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ total_documents }}</div>
+              <div class="text-muted small">Total Documents</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-success bg-opacity-10 rounded-3 p-3">
+                <i
+                  class="bi bi-cloud-check text-success"
+                  style="font-size: 1.5rem"
+                ></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ total_documents }}</div>
+              <div class="text-muted small">Stored Securely</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-info bg-opacity-10 rounded-3 p-3">
+                <i
+                  class="bi bi-shield-check text-info"
+                  style="font-size: 1.5rem"
+                ></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">100%</div>
+              <div class="text-muted small">Compliant</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-warning bg-opacity-10 rounded-3 p-3">
+                <i
+                  class="bi bi-clock text-warning"
+                  style="font-size: 1.5rem"
+                ></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">24/7</div>
+              <div class="text-muted small">Available</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Row -->
+  <div class="row">
+    <!-- Upload Section -->
+    <div class="col-lg-8 mb-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-cloud-upload me-2 text-primary"></i>Upload Documents
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="text-center py-5">
+            <div class="mb-4">
+              <i
+                class="bi bi-cloud-upload text-primary"
+                style="font-size: 4rem; opacity: 0.7"
+              ></i>
+            </div>
+            <h6 class="fw-bold mb-3">Upload Your Compliance Documents</h6>
+            <p class="text-muted mb-4">
+              Securely upload PDF and DOCX files to your compliance repository.
+              All files are encrypted and stored in Azure Blob Storage.
+            </p>
+
+            <!-- Upload Form -->
+            <form
+              id="uploadForm"
+              action="{{ url_for('upload.upload_file') }}"
+              method="post"
+              enctype="multipart/form-data"
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+              />
+
+              <div class="mb-3">
+                <input
+                  type="file"
+                  class="form-control form-control-lg"
+                  id="fileInput"
+                  name="file"
+                  accept=".pdf,.docx"
+                  required
+                />
+              </div>
+
+              <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                <button type="submit" class="btn btn-primary btn-lg px-4">
+                  <i class="bi bi-upload me-2"></i>Upload Document
+                </button>
+                <a
+                  href="{{ url_for('main.evidence_repository') }}"
+                  class="btn btn-outline-primary btn-lg px-4"
+                >
+                  <i class="bi bi-folder2-open me-2"></i>View Repository
+                </a>
+              </div>
+            </form>
+
+            <div class="mt-3">
+              <small class="text-muted">
+                <i class="bi bi-info-circle me-1"></i>
+                Supported formats: PDF, DOCX • Maximum file size: 16MB
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Documents -->
+    <div class="col-lg-4 mb-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-clock-history me-2 text-primary"></i>Recent
+              Documents
+            </h5>
+            <a
+              href="{{ url_for('main.evidence_repository') }}"
+              class="btn btn-sm btn-outline-primary"
+            >
+              View All
+            </a>
+          </div>
+        </div>
+        <div class="card-body">
+          {% if recent_documents %}
+          <div class="list-group list-group-flush">
+            {% for document in recent_documents %}
+            <div class="list-group-item border-0 px-0">
+              <div class="d-flex align-items-center">
+                <div class="flex-shrink-0 me-3">
+                  {% if document.content_type == 'application/pdf' %}
+                  <i
+                    class="bi bi-file-earmark-pdf text-danger"
+                    style="font-size: 1.5rem"
+                  ></i>
+                  {% else %}
+                  <i
+                    class="bi bi-file-earmark-word text-primary"
+                    style="font-size: 1.5rem"
+                  ></i>
+                  {% endif %}
+                </div>
+                <div class="flex-grow-1 min-w-0" style="overflow: hidden">
+                  <div
+                    class="fw-medium"
+                    title="{{ document.original_filename }}"
+                    style="
+                      white-space: nowrap;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                      max-width: 100%;
+                    "
+                  >
+                    {{ document.original_filename }}
+                  </div>
+                  <small class="text-muted">
+                    {{ document.uploaded_at | datetime_format('%b %d, %Y at
+                    %I:%M %p') }} • {{ current_user.email.split('@')[0] }}
+                  </small>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="text-center py-4">
+            <i
+              class="bi bi-inbox text-muted"
+              style="font-size: 3rem; opacity: 0.5"
+            ></i>
+            <p class="text-muted mt-3 mb-0">No documents uploaded yet</p>
+            <small class="text-muted"
+              >Upload your first document to get started</small
+            >
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-lightning me-2 text-primary"></i>Quick Actions
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6 col-lg-3">
+              <a
+                href="{{ url_for('main.evidence_repository') }}"
+                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3"
+              >
+                <i
+                  class="bi bi-folder2-open mb-2"
+                  style="font-size: 1.5rem"
+                ></i>
+                <span>Evidence Repository</span>
+              </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+              <a
+                href="{{ url_for('main.ai_evidence') }}"
+                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
+              >
+                <i class="bi bi-robot mb-2" style="font-size: 1.5rem"></i>
+                <span>AI Evidence</span>
+              </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+              <a
+                href="{{ url_for('main.gap_analysis') }}"
+                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
+              >
+                <i class="bi bi-graph-up mb-2" style="font-size: 1.5rem"></i>
+                <span>Gap Analysis</span>
+              </a>
+            </div>
+            <div class="col-md-6 col-lg-3">
+              <a
+                href="{{ url_for('main.audit_export') }}"
+                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
+              >
+                <i class="bi bi-download mb-2" style="font-size: 1.5rem"></i>
+                <span>Audit Export</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
 <script>
-    // File upload validation
-    document.getElementById('fileInput').addEventListener('change', function() {
-        const file = this.files[0];
-        if (file) {
-            const maxSize = 16 * 1024 * 1024; // 16MB
-            const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-            
-            if (file.size > maxSize) {
-                alert('File size must be less than 16MB');
-                this.value = '';
-                return;
-            }
-            
-            if (!allowedTypes.includes(file.type)) {
-                alert('Only PDF and DOCX files are allowed');
-                this.value = '';
-                return;
-            }
-        }
-    });
+  // File upload validation
+  document.getElementById("fileInput").addEventListener("change", function () {
+    const file = this.files[0];
+    if (file) {
+      const maxSize = 16 * 1024 * 1024; // 16MB
+      const allowedTypes = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+
+      if (file.size > maxSize) {
+        alert("File size must be less than 16MB");
+        this.value = "";
+        return;
+      }
+
+      if (!allowedTypes.includes(file.type)) {
+        alert("Only PDF and DOCX files are allowed");
+        this.value = "";
+        return;
+      }
+    }
+  });
 </script>
 {% endblock %}
