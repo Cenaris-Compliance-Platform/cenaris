@@ -82,7 +82,7 @@ A professional, secure, and modern compliance document management system built w
 
 📦 Container/File System Name (default: compliance-documents): user-uploads
 
-After this please enter the secret key in the .env file 
+-> _After this, please enter the secret key in the .env file_
    ```
    
    You'll be prompted to enter:
