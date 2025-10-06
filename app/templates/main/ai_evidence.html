@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 fw-bold text-dark mb-1">AI Evidence Analysis</h1>
+                    <p class="text-muted mb-0">AI-powered document analysis and compliance evidence extraction</p>
+                </div>
+                <div class="d-none d-md-block">
+                    <i class="bi bi-robot text-primary" style="font-size: 2.5rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-file-earmark-check text-primary" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">{{ ai_evidence_entries|length }}</div>
+                            <div class="text-muted small">AI Analyzed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-success bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-graph-up text-success" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">
+                                {% set total_confidence = ai_evidence_entries|sum(attribute='confidence_score') %}
+                                {% if ai_evidence_entries|length > 0 %}
+                                    {{ (total_confidence / ai_evidence_entries|length)|round|int }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </div>
+                            <div class="text-muted small">Avg Confidence</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-info bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-shield-check text-info" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">
+                                {{ ai_evidence_entries|selectattr('confidence_score', '>=', 85)|list|length }}
+                            </div>
+                            <div class="text-muted small">High Confidence</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-warning bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-clock text-warning" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">Real-time</div>
+                            <div class="text-muted small">Processing</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- AI Evidence List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-robot me-2 text-primary"></i>
+                            AI Evidence Entries
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleView()">
+                                <i class="bi bi-grid-3x3-gap" id="viewToggleIcon"></i>
+                            </button>
+                            <button class="btn btn-sm btn-primary" disabled>
+                                <i class="bi bi-plus-lg me-1"></i>Analyze New
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if ai_evidence_entries %}
+                        <!-- Table View (Default) -->
+                        <div id="tableView">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-file-earmark me-1"></i>Document
+                                            </th>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-diagram-3 me-1"></i>Source
+                                            </th>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-graph-up me-1"></i>Confidence
+                                            </th>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-calendar me-1"></i>Date
+                                            </th>
+                                            <th scope="col" class="border-0">
+                                                <i class="bi bi-gear me-1"></i>Actions
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for entry in ai_evidence_entries %}
+                                            <tr class="cursor-pointer" onclick="window.location.href='{{ url_for('main.ai_evidence_detail', entry_id=entry.id) }}'">
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="flex-shrink-0 me-3">
+                                                            <i class="bi bi-file-earmark-text text-primary" style="font-size: 1.5rem;"></i>
+                                                        </div>
+                                                        <div class="flex-grow-1 min-w-0">
+                                                            <div class="fw-medium text-truncate">{{ entry.document_title }}</div>
+                                                            <small class="text-muted">{{ entry.document_type }}</small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-light text-dark">{{ entry.source }}</span>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="progress me-2" style="width: 60px; height: 8px;">
+                                                            <div class="progress-bar 
+                                                                {% if entry.confidence_score >= 90 %}bg-success
+                                                                {% elif entry.confidence_score >= 75 %}bg-info
+                                                                {% elif entry.confidence_score >= 60 %}bg-warning
+                                                                {% else %}bg-danger{% endif %}" 
+                                                                style="width: {{ entry.confidence_score }}%"></div>
+                                                        </div>
+                                                        <span class="fw-bold 
+                                                            {% if entry.confidence_score >= 90 %}text-success
+                                                            {% elif entry.confidence_score >= 75 %}text-info
+                                                            {% elif entry.confidence_score >= 60 %}text-warning
+                                                            {% else %}text-danger{% endif %}">
+                                                            {{ entry.confidence_score }}%
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div>{{ entry.upload_date | datetime_format('%b %d, %Y') }}</div>
+                                                </td>
+                                                <td>
+                                                    <div class="dropdown" onclick="event.stopPropagation()">
+                                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                                type="button" data-bs-toggle="dropdown">
+                                                            <i class="bi bi-three-dots"></i>
+                                                        </button>
+                                                        <ul class="dropdown-menu">
+                                                            <li>
+                                                                <a class="dropdown-item" href="{{ url_for('main.ai_evidence_detail', entry_id=entry.id) }}">
+                                                                    <i class="bi bi-eye me-2"></i>View Details
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="#" onclick="showComingSoon('Export')">
+                                                                    <i class="bi bi-download me-2"></i>Export
+                                                                </a>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="#" onclick="showComingSoon('Re-analyze')">
+                                                                    <i class="bi bi-arrow-clockwise me-2"></i>Re-analyze
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Grid View (Hidden by default) -->
+                        <div id="gridView" style="display: none;">
+                            <div class="row g-3">
+                                {% for entry in ai_evidence_entries %}
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="card h-100 border shadow-sm cursor-pointer" 
+                                             onclick="window.location.href='{{ url_for('main.ai_evidence_detail', entry_id=entry.id) }}'">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                                    <i class="bi bi-file-earmark-text text-primary" style="font-size: 2rem;"></i>
+                                                    <span class="badge 
+                                                        {% if entry.confidence_score >= 90 %}bg-success
+                                                        {% elif entry.confidence_score >= 75 %}bg-info
+                                                        {% elif entry.confidence_score >= 60 %}bg-warning
+                                                        {% else %}bg-danger{% endif %}">
+                                                        {{ entry.confidence_score }}%
+                                                    </span>
+                                                </div>
+                                                <h6 class="card-title text-truncate" title="{{ entry.document_title }}">
+                                                    {{ entry.document_title }}
+                                                </h6>
+                                                <p class="card-text">
+                                                    <small class="text-muted">
+                                                        <strong>Source:</strong> {{ entry.source }}<br>
+                                                        <strong>Date:</strong> {{ entry.upload_date | datetime_format('%b %d, %Y') }}
+                                                    </small>
+                                                </p>
+                                                <div class="mt-auto">
+                                                    <small class="text-muted">{{ entry.summary[:100] }}...</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Empty State -->
+                        <div class="text-center py-5">
+                            <div class="mb-4">
+                                <i class="bi bi-robot text-muted" style="font-size: 5rem; opacity: 0.3;"></i>
+                            </div>
+                            <h5 class="fw-bold text-muted mb-3">No AI Evidence Found</h5>
+                            <p class="text-muted mb-4">
+                                Upload documents to start AI-powered compliance analysis. 
+                                Our AI will automatically extract evidence and assess compliance.
+                            </p>
+                            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-upload me-2"></i>Upload Documents for Analysis
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let isGridView = false;
+    
+    function toggleView() {
+        const tableView = document.getElementById('tableView');
+        const gridView = document.getElementById('gridView');
+        const toggleIcon = document.getElementById('viewToggleIcon');
+        
+        if (isGridView) {
+            // Switch to table view
+            tableView.style.display = 'block';
+            gridView.style.display = 'none';
+            toggleIcon.className = 'bi bi-grid-3x3-gap';
+            isGridView = false;
+        } else {
+            // Switch to grid view
+            tableView.style.display = 'none';
+            gridView.style.display = 'block';
+            toggleIcon.className = 'bi bi-list';
+            isGridView = true;
+        }
+    }
+    
+    // Add cursor pointer style
+    document.addEventListener('DOMContentLoaded', function() {
+        const style = document.createElement('style');
+        style.textContent = '.cursor-pointer { cursor: pointer; }';
+        document.head.appendChild(style);
+    });
+</script>
+{% endblock %}

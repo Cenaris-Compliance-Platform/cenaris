@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 fw-bold text-dark mb-1">User Roles & Permissions</h1>
+                    <p class="text-muted mb-0">Manage user roles, permissions, and access controls</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" onclick="showComingSoon('Import Users')">
+                        <i class="bi bi-upload me-2"></i>Import Users
+                    </button>
+                    <button class="btn btn-primary" onclick="showComingSoon('Add Role')" disabled>
+                        <i class="bi bi-plus-lg me-2"></i>Add New Role
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Summary Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-people text-primary" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">{{ roles_data|length }}</div>
+                            <div class="text-muted small">Total Roles</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-success bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-person-check text-success" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">
+                                {% set total_users = roles_data|sum(attribute='user_count') %}
+                                {{ total_users }}
+                            </div>
+                            <div class="text-muted small">Active Users</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-info bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-key text-info" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">{{ all_permissions|length }}</div>
+                            <div class="text-muted small">Permissions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-warning bg-opacity-10 rounded-3 p-3">
+                                <i class="bi bi-shield-check text-warning" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fw-bold h4 mb-0">100%</div>
+                            <div class="text-muted small">Secure</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Roles Table -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-table me-2 text-primary"></i>
+                            Role Management
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-funnel me-1"></i>Filter
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="filterRoles('all')">All Roles</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="filterRoles('admin')">Admin Roles</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="filterRoles('user')">User Roles</a></li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showComingSoon('Export')">
+                                <i class="bi bi-download me-1"></i>Export
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col" class="border-0">
+                                        <i class="bi bi-person-badge me-1"></i>Role Name
+                                    </th>
+                                    <th scope="col" class="border-0">
+                                        <i class="bi bi-key me-1"></i>Permissions
+                                    </th>
+                                    <th scope="col" class="border-0">
+                                        <i class="bi bi-people me-1"></i>Assigned Users
+                                    </th>
+                                    <th scope="col" class="border-0">
+                                        <i class="bi bi-calendar me-1"></i>Created
+                                    </th>
+                                    <th scope="col" class="border-0">
+                                        <i class="bi bi-gear me-1"></i>Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for role in roles_data %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 me-3">
+                                                    {% if 'Admin' in role.role_name %}
+                                                        <i class="bi bi-shield-fill-check text-danger" style="font-size: 1.5rem;"></i>
+                                                    {% elif 'Manager' in role.role_name %}
+                                                        <i class="bi bi-person-fill-gear text-warning" style="font-size: 1.5rem;"></i>
+                                                    {% else %}
+                                                        <i class="bi bi-person-fill text-primary" style="font-size: 1.5rem;"></i>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="flex-grow-1 min-w-0">
+                                                    <div class="fw-medium">{{ role.role_name }}</div>
+                                                    <small class="text-muted">{{ role.description }}</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                {% for permission in role.permissions[:3] %}
+                                                    <span class="badge bg-light text-dark border">{{ permission }}</span>
+                                                {% endfor %}
+                                                {% if role.permissions|length > 3 %}
+                                                    <span class="badge bg-secondary">+{{ role.permissions|length - 3 }} more</span>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <span class="fw-bold me-2">{{ role.user_count }}</span>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                            type="button" data-bs-toggle="dropdown">
+                                                        <i class="bi bi-people"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu">
+                                                        {% for user in role.assigned_users %}
+                                                            <li><span class="dropdown-item-text">{{ user }}</span></li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <small>{{ role.created_date | datetime_format('%b %d, %Y') }}</small>
+                                        </td>
+                                        <td>
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                        type="button" data-bs-toggle="dropdown">
+                                                    <i class="bi bi-three-dots"></i>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li>
+                                                        <a class="dropdown-item" href="#" onclick="viewRoleDetails({{ role.id }})">
+                                                            <i class="bi bi-eye me-2"></i>View Details
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="#" onclick="showComingSoon('Edit Role')">
+                                                            <i class="bi bi-pencil me-2"></i>Edit Role
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="#" onclick="showComingSoon('Manage Users')">
+                                                            <i class="bi bi-people me-2"></i>Manage Users
+                                                        </a>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item text-danger" href="#" onclick="showComingSoon('Delete Role')">
+                                                            <i class="bi bi-trash me-2"></i>Delete Role
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Permissions Reference -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2 text-primary"></i>
+                        Permission Reference
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        {% for permission in all_permissions %}
+                            <div class="col-md-6 col-lg-4">
+                                <div class="d-flex align-items-start">
+                                    <div class="flex-shrink-0 me-3">
+                                        <i class="bi bi-key text-primary"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="fw-medium">{{ permission.name }}</div>
+                                        <small class="text-muted">{{ permission.description }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Role Details Modal -->
+<div class="modal fade" id="roleDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-person-badge me-2"></i>Role Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="roleDetailsContent">
+                <!-- Content will be loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="showComingSoon('Edit Role')">
+                    <i class="bi bi-pencil me-2"></i>Edit Role
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function filterRoles(type) {
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const roleName = row.querySelector('.fw-medium').textContent.toLowerCase();
+            if (type === 'all' || 
+                (type === 'admin' && roleName.includes('admin')) ||
+                (type === 'user' && !roleName.includes('admin') && !roleName.includes('manager'))) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+    
+    function viewRoleDetails(roleId) {
+        // Mock role details - in real app, this would fetch from server
+        const roleDetails = {
+            1: {
+                name: 'System Administrator',
+                description: 'Full system access with administrative privileges',
+                permissions: ['View', 'Edit', 'Delete', 'Approve', 'Manage Users', 'System Config'],
+                users: ['admin@compliance.com', 'sysadmin@cenaris.com'],
+                created: '2025-01-15'
+            }
+        };
+        
+        const role = roleDetails[roleId] || roleDetails[1];
+        
+        const content = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="fw-bold mb-3">Role Information</h6>
+                    <div class="mb-2"><strong>Name:</strong> ${role.name}</div>
+                    <div class="mb-2"><strong>Description:</strong> ${role.description}</div>
+                    <div class="mb-2"><strong>Created:</strong> ${role.created}</div>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="fw-bold mb-3">Permissions</h6>
+                    <div class="d-flex flex-wrap gap-1 mb-3">
+                        ${role.permissions.map(p => `<span class="badge bg-primary">${p}</span>`).join('')}
+                    </div>
+                    <h6 class="fw-bold mb-2">Assigned Users (${role.users.length})</h6>
+                    <ul class="list-unstyled">
+                        ${role.users.map(u => `<li><i class="bi bi-person me-2"></i>${u}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('roleDetailsContent').innerHTML = content;
+        new bootstrap.Modal(document.getElementById('roleDetailsModal')).show();
+    }
+</script>
+{% endblock %}

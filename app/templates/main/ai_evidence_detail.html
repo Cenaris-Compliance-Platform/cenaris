@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('main.ai_evidence') }}">AI Evidence</a></li>
+            <li class="breadcrumb-item active">{{ entry.document_title[:50] }}{% if entry.document_title|length > 50 %}...{% endif %}</li>
+        </ol>
+    </nav>
+    
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <h1 class="h2 fw-bold text-dark mb-2">{{ entry.document_title }}</h1>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <span class="badge bg-primary">{{ entry.document_type }}</span>
+                        <span class="badge bg-light text-dark">{{ entry.source }}</span>
+                        <span class="badge 
+                            {% if entry.confidence_score >= 90 %}bg-success
+                            {% elif entry.confidence_score >= 75 %}bg-info
+                            {% elif entry.confidence_score >= 60 %}bg-warning
+                            {% else %}bg-danger{% endif %}">
+                            {{ entry.confidence_score }}% Confidence
+                        </span>
+                        <span class="badge bg-secondary">{{ entry.risk_level }} Risk</span>
+                    </div>
+                </div>
+                <div class="flex-shrink-0">
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots"></i> Actions
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="showComingSoon('Download')">
+                                <i class="bi bi-download me-2"></i>Download Report
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="showComingSoon('Export')">
+                                <i class="bi bi-file-earmark-pdf me-2"></i>Export PDF
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="showComingSoon('Re-analyze')">
+                                <i class="bi bi-arrow-clockwise me-2"></i>Re-analyze
+                            </a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Left Column - Main Details -->
+        <div class="col-lg-8 mb-4">
+            <!-- Summary Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-file-text me-2 text-primary"></i>Document Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">{{ entry.summary }}</p>
+                </div>
+            </div>
+            
+            <!-- AI Analysis Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-robot me-2 text-primary"></i>AI Analysis Notes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">{{ entry.ai_notes }}</p>
+                    
+                    <!-- Keywords -->
+                    <div class="mb-3">
+                        <h6 class="fw-bold mb-2">Identified Keywords:</h6>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for keyword in entry.keywords %}
+                                <span class="badge bg-light text-dark border">{{ keyword }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Compliance Frameworks -->
+                    <div>
+                        <h6 class="fw-bold mb-2">Compliance Frameworks:</h6>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for framework in entry.compliance_frameworks %}
+                                <span class="badge bg-info">{{ framework }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Confidence Score Breakdown -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up me-2 text-primary"></i>Confidence Analysis
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="text-center">
+                                <div class="position-relative d-inline-block">
+                                    <svg width="120" height="120" class="circular-progress">
+                                        <circle cx="60" cy="60" r="50" fill="none" stroke="#e9ecef" stroke-width="8"/>
+                                        <circle cx="60" cy="60" r="50" fill="none" 
+                                                stroke="{% if entry.confidence_score >= 90 %}#28a745{% elif entry.confidence_score >= 75 %}#17a2b8{% elif entry.confidence_score >= 60 %}#ffc107{% else %}#dc3545{% endif %}" 
+                                                stroke-width="8" 
+                                                stroke-dasharray="{{ (entry.confidence_score / 100 * 314)|round }}, 314"
+                                                stroke-linecap="round"
+                                                transform="rotate(-90 60 60)"/>
+                                    </svg>
+                                    <div class="position-absolute top-50 start-50 translate-middle">
+                                        <div class="h3 fw-bold mb-0">{{ entry.confidence_score }}%</div>
+                                        <small class="text-muted">Overall</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <small class="fw-medium">Content Analysis</small>
+                                    <small>{{ (entry.confidence_score + 5) % 100 }}%</small>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-success" style="width: {{ (entry.confidence_score + 5) % 100 }}%"></div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <small class="fw-medium">Structure Recognition</small>
+                                    <small>{{ (entry.confidence_score - 3) % 100 }}%</small>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-info" style="width: {{ (entry.confidence_score - 3) % 100 }}%"></div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <small class="fw-medium">Compliance Mapping</small>
+                                    <small>{{ entry.confidence_score }}%</small>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-warning" style="width: {{ entry.confidence_score }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column - Metadata -->
+        <div class="col-lg-4">
+            <!-- Document Info -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2 text-primary"></i>Document Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Upload Date:</span>
+                                <span class="fw-medium">{{ entry.upload_date | datetime_format('%b %d, %Y') }}</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">File Size:</span>
+                                <span class="fw-medium">{{ entry.file_size }}</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Pages:</span>
+                                <span class="fw-medium">{{ entry.pages }}</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Language:</span>
+                                <span class="fw-medium">{{ entry.language }}</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">Last Reviewed:</span>
+                                <span class="fw-medium">{{ entry.last_reviewed | datetime_format('%b %d, %Y') }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Risk Assessment -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-shield-exclamation me-2 text-primary"></i>Risk Assessment
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <div class="badge 
+                            {% if entry.risk_level == 'Low' %}bg-success
+                            {% elif entry.risk_level == 'Medium' %}bg-warning
+                            {% else %}bg-danger{% endif %} 
+                            fs-6 px-3 py-2">
+                            {{ entry.risk_level }} Risk
+                        </div>
+                    </div>
+                    <div class="small text-muted text-center">
+                        {% if entry.risk_level == 'Low' %}
+                            Document shows strong compliance indicators with minimal risk factors identified.
+                        {% elif entry.risk_level == 'Medium' %}
+                            Some compliance gaps identified that require attention and monitoring.
+                        {% else %}
+                            Significant compliance issues detected requiring immediate action.
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-lightning me-2 text-primary"></i>Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary btn-sm" onclick="showComingSoon('View Original')">
+                            <i class="bi bi-file-earmark me-2"></i>View Original Document
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="showComingSoon('Generate Report')">
+                            <i class="bi bi-file-earmark-text me-2"></i>Generate Report
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="showComingSoon('Share')">
+                            <i class="bi bi-share me-2"></i>Share Analysis
+                        </button>
+                        <hr class="my-2">
+                        <button class="btn btn-outline-warning btn-sm" onclick="showComingSoon('Flag Issue')">
+                            <i class="bi bi-flag me-2"></i>Flag Issue
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .circular-progress {
+        transform: rotate(-90deg);
+    }
+</style>
+{% endblock %}

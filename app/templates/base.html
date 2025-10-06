@@ -283,36 +283,32 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link"
-                href="#"
-                onclick="showComingSoon('AI Evidence')"
+                class="nav-link {% if request.endpoint == 'main.ai_evidence' %}active{% endif %}"
+                href="{{ url_for('main.ai_evidence') }}"
               >
                 <i class="bi bi-robot me-1"></i>AI Evidence
               </a>
             </li>
             <li class="nav-item">
               <a
-                class="nav-link"
-                href="#"
-                onclick="showComingSoon('Gap Analysis')"
+                class="nav-link {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
+                href="{{ url_for('main.gap_analysis') }}"
               >
                 <i class="bi bi-graph-up me-1"></i>Gap Analysis
               </a>
             </li>
             <li class="nav-item">
               <a
-                class="nav-link"
-                href="#"
-                onclick="showComingSoon('Audit Export')"
+                class="nav-link {% if request.endpoint == 'main.audit_export' %}active{% endif %}"
+                href="{{ url_for('main.audit_export') }}"
               >
                 <i class="bi bi-download me-1"></i>Audit Export
               </a>
             </li>
             <li class="nav-item">
               <a
-                class="nav-link"
-                href="#"
-                onclick="showComingSoon('User Roles')"
+                class="nav-link {% if request.endpoint == 'main.user_roles' %}active{% endif %}"
+                href="{{ url_for('main.user_roles') }}"
               >
                 <i class="bi bi-people me-1"></i>User Roles
               </a>
