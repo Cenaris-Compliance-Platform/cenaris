@@ -79,7 +79,10 @@ A professional, secure, and modern compliance document management system built w
    python3 setup_azure.py
    
 🔑 Azure Storage Connection String: DefaultEndpointsProtocol=https;AccountName=<acc_name>;AccountKey=<acc_key>
+
 📦 Container/File System Name (default: compliance-documents): user-uploads
+
+After this please enter the secret key in the .env file 
    ```
    
    You'll be prompted to enter:
