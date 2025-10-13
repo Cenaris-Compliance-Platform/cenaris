@@ -1,0 +1,208 @@
+{% extends "base.html" %} {% block content %}
+<div class="fade-in">
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h2 fw-bold text-dark mb-1">ADLS Raw Data</h1>
+          <p class="text-muted mb-0">
+            Exact data from Azure Data Lake Storage - no processing, just raw ML results
+          </p>
+        </div>
+        <div class="d-none d-md-block">
+          <i class="bi bi-table text-primary" style="font-size: 2.5rem"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw Data Table -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-database me-2 text-primary"></i>Raw ML Analysis Results
+            </h5>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" onclick="refreshData()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+              </button>
+              <button class="btn btn-sm btn-primary" onclick="exportData()">
+                <i class="bi bi-download me-1"></i>Export
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle" id="adlsRawTable">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col" class="border-0">Best Match Page</th>
+                  <th scope="col" class="border-0">Outcome Code</th>
+                  <th scope="col" class="border-0">Requirement</th>
+                  <th scope="col" class="border-0">Rule</th>
+                  <th scope="col" class="border-0">Rule Status</th>
+                  <th scope="col" class="border-0">Similarity</th>
+                  <th scope="col" class="border-0">Status</th>
+                  <th scope="col" class="border-0">Status Score</th>
+                  <th scope="col" class="border-0">Weight</th>
+                  <th scope="col" class="border-0">Weighted Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for file_summary in ml_summary.file_summaries %}
+                  {% set detailed_analysis = azure_data_service.get_file_analysis_summary('compliance-results/' + file_summary.file_name) %}
+                  {% for req in detailed_analysis.requirements %}
+                  <tr>
+                    <td>{{ req.Best_Match_Page }}</td>
+                    <td><code>{{ req.Outcome_Code }}</code></td>
+                    <td>
+                      <div class="fw-medium">{{ req.Requirement }}</div>
+                      <small class="text-muted">{{ file_summary.framework }}</small>
+                    </td>
+                    <td><small class="text-muted">{{ req.Rule }}</small></td>
+                    <td>
+                      {% if req.Rule_Status == 'Complete' %}
+                        <span class="badge bg-success">{{ req.Rule_Status }}</span>
+                      {% elif req.Rule_Status == 'Partial' %}
+                        <span class="badge bg-warning">{{ req.Rule_Status }}</span>
+                      {% else %}
+                        <span class="badge bg-secondary">{{ req.Rule_Status }}</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <div class="d-flex align-items-center">
+                        <div class="progress me-2" style="width: 60px; height: 6px;">
+                          {% if req.Similarity >= 0.8 %}
+                            <div class="progress-bar bg-success" style="width: {{ (req.Similarity * 100)|round }}%"></div>
+                          {% elif req.Similarity >= 0.6 %}
+                            <div class="progress-bar bg-info" style="width: {{ (req.Similarity * 100)|round }}%"></div>
+                          {% elif req.Similarity >= 0.4 %}
+                            <div class="progress-bar bg-warning" style="width: {{ (req.Similarity * 100)|round }}%"></div>
+                          {% else %}
+                            <div class="progress-bar bg-danger" style="width: {{ (req.Similarity * 100)|round }}%"></div>
+                          {% endif %}
+                        </div>
+                        <small class="fw-medium">{{ req.Similarity }}</small>
+                      </div>
+                    </td>
+                    <td>
+                      {% if req.Status == 'Complete' %}
+                        <span class="badge bg-success">
+                          <i class="bi bi-check-circle me-1"></i>{{ req.Status }}
+                        </span>
+                      {% elif req.Status == 'Needs Review' %}
+                        <span class="badge bg-warning">
+                          <i class="bi bi-clock me-1"></i>{{ req.Status }}
+                        </span>
+                      {% elif req.Status == 'Missing' %}
+                        <span class="badge bg-danger">
+                          <i class="bi bi-x-circle me-1"></i>{{ req.Status }}
+                        </span>
+                      {% else %}
+                        <span class="badge bg-secondary">{{ req.Status }}</span>
+                      {% endif %}
+                    </td>
+                    <td><span class="fw-medium">{{ req.Status_Score }}</span></td>
+                    <td><span class="text-muted">{{ req.Weight }}</span></td>
+                    <td><span class="fw-bold">{{ req.Weighted_Score }}</span></td>
+                  </tr>
+                  {% endfor %}
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Summary -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-files me-2 text-primary"></i>Files in ADLS
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            {% for file_summary in ml_summary.file_summaries %}
+            <div class="col-md-6 col-lg-4 mb-3">
+              <div class="border rounded p-3">
+                <h6 class="fw-bold">{{ file_summary.file_name }}</h6>
+                <div class="d-flex justify-content-between">
+                  <small class="text-muted">Framework:</small>
+                  <span class="badge bg-secondary">{{ file_summary.framework }}</span>
+                </div>
+                <div class="d-flex justify-content-between mt-1">
+                  <small class="text-muted">Requirements:</small>
+                  <span>{{ file_summary.total_requirements }}</span>
+                </div>
+                <div class="d-flex justify-content-between mt-1">
+                  <small class="text-muted">Last Updated:</small>
+                  <small>{{ file_summary.last_updated.strftime('%Y-%m-%d') }}</small>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshData() {
+  location.reload();
+}
+
+function exportData() {
+  // Create CSV from table data
+  const table = document.getElementById('adlsRawTable');
+  let csv = [];
+  
+  // Get headers
+  const headers = [];
+  table.querySelectorAll('thead th').forEach(th => {
+    headers.push(th.textContent.trim());
+  });
+  csv.push(headers.join(','));
+  
+  // Get data rows
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    const row = [];
+    tr.querySelectorAll('td').forEach(td => {
+      // Clean the text content
+      let text = td.textContent.trim();
+      // Remove extra whitespace and newlines
+      text = text.replace(/\s+/g, ' ');
+      // Escape commas
+      if (text.includes(',')) {
+        text = '"' + text + '"';
+      }
+      row.push(text);
+    });
+    csv.push(row.join(','));
+  });
+  
+  // Download CSV
+  const csvContent = csv.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'adls_raw_data_' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}

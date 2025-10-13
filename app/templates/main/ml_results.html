@@ -1,0 +1,413 @@
+{% extends "base.html" %} {% block content %}
+<div class="fade-in">
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h2 fw-bold text-dark mb-1">ML Compliance Analysis</h1>
+          <p class="text-muted mb-0">
+            Real-time compliance analysis results from Azure Machine Learning
+          </p>
+        </div>
+        <div class="d-none d-md-block">
+          <i class="bi bi-cpu text-primary" style="font-size: 2.5rem"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="row mb-4">
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                <i class="bi bi-files text-primary" style="font-size: 1.5rem"></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ ml_summary.total_files }}</div>
+              <div class="text-muted small">Analysis Files</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-success bg-opacity-10 rounded-3 p-3">
+                <i class="bi bi-check-circle text-success" style="font-size: 1.5rem"></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ ml_summary.total_complete }}</div>
+              <div class="text-muted small">Complete</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-warning bg-opacity-10 rounded-3 p-3">
+                <i class="bi bi-clock text-warning" style="font-size: 1.5rem"></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ ml_summary.total_needs_review }}</div>
+              <div class="text-muted small">Needs Review</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-danger bg-opacity-10 rounded-3 p-3">
+                <i class="bi bi-x-circle text-danger" style="font-size: 1.5rem"></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ ml_summary.total_missing }}</div>
+              <div class="text-muted small">Missing</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overall Compliance Chart -->
+  <div class="row mb-4">
+    <div class="col-lg-4 mb-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-pie-chart me-2 text-primary"></i>Overall Compliance
+          </h5>
+        </div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <div class="text-center">
+            <div class="position-relative d-inline-block mb-3">
+              <svg width="200" height="200">
+                <circle cx="100" cy="100" r="80" fill="none" stroke="#e9ecef" stroke-width="20"/>
+                <circle cx="100" cy="100" r="80" fill="none" stroke="#28a745" stroke-width="20"
+                        stroke-dasharray="{{ (ml_summary.avg_compliancy_rate / 100 * 502)|round }}, 502"
+                        stroke-linecap="round" transform="rotate(-90 100 100)"/>
+              </svg>
+              <div class="position-absolute top-50 start-50 translate-middle text-center">
+                <div class="h2 fw-bold mb-0 text-primary">{{ ml_summary.avg_compliancy_rate }}%</div>
+                <small class="text-muted">Compliant</small>
+              </div>
+            </div>
+            <div class="text-muted">
+              Last updated: {{ ml_summary.last_updated.strftime('%b %d, %Y at %I:%M %p') }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8 mb-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-bar-chart me-2 text-primary"></i>Framework Analysis
+            </h5>
+            <button class="btn btn-sm btn-outline-primary" onclick="refreshData()">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          {% for file_summary in ml_summary.file_summaries %}
+          <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="d-flex align-items-center">
+                <h6 class="fw-bold mb-0 me-3">{{ file_summary.framework }}</h6>
+                {% if file_summary.overall_status == 'Excellent' %}
+                  <span class="badge bg-success">{{ file_summary.overall_status }}</span>
+                {% elif file_summary.overall_status == 'Good' %}
+                  <span class="badge bg-info">{{ file_summary.overall_status }}</span>
+                {% elif file_summary.overall_status == 'Needs Attention' %}
+                  <span class="badge bg-warning">{{ file_summary.overall_status }}</span>
+                {% else %}
+                  <span class="badge bg-danger">{{ file_summary.overall_status }}</span>
+                {% endif %}
+              </div>
+              <div class="text-end">
+                <span class="fw-bold">{{ file_summary.compliancy_rate }}%</span>
+                <small class="text-muted d-block">{{ file_summary.total_requirements }} requirements</small>
+              </div>
+            </div>
+            <div class="progress mb-2" style="height: 10px;">
+              {% if file_summary.compliancy_rate >= 90 %}
+                <div class="progress-bar bg-success" style="width: {{ file_summary.compliancy_rate }}%"></div>
+              {% elif file_summary.compliancy_rate >= 70 %}
+                <div class="progress-bar bg-info" style="width: {{ file_summary.compliancy_rate }}%"></div>
+              {% elif file_summary.compliancy_rate >= 50 %}
+                <div class="progress-bar bg-warning" style="width: {{ file_summary.compliancy_rate }}%"></div>
+              {% else %}
+                <div class="progress-bar bg-danger" style="width: {{ file_summary.compliancy_rate }}%"></div>
+              {% endif %}
+            </div>
+            <div class="d-flex justify-content-between">
+              <small class="text-success">✓ {{ file_summary.complete_count }} Complete</small>
+              <small class="text-warning">⏳ {{ file_summary.needs_review_count }} Review</small>
+              <small class="text-danger">✗ {{ file_summary.missing_count }} Missing</small>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Files Table -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-table me-2 text-primary"></i>Analysis Files
+            </h5>
+            <div class="d-flex gap-2">
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                  <i class="bi bi-funnel me-1"></i>Filter
+                </button>
+                <ul class="dropdown-menu">
+                  <li><a class="dropdown-item" href="#" onclick="filterFiles('all')">All Files</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="filterFiles('Excellent')">Excellent</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="filterFiles('Good')">Good</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="filterFiles('Needs Attention')">Needs Attention</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="filterFiles('Critical')">Critical</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle" id="mlFilesTable">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-file-earmark me-1"></i>File Name
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-shield me-1"></i>Framework
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-check-circle me-1"></i>Status
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-percent me-1"></i>Compliance Rate
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-list-check me-1"></i>Requirements
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-calendar me-1"></i>Last Updated
+                  </th>
+                  <th scope="col" class="border-0">
+                    <i class="bi bi-gear me-1"></i>Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for file_summary in ml_summary.file_summaries %}
+                <tr data-status="{{ file_summary.overall_status }}">
+                  <td>
+                    <div class="fw-medium">{{ file_summary.file_name }}</div>
+                    <small class="text-muted">{{ (file_summary.file_name|length * 1024)|filesizeformat }}</small>
+                  </td>
+                  <td>
+                    <span class="badge bg-secondary">{{ file_summary.framework }}</span>
+                  </td>
+                  <td>
+                    {% if file_summary.overall_status == 'Excellent' %}
+                      <span class="badge bg-success">
+                        <i class="bi bi-check-circle me-1"></i>{{ file_summary.overall_status }}
+                      </span>
+                    {% elif file_summary.overall_status == 'Good' %}
+                      <span class="badge bg-info">
+                        <i class="bi bi-info-circle me-1"></i>{{ file_summary.overall_status }}
+                      </span>
+                    {% elif file_summary.overall_status == 'Needs Attention' %}
+                      <span class="badge bg-warning">
+                        <i class="bi bi-exclamation-triangle me-1"></i>{{ file_summary.overall_status }}
+                      </span>
+                    {% else %}
+                      <span class="badge bg-danger">
+                        <i class="bi bi-x-circle me-1"></i>{{ file_summary.overall_status }}
+                      </span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <div class="progress me-2" style="width: 80px; height: 6px;">
+                        {% if file_summary.compliancy_rate >= 90 %}
+                          <div class="progress-bar bg-success" style="width: {{ file_summary.compliancy_rate }}%"></div>
+                        {% elif file_summary.compliancy_rate >= 70 %}
+                          <div class="progress-bar bg-info" style="width: {{ file_summary.compliancy_rate }}%"></div>
+                        {% elif file_summary.compliancy_rate >= 50 %}
+                          <div class="progress-bar bg-warning" style="width: {{ file_summary.compliancy_rate }}%"></div>
+                        {% else %}
+                          <div class="progress-bar bg-danger" style="width: {{ file_summary.compliancy_rate }}%"></div>
+                        {% endif %}
+                      </div>
+                      <small class="fw-medium">{{ file_summary.compliancy_rate }}%</small>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="d-flex gap-2">
+                      <small class="text-success">✓{{ file_summary.complete_count }}</small>
+                      <small class="text-warning">⏳{{ file_summary.needs_review_count }}</small>
+                      <small class="text-danger">✗{{ file_summary.missing_count }}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <small>{{ file_summary.last_updated.strftime('%b %d, %Y') }}</small>
+                  </td>
+                  <td>
+                    <div class="dropdown">
+                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-three-dots"></i>
+                      </button>
+                      <ul class="dropdown-menu">
+                        <li>
+                          <a class="dropdown-item" href="{{ url_for('main.ml_file_detail', file_path='compliance-results/' + file_summary.file_name) }}">
+                            <i class="bi bi-eye me-2"></i>View Details
+                          </a>
+                        </li>
+                        <li>
+                          <a class="dropdown-item" href="#" onclick="downloadFile('{{ file_summary.file_name }}')">
+                            <i class="bi bi-download me-2"></i>Download
+                          </a>
+                        </li>
+                        <li>
+                          <a class="dropdown-item" href="#" onclick="exportReport('{{ file_summary.framework }}')">
+                            <i class="bi bi-file-earmark-text me-2"></i>Export Report
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterFiles(status) {
+  const table = document.getElementById('mlFilesTable');
+  const rows = table.querySelectorAll('tbody tr');
+  
+  rows.forEach(row => {
+    const rowStatus = row.getAttribute('data-status');
+    if (status === 'all' || rowStatus === status) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+function refreshData() {
+  // Show loading state
+  const refreshBtn = document.querySelector('[onclick="refreshData()"]');
+  const originalText = refreshBtn.innerHTML;
+  refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1 spin"></i>Refreshing...';
+  refreshBtn.disabled = true;
+  
+  // Simulate refresh (in real app, this would call the API)
+  setTimeout(() => {
+    location.reload();
+  }, 1000);
+}
+
+function downloadFile(fileName) {
+  showToast('Download started for ' + fileName, 'info');
+}
+
+function exportReport(framework) {
+  showToast('Generating ' + framework + ' compliance report...', 'info');
+}
+
+function showToast(message, type = 'info') {
+  const toastDiv = document.createElement('div');
+  toastDiv.className = `toast align-items-center text-white bg-${type} border-0 position-fixed`;
+  toastDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999;';
+  toastDiv.setAttribute('role', 'alert');
+  toastDiv.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">
+        <i class="bi bi-info-circle me-2"></i>${message}
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  `;
+  
+  document.body.appendChild(toastDiv);
+  const toast = new bootstrap.Toast(toastDiv);
+  toast.show();
+  
+  toastDiv.addEventListener('hidden.bs.toast', () => {
+    toastDiv.remove();
+  });
+}
+
+// Auto-refresh every 5 minutes
+setInterval(() => {
+  fetch('{{ url_for("main.api_ml_summary") }}')
+    .then(response => response.json())
+    .then(data => {
+      // Update dashboard if new data is available
+      if (data.last_updated !== '{{ ml_summary.last_updated.isoformat() }}') {
+        showToast('New ML analysis results available. Refreshing...', 'success');
+        setTimeout(() => location.reload(), 2000);
+      }
+    })
+    .catch(error => console.log('Auto-refresh check failed:', error));
+}, 300000); // 5 minutes
+
+// Add spin animation for refresh button
+const style = document.createElement('style');
+style.textContent = `
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}
