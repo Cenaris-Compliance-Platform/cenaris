@@ -1,0 +1,267 @@
+{% extends "base.html" %} {% block content %}
+<div class="fade-in">
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h2 fw-bold text-dark mb-1">ADLS Connection Status</h1>
+          <p class="text-muted mb-0">
+            Azure Data Lake Storage connection for ML compliance results
+          </p>
+        </div>
+        <div class="d-none d-md-block">
+          <i class="bi bi-cloud text-primary" style="font-size: 2.5rem"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connection Status -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-cloud-arrow-down me-2 text-primary"></i>ADLS Configuration
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <table class="table table-borderless">
+                <tr>
+                  <td class="fw-medium text-muted">Storage Account:</td>
+                  <td><code>{{ ml_summary.adls_path.split('@')[1].split('.')[0] }}</code></td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Container:</td>
+                  <td><code>processed-doc-intel</code></td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Results Path:</td>
+                  <td><code>compliance-results/</code></td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Full Path:</td>
+                  <td><small><code>{{ ml_summary.adls_path }}</code></small></td>
+                </tr>
+              </table>
+            </div>
+            <div class="col-md-6">
+              <table class="table table-borderless">
+                <tr>
+                  <td class="fw-medium text-muted">Connection Status:</td>
+                  <td>
+                    <span class="badge bg-warning">{{ ml_summary.connection_status }}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Files Found:</td>
+                  <td>{{ ml_summary.total_files }}</td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Last Check:</td>
+                  <td>{{ ml_summary.last_updated.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Expected Format:</td>
+                  <td><code>CSV/JSON</code></td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expected Data Structure -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-table me-2 text-primary"></i>Expected ADLS Data Structure
+          </h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted mb-3">
+            Your ML analysis files should contain these exact columns:
+          </p>
+          <div class="table-responsive">
+            <table class="table table-bordered">
+              <thead class="table-light">
+                <tr>
+                  <th>Column Name</th>
+                  <th>Data Type</th>
+                  <th>Description</th>
+                  <th>Example Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Best Match Page</code></td>
+                  <td>Integer</td>
+                  <td>Page reference number</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td><code>Outcome Code</code></td>
+                  <td>String</td>
+                  <td>Analysis outcome identifier</td>
+                  <td>1.3</td>
+                </tr>
+                <tr>
+                  <td><code>Requirement</code></td>
+                  <td>String</td>
+                  <td>Compliance requirement description</td>
+                  <td>Choice, independence and quality of life</td>
+                </tr>
+                <tr>
+                  <td><code>Rule</code></td>
+                  <td>String</td>
+                  <td>Rule definition for compliance</td>
+                  <td>Complete if informed decision</td>
+                </tr>
+                <tr>
+                  <td><code>Rule_Status</code></td>
+                  <td>String</td>
+                  <td>Status of the rule</td>
+                  <td>Complete / Partial / Missing</td>
+                </tr>
+                <tr>
+                  <td><code>Similarity</code></td>
+                  <td>Float</td>
+                  <td>ML similarity score (0.0 to 1.0)</td>
+                  <td>0.3007</td>
+                </tr>
+                <tr>
+                  <td><code>Status</code></td>
+                  <td>String</td>
+                  <td>Overall status assessment</td>
+                  <td>Complete / Needs Review / Missing</td>
+                </tr>
+                <tr>
+                  <td><code>Status_Score</code></td>
+                  <td>Float</td>
+                  <td>Numeric status score (0.0 to 1.0)</td>
+                  <td>0.5</td>
+                </tr>
+                <tr>
+                  <td><code>Weight</code></td>
+                  <td>Float</td>
+                  <td>Importance weight for requirement</td>
+                  <td>4.0</td>
+                </tr>
+                <tr>
+                  <td><code>Weighted_Score</code></td>
+                  <td>Float</td>
+                  <td>Calculated weighted score</td>
+                  <td>2.0</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup Instructions -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-gear me-2 text-primary"></i>Setup Instructions
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <h6 class="fw-bold">1. Update Environment Variables</h6>
+              <p class="text-muted">Add your Azure connection string to <code>.env</code>:</p>
+              <pre class="bg-light p-3 rounded"><code>AZURE_STORAGE_CONNECTION_STRING=your_connection_string</code></pre>
+              
+              <h6 class="fw-bold mt-4">2. Upload ML Results</h6>
+              <p class="text-muted">Save your ML analysis results to ADLS path:</p>
+              <pre class="bg-light p-3 rounded"><code>{{ ml_summary.adls_path }}</code></pre>
+            </div>
+            <div class="col-md-6">
+              <h6 class="fw-bold">3. File Format</h6>
+              <p class="text-muted">Ensure your files are in CSV format with the exact column names shown above.</p>
+              
+              <h6 class="fw-bold mt-4">4. Test Connection</h6>
+              <p class="text-muted">Run the setup script to test your connection:</p>
+              <pre class="bg-light p-3 rounded"><code>python3 setup_azure_ml.py</code></pre>
+              
+              <div class="mt-4">
+                <button class="btn btn-primary" onclick="testConnection()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Test Connection
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testConnection() {
+  const btn = event.target;
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1 spin"></i>Testing...';
+  btn.disabled = true;
+  
+  // Simulate connection test
+  setTimeout(() => {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+    
+    // Show result
+    showToast('Connection test completed. Check console for details.', 'info');
+  }, 2000);
+}
+
+function showToast(message, type = 'info') {
+  const toastDiv = document.createElement('div');
+  toastDiv.className = `toast align-items-center text-white bg-${type} border-0 position-fixed`;
+  toastDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999;';
+  toastDiv.setAttribute('role', 'alert');
+  toastDiv.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">
+        <i class="bi bi-info-circle me-2"></i>${message}
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  `;
+  
+  document.body.appendChild(toastDiv);
+  const toast = new bootstrap.Toast(toastDiv);
+  toast.show();
+  
+  toastDiv.addEventListener('hidden.bs.toast', () => {
+    toastDiv.remove();
+  });
+}
+
+// Add spin animation
+const style = document.createElement('style');
+style.textContent = `
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

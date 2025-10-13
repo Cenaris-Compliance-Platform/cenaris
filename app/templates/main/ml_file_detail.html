@@ -1,0 +1,377 @@
+{% extends "base.html" %} {% block content %}
+<div class="fade-in">
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+              <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+              <li class="breadcrumb-item"><a href="{{ url_for('main.ml_results') }}">ML Results</a></li>
+              <li class="breadcrumb-item active">{{ file_analysis.file_name }}</li>
+            </ol>
+          </nav>
+          <h1 class="h2 fw-bold text-dark mb-1">{{ file_analysis.file_name }}</h1>
+          <p class="text-muted mb-0">
+            Detailed ML analysis results and compliance breakdown
+          </p>
+        </div>
+        <div class="d-none d-md-block">
+          <i class="bi bi-file-earmark-text text-primary" style="font-size: 2.5rem"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row mb-4">
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-primary bg-opacity-10 rounded-3 p-3">
+                <i class="bi bi-percent text-primary" style="font-size: 1.5rem"></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ file_analysis.compliancy_rate }}%</div>
+              <div class="text-muted small">Compliance Rate</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-success bg-opacity-10 rounded-3 p-3">
+                <i class="bi bi-check-circle text-success" style="font-size: 1.5rem"></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ file_analysis.complete_count }}</div>
+              <div class="text-muted small">Complete</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-warning bg-opacity-10 rounded-3 p-3">
+                <i class="bi bi-clock text-warning" style="font-size: 1.5rem"></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ file_analysis.needs_review_count }}</div>
+              <div class="text-muted small">Needs Review</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+              <div class="bg-danger bg-opacity-10 rounded-3 p-3">
+                <i class="bi bi-x-circle text-danger" style="font-size: 1.5rem"></i>
+              </div>
+            </div>
+            <div class="flex-grow-1 ms-3">
+              <div class="fw-bold h4 mb-0">{{ file_analysis.missing_count }}</div>
+              <div class="text-muted small">Missing</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Info and Chart -->
+  <div class="row mb-4">
+    <div class="col-lg-8 mb-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-info-circle me-2 text-primary"></i>File Information
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <table class="table table-borderless">
+                <tr>
+                  <td class="fw-medium text-muted">File Name:</td>
+                  <td>{{ file_analysis.file_name }}</td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Total Requirements:</td>
+                  <td>{{ file_analysis.total_requirements }}</td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Overall Status:</td>
+                  <td>
+                    {% if file_analysis.overall_status == 'Excellent' %}
+                      <span class="badge bg-success">{{ file_analysis.overall_status }}</span>
+                    {% elif file_analysis.overall_status == 'Good' %}
+                      <span class="badge bg-info">{{ file_analysis.overall_status }}</span>
+                    {% elif file_analysis.overall_status == 'Needs Attention' %}
+                      <span class="badge bg-warning">{{ file_analysis.overall_status }}</span>
+                    {% else %}
+                      <span class="badge bg-danger">{{ file_analysis.overall_status }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Weighted Score:</td>
+                  <td>{{ file_analysis.weighted_score }}/10</td>
+                </tr>
+              </table>
+            </div>
+            <div class="col-md-6">
+              <table class="table table-borderless">
+                <tr>
+                  <td class="fw-medium text-muted">Last Updated:</td>
+                  <td>{{ file_analysis.last_updated.strftime('%b %d, %Y at %I:%M %p') }}</td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Complete:</td>
+                  <td><span class="text-success fw-bold">{{ file_analysis.complete_count }}</span></td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Needs Review:</td>
+                  <td><span class="text-warning fw-bold">{{ file_analysis.needs_review_count }}</span></td>
+                </tr>
+                <tr>
+                  <td class="fw-medium text-muted">Missing:</td>
+                  <td><span class="text-danger fw-bold">{{ file_analysis.missing_count }}</span></td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4 mb-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-pie-chart me-2 text-primary"></i>Compliance Breakdown
+          </h5>
+        </div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <div class="text-center">
+            <div class="position-relative d-inline-block mb-3">
+              <svg width="180" height="180">
+                <circle cx="90" cy="90" r="70" fill="none" stroke="#e9ecef" stroke-width="15"/>
+                {% if file_analysis.total_requirements > 0 %}
+                <!-- Complete (Green) -->
+                <circle cx="90" cy="90" r="70" fill="none" stroke="#28a745" stroke-width="15"
+                        stroke-dasharray="{{ (file_analysis.complete_count / file_analysis.total_requirements * 440)|round }}, 440"
+                        stroke-linecap="round" transform="rotate(-90 90 90)"/>
+                <!-- Needs Review (Yellow) -->
+                <circle cx="90" cy="90" r="70" fill="none" stroke="#ffc107" stroke-width="15"
+                        stroke-dasharray="{{ (file_analysis.needs_review_count / file_analysis.total_requirements * 440)|round }}, 440"
+                        stroke-dashoffset="-{{ (file_analysis.complete_count / file_analysis.total_requirements * 440)|round }}"
+                        stroke-linecap="round" transform="rotate(-90 90 90)"/>
+                <!-- Missing (Red) -->
+                <circle cx="90" cy="90" r="70" fill="none" stroke="#dc3545" stroke-width="15"
+                        stroke-dasharray="{{ (file_analysis.missing_count / file_analysis.total_requirements * 440)|round }}, 440"
+                        stroke-dashoffset="-{{ ((file_analysis.complete_count + file_analysis.needs_review_count) / file_analysis.total_requirements * 440)|round }}"
+                        stroke-linecap="round" transform="rotate(-90 90 90)"/>
+                {% endif %}
+              </svg>
+              <div class="position-absolute top-50 start-50 translate-middle text-center">
+                <div class="h3 fw-bold mb-0 text-primary">{{ file_analysis.compliancy_rate }}%</div>
+                <small class="text-muted">Compliant</small>
+              </div>
+            </div>
+            <div class="d-flex justify-content-center gap-3">
+              <div class="text-center">
+                <div class="d-flex align-items-center mb-1">
+                  <div class="bg-success rounded-circle me-2" style="width: 12px; height: 12px"></div>
+                  <small class="fw-medium">Complete</small>
+                </div>
+                <div class="fw-bold">{{ file_analysis.complete_count }}</div>
+              </div>
+              <div class="text-center">
+                <div class="d-flex align-items-center mb-1">
+                  <div class="bg-warning rounded-circle me-2" style="width: 12px; height: 12px"></div>
+                  <small class="fw-medium">Review</small>
+                </div>
+                <div class="fw-bold">{{ file_analysis.needs_review_count }}</div>
+              </div>
+              <div class="text-center">
+                <div class="d-flex align-items-center mb-1">
+                  <div class="bg-danger rounded-circle me-2" style="width: 12px; height: 12px"></div>
+                  <small class="fw-medium">Missing</small>
+                </div>
+                <div class="fw-bold">{{ file_analysis.missing_count }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Requirements Detail Table -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+              <i class="bi bi-table me-2 text-primary"></i>Requirement Details
+            </h5>
+            <div class="d-flex gap-2">
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                  <i class="bi bi-funnel me-1"></i>Filter
+                </button>
+                <ul class="dropdown-menu">
+                  <li><a class="dropdown-item" href="#" onclick="filterRequirements('all')">All Status</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="filterRequirements('Complete')">Complete Only</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="filterRequirements('Needs Review')">Needs Review Only</a></li>
+                  <li><a class="dropdown-item" href="#" onclick="filterRequirements('Missing')">Missing Only</a></li>
+                </ul>
+              </div>
+              <button class="btn btn-sm btn-primary" onclick="exportRequirements()">
+                <i class="bi bi-download me-1"></i>Export
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle" id="requirementsTable">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col" class="border-0">Requirement</th>
+                  <th scope="col" class="border-0">Rule</th>
+                  <th scope="col" class="border-0">Status</th>
+                  <th scope="col" class="border-0">Similarity Score</th>
+                  <th scope="col" class="border-0">Status Score</th>
+                  <th scope="col" class="border-0">Weight</th>
+                  <th scope="col" class="border-0">Weighted Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for req in file_analysis.requirements %}
+                <tr data-status="{{ req.Status }}">
+                  <td>
+                    <div class="fw-medium">{{ req.Requirement }}</div>
+                  </td>
+                  <td>
+                    <small class="text-muted">{{ req.Rule }}</small>
+                  </td>
+                  <td>
+                    {% if req.Status == 'Complete' %}
+                      <span class="badge bg-success">
+                        <i class="bi bi-check-circle me-1"></i>{{ req.Status }}
+                      </span>
+                    {% elif req.Status == 'Needs Review' %}
+                      <span class="badge bg-warning">
+                        <i class="bi bi-clock me-1"></i>{{ req.Status }}
+                      </span>
+                    {% else %}
+                      <span class="badge bg-danger">
+                        <i class="bi bi-x-circle me-1"></i>{{ req.Status }}
+                      </span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <div class="progress me-2" style="width: 60px; height: 6px;">
+                        {% if req.Similarity >= 0.8 %}
+                          <div class="progress-bar bg-success" style="width: {{ (req.Similarity * 100)|round }}%"></div>
+                        {% elif req.Similarity >= 0.6 %}
+                          <div class="progress-bar bg-info" style="width: {{ (req.Similarity * 100)|round }}%"></div>
+                        {% elif req.Similarity >= 0.4 %}
+                          <div class="progress-bar bg-warning" style="width: {{ (req.Similarity * 100)|round }}%"></div>
+                        {% else %}
+                          <div class="progress-bar bg-danger" style="width: {{ (req.Similarity * 100)|round }}%"></div>
+                        {% endif %}
+                      </div>
+                      <small class="fw-medium">{{ (req.Similarity * 100)|round }}%</small>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="fw-medium">{{ req.Status_Score }}</span>
+                  </td>
+                  <td>
+                    <span class="text-muted">{{ req.Weight }}</span>
+                  </td>
+                  <td>
+                    <span class="fw-bold">{{ req.Weighted_Score }}</span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterRequirements(status) {
+  const table = document.getElementById('requirementsTable');
+  const rows = table.querySelectorAll('tbody tr');
+  
+  rows.forEach(row => {
+    const rowStatus = row.getAttribute('data-status');
+    if (status === 'all' || rowStatus === status) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+function exportRequirements() {
+  showToast('Exporting requirements data...', 'info');
+  // In real app, this would trigger a download
+}
+
+function showToast(message, type = 'info') {
+  const toastDiv = document.createElement('div');
+  toastDiv.className = `toast align-items-center text-white bg-${type} border-0 position-fixed`;
+  toastDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999;';
+  toastDiv.setAttribute('role', 'alert');
+  toastDiv.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">
+        <i class="bi bi-info-circle me-2"></i>${message}
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  `;
+  
+  document.body.appendChild(toastDiv);
+  const toast = new bootstrap.Toast(toastDiv);
+  toast.show();
+  
+  toastDiv.addEventListener('hidden.bs.toast', () => {
+    toastDiv.remove();
+  });
+}
+</script>
+{% endblock %}

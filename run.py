@@ -29,8 +29,8 @@ if __name__ == '__main__':
     print("\n🛑 Press Ctrl+C to stop the server\n")
     
     app.run(
-        host='127.0.0.1',
-        port=8080,
+        host='0.0.0.0',  # Allow external connections
+        port=8081,
         debug=True,
         use_reloader=True
     )

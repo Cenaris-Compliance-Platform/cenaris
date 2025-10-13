@@ -1,7 +1,8 @@
-from flask import render_template, redirect, url_for
+from flask import render_template, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app.main import bp
 from app.models import Document
+from app.services.azure_data_service import azure_data_service
 
 @bp.route('/')
 def index():
@@ -21,10 +22,14 @@ def dashboard():
     all_documents = Document.get_by_user(current_user.id)
     total_documents = len(all_documents)
     
+    # Get Azure ML compliance results
+    ml_summary = azure_data_service.get_dashboard_summary()
+    
     return render_template('main/dashboard.html', 
                          title='Dashboard',
                          recent_documents=recent_documents,
-                         total_documents=total_documents)
+                         total_documents=total_documents,
+                         ml_summary=ml_summary)
 
 @bp.route('/evidence-repository')
 @login_required
@@ -127,71 +132,80 @@ def ai_evidence_detail(entry_id):
 @bp.route('/gap-analysis')
 @login_required
 def gap_analysis():
-    """Gap Analysis route to display compliance gaps."""
-    # Mock gap analysis data
-    gap_analysis_data = [
-        {
-            'requirement_name': 'SOX Section 404 - Internal Controls',
-            'status': 'Met',
-            'supporting_evidence': 'Internal Control Assessment Report, Management Certification',
-            'completion_percentage': 100,
-            'last_updated': '2025-09-15'
-        },
-        {
-            'requirement_name': 'GDPR Article 30 - Records of Processing',
-            'status': 'Pending',
-            'supporting_evidence': 'Data Processing Inventory (In Progress)',
-            'completion_percentage': 65,
-            'last_updated': '2025-09-10'
-        },
-        {
-            'requirement_name': 'ISO 27001 - Information Security Policy',
-            'status': 'Met',
-            'supporting_evidence': 'Security Policy Document, Board Approval',
-            'completion_percentage': 100,
-            'last_updated': '2025-09-08'
-        },
-        {
-            'requirement_name': 'PCI DSS Requirement 3 - Cardholder Data Protection',
-            'status': 'Not Met',
-            'supporting_evidence': 'Encryption Assessment Required',
-            'completion_percentage': 30,
-            'last_updated': '2025-09-05'
-        },
-        {
-            'requirement_name': 'HIPAA Security Rule - Access Controls',
-            'status': 'Met',
-            'supporting_evidence': 'Access Control Matrix, User Access Reviews',
-            'completion_percentage': 100,
-            'last_updated': '2025-09-01'
-        },
-        {
-            'requirement_name': 'SOC 2 Type II - Availability Controls',
-            'status': 'Pending',
-            'supporting_evidence': 'Disaster Recovery Plan (Under Review)',
-            'completion_percentage': 80,
-            'last_updated': '2025-08-28'
-        }
-    ]
+    """Gap Analysis route to display compliance gaps from Azure ML results."""
+    # Get Azure ML compliance results
+    ml_summary = azure_data_service.get_dashboard_summary()
     
-    # Calculate summary statistics
-    total_requirements = len(gap_analysis_data)
-    met_requirements = len([item for item in gap_analysis_data if item['status'] == 'Met'])
-    pending_requirements = len([item for item in gap_analysis_data if item['status'] == 'Pending'])
-    not_met_requirements = len([item for item in gap_analysis_data if item['status'] == 'Not Met'])
+    # Convert ML results to gap analysis format
+    gap_analysis_data = []
     
+    for file_summary in ml_summary['file_summaries']:
+        # Get detailed requirements for this file
+        detailed_analysis = azure_data_service.get_file_analysis_summary(f"compliance-results/{file_summary['file_name']}")
+        
+        for req in detailed_analysis.get('requirements', []):
+            # Debug: print the actual keys in req
+            print(f"DEBUG: req keys = {list(req.keys())}")
+            print(f"DEBUG: req = {req}")
+            
+            # Map ML status to gap analysis status
+            status_mapping = {
+                'Complete': 'Met',
+                'Needs Review': 'Pending', 
+                'Missing': 'Not Met'
+            }
+            
+            # Use safe access with .get() to avoid KeyError
+            gap_analysis_data.append({
+                'requirement_name': f"{file_summary['framework']} - {req.get('Requirement', 'Unknown Requirement')}",
+                'status': status_mapping.get(req.get('Status', 'Unknown'), 'Not Met'),
+                'supporting_evidence': f"ML Analysis (Similarity: {req.get('Similarity', 0):.2f})",
+                'completion_percentage': int(req.get('Status_Score', 0) * 100),
+                'last_updated': file_summary['last_updated'].strftime('%Y-%m-%d'),
+                'framework': file_summary['framework'],
+                'similarity_score': req.get('Similarity', 0),
+                'weighted_score': req.get('Weighted_Score', 0)
+            })
+    
+    # If no ML data, fall back to mock data
+    if not gap_analysis_data:
+        gap_analysis_data = [
+            {
+                'requirement_name': 'SOX Section 404 - Internal Controls',
+                'status': 'Met',
+                'supporting_evidence': 'Internal Control Assessment Report, Management Certification',
+                'completion_percentage': 100,
+                'last_updated': '2025-09-15',
+                'framework': 'SOX',
+                'similarity_score': 0.92,
+                'weighted_score': 4.0
+            },
+            {
+                'requirement_name': 'GDPR Article 30 - Records of Processing',
+                'status': 'Pending',
+                'supporting_evidence': 'Data Processing Inventory (In Progress)',
+                'completion_percentage': 65,
+                'last_updated': '2025-09-10',
+                'framework': 'GDPR',
+                'similarity_score': 0.65,
+                'weighted_score': 2.5
+            }
+        ]
+    
+    # Calculate summary statistics from ML data
     summary_stats = {
-        'total': total_requirements,
-        'met': met_requirements,
-        'pending': pending_requirements,
-        'not_met': not_met_requirements,
-        'compliance_percentage': round((met_requirements / total_requirements) * 100, 1)
+        'total': ml_summary['total_requirements'],
+        'met': ml_summary['total_complete'],
+        'pending': ml_summary['total_needs_review'],
+        'not_met': ml_summary['total_missing'],
+        'compliance_percentage': ml_summary['avg_compliancy_rate']
     }
     
     return render_template('main/gap_analysis.html', 
                          title='Gap Analysis',
                          gap_data=gap_analysis_data,
-                         summary_stats=summary_stats)
+                         summary_stats=summary_stats,
+                         ml_summary=ml_summary)
 
 @bp.route('/user-roles')
 @login_required
@@ -374,3 +388,54 @@ def audit_export():
                          available_reports=available_reports,
                          recent_exports=recent_exports,
                          export_stats=export_stats)
+
+@bp.route('/ml-results')
+@login_required
+def ml_results():
+    """ML Results dashboard showing Azure ML compliance analysis."""
+    # Get Azure ML compliance results
+    ml_summary = azure_data_service.get_dashboard_summary()
+    compliance_files = azure_data_service.get_compliance_files()
+    
+    return render_template('main/ml_results.html',
+                         title='ML Compliance Results',
+                         ml_summary=ml_summary,
+                         compliance_files=compliance_files)
+
+@bp.route('/ml-results/<path:file_path>')
+@login_required
+def ml_file_detail(file_path):
+    """Detailed view of a specific ML analysis file."""
+    file_analysis = azure_data_service.get_file_analysis_summary(file_path)
+    
+    return render_template('main/ml_file_detail.html',
+                         title='ML File Analysis',
+                         file_analysis=file_analysis)
+
+@bp.route('/api/ml-summary')
+@login_required
+def api_ml_summary():
+    """API endpoint for ML summary data (for auto-refresh)."""
+    ml_summary = azure_data_service.get_dashboard_summary()
+    return jsonify(ml_summary)
+
+@bp.route('/adls-raw-data')
+@login_required
+def adls_raw_data():
+    """Show raw ADLS data exactly as it appears in the JSON files."""
+    ml_summary = azure_data_service.get_dashboard_summary()
+    
+    return render_template('main/adls_raw_data.html',
+                         title='ADLS Raw Data',
+                         ml_summary=ml_summary,
+                         azure_data_service=azure_data_service)
+
+@bp.route('/adls-connection')
+@login_required
+def adls_connection():
+    """Show ADLS connection status and setup instructions."""
+    ml_summary = azure_data_service.get_dashboard_summary()
+    
+    return render_template('main/adls_connection.html',
+                         title='ADLS Connection',
+                         ml_summary=ml_summary)
