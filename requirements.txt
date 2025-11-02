@@ -7,6 +7,8 @@ python-dotenv==1.0.0
 WTForms==3.0.1
 Flask-WTF==1.1.1
 email-validator==2.0.0
-pandas==2.1.1
+numpy==1.24.3
+pandas==2.0.3
 azure-core==1.29.4
 requests==2.31.0
+gunicorn==21.2.0
