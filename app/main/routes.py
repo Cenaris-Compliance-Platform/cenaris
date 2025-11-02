@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app.main import bp
 from app.models import Document
-from app.services.azure_data_service import azure_data_service
+# from app.services.azure_data_service import azure_data_service  # Temporarily disabled for deployment
 
 @bp.route('/')
 def index():
