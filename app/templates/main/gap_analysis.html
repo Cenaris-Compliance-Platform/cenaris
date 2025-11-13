@@ -7,12 +7,41 @@
         <div>
           <h1 class="h2 fw-bold text-dark mb-1">Compliance Gap Analysis</h1>
           <p class="text-muted mb-0">
-            Identify and track compliance requirements and gaps across
-            frameworks
+            Identify and track compliance requirements and gaps across frameworks
           </p>
+          <small class="text-muted">
+            <i class="bi bi-clock me-1"></i>Last updated: {{ ml_summary.get('last_updated', 'Unknown') | datetime_format('%b %d, %Y %I:%M %p') }}
+          </small>
         </div>
-        <div class="d-none d-md-block">
-          <i class="bi bi-graph-up text-primary" style="font-size: 2.5rem"></i>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-outline-secondary" onclick="window.location.reload(true)" title="Refresh data from ADLS">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh Data
+          </button>
+          <div class="dropdown">
+            <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              <i class="bi bi-file-earmark-pdf me-2"></i>Generate Report
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li>
+                <a class="dropdown-item" href="{{ url_for('main.generate_report', report_type='gap-analysis') }}">
+                  <i class="bi bi-file-earmark-bar-graph me-2 text-primary"></i>Gap Analysis Report
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="{{ url_for('main.generate_report', report_type='accreditation-plan') }}">
+                  <i class="bi bi-file-earmark-check me-2 text-success"></i>Accreditation Plan
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="{{ url_for('main.generate_report', report_type='audit-pack') }}">
+                  <i class="bi bi-file-earmark-zip me-2 text-info"></i>Audit Pack Export
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="d-none d-md-block">
+            <i class="bi bi-graph-up text-primary" style="font-size: 2.5rem"></i>
+          </div>
         </div>
       </div>
     </div>
@@ -225,60 +254,30 @@
           </h5>
         </div>
         <div class="card-body">
-          <div class="mb-3">
-            <div class="d-flex justify-content-between mb-2">
-              <span class="fw-medium">SOX Compliance</span>
-              <span class="text-muted">85%</span>
+          {% if gap_data %}
+            {% for item in gap_data %}
+              {% set percentage = item.completion_percentage %}
+              {% set progress_class = 'bg-success' if percentage >= 90 else 'bg-info' if percentage >= 70 else 'bg-warning' if percentage >= 50 else 'bg-danger' %}
+              {% set status_text = 'Complete' if item.status == 'Complete' else 'Needs Review' if item.status == 'Needs Review' else 'Missing' %}
+              
+              <div class="mb-3">
+                <div class="d-flex justify-content-between mb-2">
+                  <span class="fw-medium">{{ item.requirement_name }}</span>
+                  <span class="text-muted">{{ percentage }}%</span>
+                </div>
+                <div class="progress mb-1" style="height: 8px">
+                  <div class="progress-bar {{ progress_class }}" style="width: {{ percentage }}%"></div>
+                </div>
+                <small class="text-muted">Status: {{ status_text }}</small>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-center py-4">
+              <i class="bi bi-inbox text-muted" style="font-size: 3rem; opacity: 0.3;"></i>
+              <p class="text-muted mt-3">No framework data available</p>
+              <small class="text-muted">Upload compliance data to ADLS to see framework progress</small>
             </div>
-            <div class="progress mb-1" style="height: 8px">
-              <div class="progress-bar bg-success" style="width: 85%"></div>
-            </div>
-            <small class="text-muted">3 of 4 requirements met</small>
-          </div>
-
-          <div class="mb-3">
-            <div class="d-flex justify-content-between mb-2">
-              <span class="fw-medium">GDPR</span>
-              <span class="text-muted">60%</span>
-            </div>
-            <div class="progress mb-1" style="height: 8px">
-              <div class="progress-bar bg-warning" style="width: 60%"></div>
-            </div>
-            <small class="text-muted">1 of 2 requirements pending</small>
-          </div>
-
-          <div class="mb-3">
-            <div class="d-flex justify-content-between mb-2">
-              <span class="fw-medium">ISO 27001</span>
-              <span class="text-muted">100%</span>
-            </div>
-            <div class="progress mb-1" style="height: 8px">
-              <div class="progress-bar bg-success" style="width: 100%"></div>
-            </div>
-            <small class="text-muted">1 of 1 requirements met</small>
-          </div>
-
-          <div class="mb-3">
-            <div class="d-flex justify-content-between mb-2">
-              <span class="fw-medium">PCI DSS</span>
-              <span class="text-muted">30%</span>
-            </div>
-            <div class="progress mb-1" style="height: 8px">
-              <div class="progress-bar bg-danger" style="width: 30%"></div>
-            </div>
-            <small class="text-muted">1 of 1 requirements not met</small>
-          </div>
-
-          <div class="mb-3">
-            <div class="d-flex justify-content-between mb-2">
-              <span class="fw-medium">HIPAA</span>
-              <span class="text-muted">100%</span>
-            </div>
-            <div class="progress mb-1" style="height: 8px">
-              <div class="progress-bar bg-success" style="width: 100%"></div>
-            </div>
-            <small class="text-muted">1 of 1 requirements met</small>
-          </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -316,34 +315,28 @@
                     <a
                       class="dropdown-item"
                       href="#"
-                      onclick="filterTable('Met')"
-                      >Met Only</a
+                      onclick="filterTable('Complete')"
+                      >Complete Only</a
                     >
                   </li>
                   <li>
                     <a
                       class="dropdown-item"
                       href="#"
-                      onclick="filterTable('Pending')"
-                      >Pending Only</a
+                      onclick="filterTable('Needs Review')"
+                      >Needs Review Only</a
                     >
                   </li>
                   <li>
                     <a
                       class="dropdown-item"
                       href="#"
-                      onclick="filterTable('Not Met')"
-                      >Gaps Only</a
+                      onclick="filterTable('Missing')"
+                      >Missing Only</a
                     >
                   </li>
                 </ul>
               </div>
-              <button
-                class="btn btn-sm btn-primary"
-                onclick="showComingSoon('Generate Report')"
-              >
-                <i class="bi bi-file-earmark-text me-1"></i>Generate Report
-              </button>
             </div>
           </div>
         </div>
@@ -373,17 +366,18 @@
                 </tr>
               </thead>
               <tbody>
+                {% if gap_data %}
                 {% for item in gap_data %}
                 <tr data-status="{{ item.status }}">
                   <td>
                     <div class="fw-medium">{{ item.requirement_name }}</div>
                   </td>
                   <td>
-                    {% set status_class = 'bg-success' if item.status == 'Met' else 'bg-warning' if item.status == 'Pending' else 'bg-danger' %}
+                    {% set status_class = 'bg-success' if item.status == 'Complete' else 'bg-warning' if item.status == 'Needs Review' else 'bg-danger' %}
                     <span class="badge {{ status_class }}">
-                      {% if item.status == 'Met' %}
+                      {% if item.status == 'Complete' %}
                       <i class="bi bi-check-circle me-1"></i>
-                      {% elif item.status == 'Pending' %}
+                      {% elif item.status == 'Needs Review' %}
                       <i class="bi bi-clock me-1"></i>
                       {% else %}
                       <i class="bi bi-x-circle me-1"></i>
@@ -458,6 +452,19 @@
                   </td>
                 </tr>
                 {% endfor %}
+                {% else %}
+                <tr>
+                  <td colspan="6" class="text-center py-5">
+                    <div class="text-center">
+                      <i class="bi bi-inbox text-muted" style="font-size: 3rem; opacity: 0.3;"></i>
+                      <p class="text-muted mt-3 mb-1"><strong>No Compliance Data Available</strong></p>
+                      <small class="text-muted">Upload your compliance_summary.csv file to ADLS to see gap analysis</small>
+                      <br>
+                      <small class="text-muted">Path: compliance-results/2025/11/user_{{ current_user.id }}/compliance_summary.csv</small>
+                    </div>
+                  </td>
+                </tr>
+                {% endif %}
               </tbody>
             </table>
           </div>

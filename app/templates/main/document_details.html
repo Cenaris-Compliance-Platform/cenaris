@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('main.evidence_repository') }}">Evidence Repository</a></li>
+                    <li class="breadcrumb-item active">Document Details</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+    
+    <!-- Document Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-start">
+                        <div class="flex-shrink-0 me-4">
+                            {% if document.content_type == 'application/pdf' %}
+                                <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 4rem;"></i>
+                            {% else %}
+                                <i class="bi bi-file-earmark-word text-primary" style="font-size: 4rem;"></i>
+                            {% endif %}
+                        </div>
+                        <div class="flex-grow-1">
+                            <h2 class="h3 fw-bold mb-2">{{ document.original_filename }}</h2>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <span class="badge bg-light text-dark">
+                                    <i class="bi bi-hdd me-1"></i>{{ document.get_file_size_formatted() }}
+                                </span>
+                                <span class="badge bg-light text-dark">
+                                    {% if document.content_type == 'application/pdf' %}
+                                        <i class="bi bi-file-earmark-pdf me-1"></i>PDF Document
+                                    {% else %}
+                                        <i class="bi bi-file-earmark-word me-1"></i>Word Document
+                                    {% endif %}
+                                </span>
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle me-1"></i>Active
+                                </span>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-primary">
+                                    <i class="bi bi-download me-2"></i>Download
+                                </a>
+                                <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.original_filename }}')">
+                                    <i class="bi bi-trash me-2"></i>Delete
+                                </button>
+                                <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-2"></i>Back to Repository
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Document Details -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2 text-primary"></i>
+                        Document Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tbody>
+                            <tr>
+                                <td class="text-muted" style="width: 200px;">
+                                    <i class="bi bi-file-earmark me-2"></i>Original Filename
+                                </td>
+                                <td class="fw-medium">{{ document.original_filename }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">
+                                    <i class="bi bi-hash me-2"></i>System Filename
+                                </td>
+                                <td><code>{{ document.filename }}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">
+                                    <i class="bi bi-cloud me-2"></i>Blob Name
+                                </td>
+                                <td><code>{{ document.blob_name }}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">
+                                    <i class="bi bi-hdd me-2"></i>File Size
+                                </td>
+                                <td>
+                                    {{ document.get_file_size_formatted() }}
+                                    <small class="text-muted">({{ "{:,}".format(document.file_size) }} bytes)</small>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">
+                                    <i class="bi bi-file-earmark-code me-2"></i>Content Type
+                                </td>
+                                <td><code>{{ document.content_type }}</code></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">
+                                    <i class="bi bi-calendar-plus me-2"></i>Upload Date
+                                </td>
+                                <td>
+                                    {{ document.uploaded_at | datetime_format('%B %d, %Y at %I:%M %p') }}
+                                    <small class="text-muted">({{ document.uploaded_at | datetime_format('%Z') }})</small>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">
+                                    <i class="bi bi-person me-2"></i>Uploaded By
+                                </td>
+                                <td>User ID: {{ document.uploaded_by }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">
+                                    <i class="bi bi-shield-check me-2"></i>Status
+                                </td>
+                                <td>
+                                    {% if document.is_active %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle me-1"></i>Active
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="bi bi-x-circle me-1"></i>Inactive
+                                        </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <!-- Quick Actions -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-lightning me-2 text-primary"></i>
+                        Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-outline-primary">
+                            <i class="bi bi-download me-2"></i>Download Document
+                        </a>
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ document.blob_name }}')">
+                            <i class="bi bi-clipboard me-2"></i>Copy Blob Name
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ document.id }}')">
+                            <i class="bi bi-hash me-2"></i>Copy Document ID
+                        </button>
+                        <hr>
+                        <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.original_filename }}')">
+                            <i class="bi bi-trash me-2"></i>Delete Document
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Storage Info -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-cloud-arrow-up me-2 text-primary"></i>
+                        Storage Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1">Storage Location</small>
+                        <div class="fw-medium">Azure Blob Storage</div>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-1">Container</small>
+                        <code class="small">user-uploads</code>
+                    </div>
+                    <div class="mb-0">
+                        <small class="text-muted d-block mb-1">Encryption</small>
+                        <span class="badge bg-success">
+                            <i class="bi bi-shield-lock me-1"></i>AES-256 Encrypted
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function confirmDelete(docId, filename) {
+        const modalHtml = `
+            <div class="modal fade" id="deleteModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                                Confirm Delete
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to delete this document?</p>
+                            <div class="alert alert-warning">
+                                <strong>${filename}</strong>
+                            </div>
+                            <p class="text-muted mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                This action cannot be undone. The document will be removed from both the database and Azure storage.
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <form method="POST" action="/document/${docId}/delete" style="display: inline;">
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="bi bi-trash me-1"></i>Delete Document
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const existingModal = document.getElementById('deleteModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        modal.show();
+        
+        document.getElementById('deleteModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    }
+    
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(function() {
+            // Show success toast
+            const toastHtml = `
+                <div class="toast align-items-center text-white bg-success border-0 position-fixed" 
+                     style="top: 20px; right: 20px; z-index: 9999;" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="bi bi-check-circle me-2"></i>Copied to clipboard!
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.querySelector('.toast:last-child');
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+        }).catch(function(err) {
+            alert('Failed to copy: ' + err);
+        });
+    }
+</script>
+{% endblock %}

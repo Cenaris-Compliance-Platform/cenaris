@@ -101,18 +101,18 @@
                                                         </button>
                                                         <ul class="dropdown-menu">
                                                             <li>
-                                                                <a class="dropdown-item" href="#" onclick="showComingSoon('Download')">
+                                                                <a class="dropdown-item" href="{{ url_for('main.download_document', doc_id=document.id) }}">
                                                                     <i class="bi bi-download me-2"></i>Download
                                                                 </a>
                                                             </li>
                                                             <li>
-                                                                <a class="dropdown-item" href="#" onclick="showComingSoon('View Details')">
+                                                                <a class="dropdown-item" href="{{ url_for('main.document_details', doc_id=document.id) }}">
                                                                     <i class="bi bi-info-circle me-2"></i>View Details
                                                                 </a>
                                                             </li>
                                                             <li><hr class="dropdown-divider"></li>
                                                             <li>
-                                                                <a class="dropdown-item text-danger" href="#" onclick="showComingSoon('Delete')">
+                                                                <a class="dropdown-item text-danger" href="#" onclick="confirmDelete({{ document.id }}, '{{ document.original_filename }}'); return false;">
                                                                     <i class="bi bi-trash me-2"></i>Delete
                                                                 </a>
                                                             </li>
@@ -156,13 +156,19 @@
                                                     </button>
                                                     <ul class="dropdown-menu">
                                                         <li>
-                                                            <a class="dropdown-item" href="#" onclick="showComingSoon('Download')">
+                                                            <a class="dropdown-item" href="{{ url_for('main.download_document', doc_id=document.id) }}">
                                                                 <i class="bi bi-download me-2"></i>Download
                                                             </a>
                                                         </li>
                                                         <li>
-                                                            <a class="dropdown-item" href="#" onclick="showComingSoon('View Details')">
+                                                            <a class="dropdown-item" href="{{ url_for('main.document_details', doc_id=document.id) }}">
                                                                 <i class="bi bi-info-circle me-2"></i>View Details
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger" href="#" onclick="confirmDelete({{ document.id }}, '{{ document.original_filename }}'); return false;">
+                                                                <i class="bi bi-trash me-2"></i>Delete
                                                             </a>
                                                         </li>
                                                     </ul>
@@ -264,6 +270,61 @@
             toggleIcon.className = 'bi bi-list';
             isGridView = true;
         }
+    }
+    
+    function confirmDelete(docId, filename) {
+        // Create Bootstrap modal for confirmation
+        const modalHtml = `
+            <div class="modal fade" id="deleteModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                                Confirm Delete
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to delete this document?</p>
+                            <div class="alert alert-warning">
+                                <strong>${filename}</strong>
+                            </div>
+                            <p class="text-muted mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                This action cannot be undone.
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <form method="POST" action="/document/${docId}/delete" style="display: inline;">
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="bi bi-trash me-1"></i>Delete Document
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('deleteModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        modal.show();
+        
+        // Clean up after modal is hidden
+        document.getElementById('deleteModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
     }
 </script>
 {% endblock %}
