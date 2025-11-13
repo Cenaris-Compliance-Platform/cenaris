@@ -2,6 +2,7 @@ from flask import render_template, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app.main import bp
 from app.models import Document
+from app.services.azure_data_service import azure_data_service
 
 def get_mock_ml_summary():
     """Get mock ML summary data"""
@@ -63,7 +64,9 @@ def dashboard():
     recent_documents = Document.get_by_user(current_user.id, limit=5)
     all_documents = Document.get_by_user(current_user.id)
     total_documents = len(all_documents)
-    ml_summary = get_mock_ml_summary()
+    
+    # Get real ADLS data
+    ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
     
     return render_template('main/dashboard.html', 
                          title='Dashboard',
@@ -95,49 +98,113 @@ def evidence_repository():
                          title='Evidence Repository',
                          documents=documents)
 
+@bp.route('/document/<int:doc_id>/download')
+@login_required
+def download_document(doc_id):
+    """Download a document."""
+    from flask import send_file, abort
+    from app.services.azure_storage_service import azure_storage_service
+    import io
+    
+    # Get document from database
+    document = Document.get_by_id(doc_id)
+    
+    # Check if document exists and belongs to user
+    if not document or document.uploaded_by != current_user.id:
+        abort(404)
+    
+    try:
+        # Download from Azure Blob Storage
+        blob_data = azure_storage_service.download_blob(document.blob_name)
+        
+        # Create file-like object
+        file_stream = io.BytesIO(blob_data)
+        file_stream.seek(0)
+        
+        # Send file to user
+        return send_file(
+            file_stream,
+            mimetype=document.content_type,
+            as_attachment=True,
+            download_name=document.original_filename
+        )
+    except Exception as e:
+        print(f"Error downloading document: {e}")
+        abort(500)
+
+@bp.route('/document/<int:doc_id>/delete', methods=['POST'])
+@login_required
+def delete_document(doc_id):
+    """Delete a document."""
+    from flask import flash, redirect
+    from app.services.azure_storage_service import azure_storage_service
+    
+    # Get document from database
+    document = Document.get_by_id(doc_id)
+    
+    # Check if document exists and belongs to user
+    if not document or document.uploaded_by != current_user.id:
+        flash('Document not found or access denied.', 'error')
+        return redirect(url_for('main.evidence_repository'))
+    
+    try:
+        # Delete from Azure Blob Storage
+        azure_storage_service.delete_blob(document.blob_name)
+        
+        # Soft delete from database
+        document.delete()
+        
+        flash(f'Document "{document.original_filename}" deleted successfully.', 'success')
+    except Exception as e:
+        print(f"Error deleting document: {e}")
+        flash('Error deleting document. Please try again.', 'error')
+    
+    return redirect(url_for('main.evidence_repository'))
+
+@bp.route('/document/<int:doc_id>/details')
+@login_required
+def document_details(doc_id):
+    """View document details."""
+    from flask import abort
+    
+    # Get document from database
+    document = Document.get_by_id(doc_id)
+    
+    # Check if document exists and belongs to user
+    if not document or document.uploaded_by != current_user.id:
+        abort(404)
+    
+    return render_template('main/document_details.html',
+                         title=f'Document: {document.original_filename}',
+                         document=document)
+
 @bp.route('/ai-evidence')
 @login_required
 def ai_evidence():
     """AI Evidence route to display AI-generated evidence entries."""
-    # Mock AI evidence data
-    ai_evidence_entries = [
-        {
-            'id': 1,
-            'document_title': 'SOX Compliance Report Q3 2025',
-            'framework': 'SOX',
-            'requirement': 'Section 404 - Internal Controls',
-            'confidence_score': 92,
-            'status': 'Complete',
-            'date_analyzed': '2025-11-01',
-            'evidence_type': 'Policy Document',
-            'key_findings': 'Strong internal control framework documented',
-            'summary': 'Comprehensive SOX compliance documentation covering internal control requirements and audit procedures.'
-        },
-        {
-            'id': 2,
-            'document_title': 'ISO 27001 Access Control Policy',
-            'framework': 'ISO 27001',
-            'requirement': 'A.9.2 User Access Management',
-            'confidence_score': 88,
-            'status': 'Needs Review',
-            'date_analyzed': '2025-10-28',
-            'evidence_type': 'Policy Document',
-            'key_findings': 'Access control procedures well defined',
-            'summary': 'Detailed access control policy with user management procedures and authentication requirements.'
-        },
-        {
-            'id': 3,
-            'document_title': 'Data Backup Procedures',
-            'framework': 'ISO 27001',
-            'requirement': 'A.12.3 Information Backup',
-            'confidence_score': 95,
-            'status': 'Complete',
-            'date_analyzed': '2025-10-25',
-            'evidence_type': 'Procedure',
-            'key_findings': 'Comprehensive backup strategy documented',
-            'summary': 'Complete backup and recovery procedures including schedules, testing protocols, and restoration processes.'
-        }
-    ]
+    # Get real ADLS data
+    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
+    
+    # Transform ADLS data into AI evidence entries
+    ai_evidence_entries = []
+    
+    if summary.get('file_summaries'):
+        for idx, file_summary in enumerate(summary['file_summaries'], 1):
+            # Get framework details from the file
+            frameworks_data = file_summary.get('frameworks', [])
+            
+            for framework_data in frameworks_data:
+                ai_evidence_entries.append({
+                    'id': idx,
+                    'document_title': f"{framework_data['name']} Compliance Analysis",
+                    'framework': framework_data['name'],
+                    'source': 'ADLS',
+                    'document_type': 'Compliance Summary',
+                    'confidence_score': round(framework_data['score'], 1),  # Score is already a percentage
+                    'status': framework_data['status'],
+                    'upload_date': file_summary.get('last_updated'),
+                    'summary': f"Compliance score: {framework_data['score']}% - Status: {framework_data['status']}"
+                })
     
     return render_template('main/ai_evidence.html', 
                          title='AI Evidence',
@@ -183,36 +250,94 @@ def document_detail(doc_id):
 @login_required
 def gap_analysis():
     """Gap Analysis route."""
-    gaps = [
-        {
-            'framework': 'ISO 27001',
-            'requirement': 'A.12.1.2 Change Management',
-            'status': 'Missing',
-            'severity': 'High',
-            'description': 'No evidence of formal change management procedures'
-        },
-        {
-            'framework': 'SOC 2',
-            'requirement': 'CC6.1 Logical Access Controls',
-            'status': 'Needs Review',
-            'severity': 'Medium',
-            'description': 'Access controls documented but need validation'
-        }
-    ]
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Get real ADLS data
+    print("\n" + "="*60)
+    print("GAP ANALYSIS - Starting data fetch")
+    print("="*60)
+    
+    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
+    
+    print(f"Connection Status: {summary.get('connection_status')}")
+    print(f"Total Files: {summary.get('total_files')}")
+    print(f"File Summaries: {len(summary.get('file_summaries', []))}")
+    
+    logger.info(f"Gap Analysis - Summary: {summary}")
+    logger.info(f"Gap Analysis - File summaries count: {len(summary.get('file_summaries', []))}")
+    
+    # Build gap analysis data from ADLS
+    gap_data = []
+    
+    if summary.get('file_summaries'):
+        print(f"\nProcessing {len(summary['file_summaries'])} file summaries...")
+        for file_summary in summary['file_summaries']:
+            frameworks_data = file_summary.get('frameworks', [])
+            print(f"  File: {file_summary.get('file_name')}")
+            print(f"  Frameworks: {frameworks_data}")
+            logger.info(f"Gap Analysis - Frameworks in {file_summary.get('file_name')}: {frameworks_data}")
+            
+            for framework_data in frameworks_data:
+                # Map status from ADLS to display format
+                status = framework_data.get('status', '').strip()
+                if status.lower() == 'complete':
+                    display_status = 'Complete'
+                elif status.lower() == 'needs review':
+                    display_status = 'Needs Review'
+                elif status.lower() == 'missing':
+                    display_status = 'Missing'
+                else:
+                    display_status = status
+                
+                item = {
+                    'requirement_name': framework_data['name'],
+                    'status': display_status,
+                    'completion_percentage': round(framework_data['score'], 1),  # Score is already a percentage
+                    'supporting_evidence': file_summary.get('file_name', 'compliance_summary.csv'),
+                    'last_updated': file_summary.get('last_updated')
+                }
+                print(f"    Adding: {item['requirement_name']} - {item['completion_percentage']}% - {item['status']}")
+                gap_data.append(item)
+    else:
+        print("  No file summaries found!")
+    
+    print(f"\nTotal gap_data items: {len(gap_data)}")
+    logger.info(f"Gap Analysis - Total gap_data items: {len(gap_data)}")
+    
+    # Log if no data found
+    if not gap_data:
+        logger.warning("No data from ADLS - showing empty state")
+    
+    # Calculate summary stats from gap_data
+    total = len(gap_data)
+    met = len([g for g in gap_data if g['status'] == 'Complete'])
+    pending = len([g for g in gap_data if g['status'] == 'Needs Review'])
+    not_met = len([g for g in gap_data if g['status'] == 'Missing'])
+    
+    # Calculate overall compliance percentage from average of all framework scores
+    if gap_data:
+        avg_percentage = sum([g['completion_percentage'] for g in gap_data]) / len(gap_data)
+    else:
+        avg_percentage = 0
     
     summary_stats = {
-        'total': 25,
-        'met': 15,
-        'pending': 5,
-        'not_met': 5,
-        'compliance_percentage': 60
+        'total': total,
+        'met': met,
+        'pending': pending,
+        'not_met': not_met,
+        'compliance_percentage': int(avg_percentage)
     }
+    
+    logger.info(f"Gap Analysis - Summary stats: {summary_stats}")
+    logger.info(f"Gap Analysis - Rendering with {len(gap_data)} items")
     
     return render_template('main/gap_analysis.html',
                          title='Gap Analysis',
-                         gaps=gaps,
+                         gaps=[],  # Keep for backward compatibility
+                         gap_data=gap_data,
                          summary_stats=summary_stats,
-                         ml_summary=get_mock_ml_summary())
+                         ml_summary=summary)
 
 @bp.route('/reports')
 @login_required
@@ -349,3 +474,133 @@ def user_roles():
     """User roles management route."""
     return render_template('main/user_roles.html',
                          title='User Roles')
+
+@bp.route('/debug-adls')
+@login_required
+def debug_adls():
+    """Debug ADLS connection and data."""
+    import os
+    from datetime import datetime
+    
+    debug_info = {
+        'timestamp': datetime.now().isoformat(),
+        'connection_string_set': bool(os.getenv('AZURE_STORAGE_CONNECTION_STRING')),
+        'user_id': current_user.id,
+        'service_client_initialized': azure_data_service.service_client is not None,
+    }
+    
+    # Try to get files
+    try:
+        files = azure_data_service.get_compliance_files(user_id=current_user.id)
+        debug_info['files_found'] = len(files)
+        debug_info['files'] = files
+    except Exception as e:
+        debug_info['files_error'] = str(e)
+    
+    # Try to get summary
+    try:
+        summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
+        debug_info['summary'] = summary
+        
+        # Show raw data from files
+        if summary.get('file_summaries'):
+            debug_info['raw_frameworks'] = []
+            for fs in summary['file_summaries']:
+                debug_info['raw_frameworks'].extend(fs.get('frameworks', []))
+    except Exception as e:
+        debug_info['summary_error'] = str(e)
+    
+    return jsonify(debug_info)
+
+@bp.route('/reports/generate/<report_type>')
+@login_required
+def generate_report(report_type):
+    """Generate and download compliance reports."""
+    from flask import send_file
+    from app.services.report_generator import report_generator
+    from datetime import datetime
+    
+    # Get organization data (you can customize this)
+    org_data = {
+        'name': 'Your Organisation Name',
+        'abn': '12 345 678 901',
+        'address': '123 Main Street, City, State, Postcode',
+        'contact_name': 'Contact Person',
+        'email': current_user.email,
+        'framework': 'NDIS / Aged Care / ISO9001',
+        'audit_type': 'Initial'
+    }
+    
+    # Get gap analysis data
+    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
+    gap_data = []
+    
+    if summary.get('file_summaries'):
+        for file_summary in summary['file_summaries']:
+            frameworks_data = file_summary.get('frameworks', [])
+            for framework_data in frameworks_data:
+                status = framework_data.get('status', '').strip()
+                if status.lower() == 'complete':
+                    display_status = 'Complete'
+                elif status.lower() == 'needs review':
+                    display_status = 'Needs Review'
+                elif status.lower() == 'missing':
+                    display_status = 'Missing'
+                else:
+                    display_status = status
+                
+                gap_data.append({
+                    'requirement_name': framework_data['name'],
+                    'status': display_status,
+                    'completion_percentage': round(framework_data['score'], 1),  # Score is already a percentage
+                    'supporting_evidence': file_summary.get('file_name', 'compliance_summary.csv'),
+                    'last_updated': file_summary.get('last_updated')
+                })
+    
+    # Calculate summary stats
+    total = len(gap_data)
+    met = len([g for g in gap_data if g['status'] == 'Complete'])
+    pending = len([g for g in gap_data if g['status'] == 'Needs Review'])
+    not_met = len([g for g in gap_data if g['status'] == 'Missing'])
+    
+    if gap_data:
+        avg_percentage = sum([g['completion_percentage'] for g in gap_data]) / len(gap_data)
+    else:
+        avg_percentage = 0
+    
+    summary_stats = {
+        'total': total,
+        'met': met,
+        'pending': pending,
+        'not_met': not_met,
+        'compliance_percentage': int(avg_percentage)
+    }
+    
+    # Get documents for audit pack
+    documents = Document.get_by_user(current_user.id)
+    
+    # Generate appropriate report
+    try:
+        if report_type == 'gap-analysis':
+            pdf_buffer = report_generator.generate_gap_analysis_report(org_data, gap_data, summary_stats)
+            filename = f'Gap_Analysis_Report_{datetime.now().strftime("%Y%m%d")}.pdf'
+        elif report_type == 'accreditation-plan':
+            pdf_buffer = report_generator.generate_accreditation_plan(org_data, gap_data, summary_stats)
+            filename = f'Accreditation_Plan_{datetime.now().strftime("%Y%m%d")}.pdf'
+        elif report_type == 'audit-pack':
+            pdf_buffer = report_generator.generate_audit_pack(org_data, gap_data, summary_stats, documents)
+            filename = f'Audit_Pack_Export_{datetime.now().strftime("%Y%m%d")}.pdf'
+        else:
+            return "Invalid report type", 400
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        print(f"Error generating report: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Error generating report: {str(e)}", 500

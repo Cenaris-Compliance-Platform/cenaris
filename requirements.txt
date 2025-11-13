@@ -12,3 +12,7 @@ pandas==2.0.3
 azure-core==1.29.4
 requests==2.31.0
 gunicorn==21.2.0
+
+# PDF Report Generation
+reportlab==4.4.4
+pillow>=9.0.0
