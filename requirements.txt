@@ -1,23 +1,27 @@
-# Build tools
-setuptools>=65.0.0
-wheel>=0.38.0
-
 # Core framework
 Flask==2.3.3
 Flask-Login==0.6.3
 Werkzeug==2.3.7
+gunicorn==21.2.0
+
+# Azure services
 azure-storage-blob==12.19.0
 azure-storage-file-datalake==12.14.0
-python-dotenv==1.0.0
+azure-core==1.29.4
+
+# Forms and validation
 WTForms==3.0.1
 Flask-WTF==1.1.1
 email-validator==2.0.0
-numpy==1.24.3
-pandas==2.0.3
-azure-core==1.29.4
+
+# Data processing (Python 3.13 compatible versions)
+numpy>=1.26.0
+pandas>=2.1.0
+
+# Utilities
+python-dotenv==1.0.0
 requests==2.31.0
-gunicorn==21.2.0
 
 # PDF Report Generation
 reportlab==4.4.4
-pillow>=9.0.0
+pillow>=10.0.0
