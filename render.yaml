@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: cenaris-compliance
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 4 -b 0.0.0.0:$PORT run:app
+    envVars:
+      - key: FLASK_CONFIG
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: AZURE_STORAGE_CONNECTION_STRING
+        sync: false
+      - key: AZURE_CONTAINER_NAME
+        value: user-uploads
+      - key: AZURE_ML_STORAGE_ACCOUNT
+        value: cenarisblobstorage
+      - key: AZURE_ML_CONTAINER
+        value: results
+      - key: AZURE_ML_RESULTS_PATH
+        value: compliance-results
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cenaris-db
+          property: connectionString
+
+databases:
+  - name: cenaris-db
+    databaseName: cenaris_production
+    user: cenaris_user
