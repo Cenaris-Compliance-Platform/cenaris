@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center" style="background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-6">
+        <div class="card fade-in">
+          <div class="card-body p-5">
+            <div class="mb-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 fw-bold mb-0">Add your logo</h1>
+                <span class="badge bg-primary">Step 2 of 3</span>
+              </div>
+              <p class="text-muted mb-0">Upload a logo, or skip for now.</p>
+            </div>
+
+            <div class="progress mb-4" style="height: 6px;">
+              <div class="progress-bar" style="width: 66%"></div>
+            </div>
+
+            {% if organization and organization.logo_blob_name %}
+              <div class="text-center mb-4">
+                <img src="{{ url_for('main.organization_logo') }}" alt="Organization logo" class="img-fluid rounded border" style="max-height: 120px;" />
+              </div>
+            {% endif %}
+
+            <form method="POST" enctype="multipart/form-data" novalidate>
+              {{ form.hidden_tag() }}
+
+              <div class="mb-4">
+                {{ form.logo.label(class="form-label") }}
+                {{ form.logo() }}
+                {% if form.logo.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in form.logo.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                <small class="text-muted d-block mt-2">Supported: PNG, JPG, WEBP.</small>
+              </div>
+
+              <div class="d-grid gap-2">
+                {{ form.submit() }}
+                <button class="btn btn-outline-secondary btn-lg" type="submit" name="skip" value="1">Skip for now</button>
+              </div>
+            </form>
+
+            <div class="text-center mt-3">
+              <a class="small text-decoration-none" href="{{ url_for('onboarding.organization') }}">
+                <i class="bi bi-arrow-left me-1"></i>Back
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

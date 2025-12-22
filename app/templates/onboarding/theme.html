@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center" style="background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-6">
+        <div class="card fade-in">
+          <div class="card-body p-5">
+            <div class="mb-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 fw-bold mb-0">Choose a theme</h1>
+                <span class="badge bg-primary">Step 3 of 3</span>
+              </div>
+              <p class="text-muted mb-0">Your theme applies immediately and is saved for this browser.</p>
+            </div>
+
+            <div class="progress mb-4" style="height: 6px;">
+              <div class="progress-bar" style="width: 100%"></div>
+            </div>
+
+            <form method="POST" novalidate id="theme-form">
+              {{ form.hidden_tag() }}
+
+              <div class="mb-4">
+                <label class="form-label">Theme</label>
+                <div class="d-flex gap-4">
+                  {% for subfield in form.theme %}
+                    <div class="form-check">
+                      {{ subfield(class="form-check-input", id=subfield.id) }}
+                      <label class="form-check-label" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="d-grid gap-2">
+                {{ form.submit() }}
+                <button class="btn btn-outline-secondary btn-lg" type="submit" name="skip" value="1">Skip for now</button>
+              </div>
+            </form>
+
+            <div class="text-center mt-3">
+              <a class="small text-decoration-none" href="{{ url_for('onboarding.logo') }}">
+                <i class="bi bi-arrow-left me-1"></i>Back
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const form = document.getElementById('theme-form');
+    if (!form) return;
+
+    const radios = form.querySelectorAll('input[type="radio"]');
+    radios.forEach((r) => {
+      r.addEventListener('change', () => {
+        const theme = r.value;
+        document.documentElement.setAttribute('data-bs-theme', theme);
+        // Auto-submit after a short delay so the user sees the change.
+        window.setTimeout(() => form.submit(), 250);
+      });
+    });
+  })();
+</script>
+{% endblock %}

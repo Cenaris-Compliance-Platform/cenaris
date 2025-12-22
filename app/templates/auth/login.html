@@ -14,13 +14,31 @@
                             <div class="mb-3">
                                 <i class="bi bi-shield-check text-primary" style="font-size: 3rem;"></i>
                             </div>
-                            <h1 class="h3 mb-2 fw-bold text-dark">Welcome Back</h1>
+                            <h1 class="h3 mb-2 fw-bold">Welcome Back</h1>
                             <p class="text-muted">Sign in to your compliance management account</p>
                         </div>
                         
                         <!-- Login Form -->
                         <form method="POST" novalidate>
                             {{ form.hidden_tag() }}
+
+                            <!-- SSO Buttons -->
+                            <div class="d-grid gap-2 mb-4">
+                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google') }}">
+                                    <i class="bi bi-google me-2"></i>Continue with Google
+                                </a>
+                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft') }}">
+                                    <i class="bi bi-microsoft me-2"></i>Continue with Microsoft
+                                </a>
+                            </div>
+
+                            <div class="text-center mb-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <hr class="flex-grow-1" />
+                                    <span class="text-muted small">or</span>
+                                    <hr class="flex-grow-1" />
+                                </div>
+                            </div>
                             
                             <!-- Email Field -->
                             <div class="mb-3">
@@ -63,6 +81,9 @@
                                 <div class="form-check">
                                     {{ form.remember_me() }}
                                     {{ form.remember_me.label(class="form-check-label") }}
+                                </div>
+                                <div class="mt-2 text-end">
+                                    <a class="small text-decoration-none" href="{{ url_for('auth.forgot_password') }}">Forgot password?</a>
                                 </div>
                             </div>
                             

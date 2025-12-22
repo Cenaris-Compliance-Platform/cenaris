@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
-from wtforms import StringField, SubmitField
+from wtforms import StringField, SubmitField, RadioField
 from wtforms.validators import DataRequired, Email, Length, Optional
 
 
@@ -50,6 +50,13 @@ class OrganizationSettingsForm(FlaskForm):
             'class': 'form-control form-control-lg',
             'accept': '.png,.jpg,.jpeg,.webp'
         },
+    )
+
+    theme = RadioField(
+        'Theme',
+        choices=[('light', 'Light'), ('dark', 'Dark')],
+        default='light',
+        validators=[DataRequired()],
     )
 
     submit = SubmitField(

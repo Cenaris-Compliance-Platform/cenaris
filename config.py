@@ -21,11 +21,30 @@ class Config:
     AZURE_CONTAINER_NAME = os.environ.get('AZURE_CONTAINER_NAME') or 'compliance-documents'
     
     # Database Configuration
+    # For SQLite, Flask-SQLAlchemy resolves relative file paths against the Flask instance folder.
+    # Use a plain filename here (not "instance/..."), otherwise it may become "instance/instance/...".
     DATABASE_URL = _normalize_database_url(os.environ.get('DATABASE_URL')) or 'sqlite:///compliance.db'
 
     # SQLAlchemy (Milestone 1)
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # OAuth (Google / Microsoft)
+    GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+    GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+    MICROSOFT_CLIENT_ID = os.environ.get('MICROSOFT_CLIENT_ID')
+    MICROSOFT_CLIENT_SECRET = os.environ.get('MICROSOFT_CLIENT_SECRET')
+    # 'common' supports consumer + org accounts; you can set a tenant id for single-tenant.
+    MICROSOFT_TENANT = os.environ.get('MICROSOFT_TENANT') or 'common'
+
+    # Email (Forgot password)
+    MAIL_SERVER = os.environ.get('MAIL_SERVER')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)
+    MAIL_USE_TLS = (os.environ.get('MAIL_USE_TLS') or 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
+    MAIL_USE_SSL = (os.environ.get('MAIL_USE_SSL') or 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or os.environ.get('MAIL_USERNAME')
     
     # File Upload Configuration
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size

@@ -14,7 +14,7 @@
                             <div class="mb-3">
                                 <i class="bi bi-person-plus-fill text-primary" style="font-size: 3rem;"></i>
                             </div>
-                            <h1 class="h3 mb-2 fw-bold text-dark">Create Account</h1>
+                            <h1 class="h3 mb-2 fw-bold">Create Account</h1>
                             <p class="text-muted">Join our secure compliance management platform</p>
                         </div>
                         
@@ -22,19 +22,22 @@
                         <form method="POST" novalidate>
                             {{ form.hidden_tag() }}
 
-                            <!-- Organization Name Field -->
-                            <div class="mb-3">
-                                {{ form.organization_name.label(class="form-label") }}
-                                {{ form.organization_name() }}
-                                {% if form.organization_name.errors %}
-                                    <div class="invalid-feedback d-block">
-                                        {% for error in form.organization_name.errors %}
-                                            <small class="text-danger">
-                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
-                                            </small>
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
+                            <!-- SSO Buttons -->
+                            <div class="d-grid gap-2 mb-4">
+                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google') }}">
+                                    <i class="bi bi-google me-2"></i>Continue with Google
+                                </a>
+                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft') }}">
+                                    <i class="bi bi-microsoft me-2"></i>Continue with Microsoft
+                                </a>
+                            </div>
+
+                            <div class="text-center mb-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <hr class="flex-grow-1" />
+                                    <span class="text-muted small">or</span>
+                                    <hr class="flex-grow-1" />
+                                </div>
                             </div>
 
                             <!-- Full Name Field -->
