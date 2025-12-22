@@ -5,22 +5,17 @@ This script starts the Flask development server.
 """
 
 from app import create_app
-from app.database import init_database, check_database_exists
 import os
 
 # Create the Flask application
 app = create_app(os.getenv('FLASK_CONFIG') or 'development')
 
-# Initialize database if it doesn't exist
-with app.app_context():
-    if not check_database_exists():
-        print("Database not found. Initializing...")
-        init_database()
-        print("Database initialized successfully!")
-
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', '8080'))
+    debug = bool(app.config.get('DEBUG', False))
+
     print("🚀 Starting Cenaris Compliance Management System...")
-    print("📊 Dashboard will be available at: http://127.0.0.1:8080")
+    print(f"📊 Dashboard will be available at: http://127.0.0.1:{port}")
     print("🔐 Create an account or use sample users:")
     print("   • admin@compliance.com / admin123")
     print("   • user@compliance.com / user123")
@@ -30,7 +25,7 @@ if __name__ == '__main__':
     
     app.run(
         host='0.0.0.0',  # Allow external connections
-        port=8081,
-        debug=True,
-        use_reloader=True
+        port=port,
+        debug=debug,
+        use_reloader=debug
     )

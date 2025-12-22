@@ -21,6 +21,36 @@
                         <!-- Signup Form -->
                         <form method="POST" novalidate>
                             {{ form.hidden_tag() }}
+
+                            <!-- Organization Name Field -->
+                            <div class="mb-3">
+                                {{ form.organization_name.label(class="form-label") }}
+                                {{ form.organization_name() }}
+                                {% if form.organization_name.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.organization_name.errors %}
+                                            <small class="text-danger">
+                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            </small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Full Name Field -->
+                            <div class="mb-3">
+                                {{ form.full_name.label(class="form-label") }}
+                                {{ form.full_name() }}
+                                {% if form.full_name.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.full_name.errors %}
+                                            <small class="text-danger">
+                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            </small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
                             
                             <!-- Email Field -->
                             <div class="mb-3">

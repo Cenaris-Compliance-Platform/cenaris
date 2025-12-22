@@ -1,7 +1,8 @@
 from flask import render_template, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app.main import bp
-from app.models import Document
+from app.models import Document, Organization
+from app import db
 from app.services.azure_data_service import azure_data_service
 
 def get_mock_ml_summary():
@@ -21,7 +22,11 @@ def get_mock_ml_summary():
     
     class MLSummary:
         def __init__(self):
-            self.total_files = len(Document.get_by_user(current_user.id)) if current_user.is_authenticated else 3
+            self.total_files = (
+                Document.query.filter_by(uploaded_by=current_user.id, is_active=True).count()
+                if current_user.is_authenticated
+                else 3
+            )
             self.avg_compliancy_rate = 85.5
             self.total_complete = 3
             self.total_needs_review = 1
@@ -61,9 +66,20 @@ def index():
 @login_required
 def dashboard():
     """Dashboard route for authenticated users."""
-    recent_documents = Document.get_by_user(current_user.id, limit=5)
-    all_documents = Document.get_by_user(current_user.id)
-    total_documents = len(all_documents)
+    org_id = getattr(current_user, 'organization_id', None)
+    recent_documents = (
+        Document.query.filter_by(organization_id=org_id, is_active=True)
+        if org_id
+        else Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
+        .order_by(Document.uploaded_at.desc())
+        .limit(5)
+        .all()
+    )
+    total_documents = (
+        Document.query.filter_by(organization_id=org_id, is_active=True).count()
+        if org_id
+        else Document.query.filter_by(uploaded_by=current_user.id, is_active=True).count()
+    )
     
     # Get real ADLS data
     ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
@@ -84,7 +100,14 @@ def upload():
 @login_required
 def documents():
     """Documents listing route."""
-    user_documents = Document.get_by_user(current_user.id)
+    org_id = getattr(current_user, 'organization_id', None)
+    user_documents = (
+        Document.query.filter_by(organization_id=org_id, is_active=True)
+        if org_id
+        else Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
     return render_template('main/documents.html', 
                          title='My Documents',
                          documents=user_documents)
@@ -93,7 +116,14 @@ def documents():
 @login_required
 def evidence_repository():
     """Evidence repository route to display all documents."""
-    documents = Document.get_by_user(current_user.id)
+    org_id = getattr(current_user, 'organization_id', None)
+    documents = (
+        Document.query.filter_by(organization_id=org_id, is_active=True)
+        if org_id
+        else Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
     return render_template('main/evidence_repository.html', 
                          title='Evidence Repository',
                          documents=documents)
@@ -107,11 +137,18 @@ def download_document(doc_id):
     import io
     
     # Get document from database
-    document = Document.get_by_id(doc_id)
+    document = Document.query.get(doc_id)
     
     # Check if document exists and belongs to user
-    if not document or document.uploaded_by != current_user.id:
+    org_id = getattr(current_user, 'organization_id', None)
+    if not document:
         abort(404)
+    if org_id:
+        if document.organization_id != org_id:
+            abort(404)
+    else:
+        if document.uploaded_by != current_user.id:
+            abort(404)
     
     try:
         # Download from Azure Blob Storage
@@ -126,7 +163,7 @@ def download_document(doc_id):
             file_stream,
             mimetype=document.content_type,
             as_attachment=True,
-            download_name=document.original_filename
+            download_name=document.filename
         )
     except Exception as e:
         print(f"Error downloading document: {e}")
@@ -140,22 +177,33 @@ def delete_document(doc_id):
     from app.services.azure_storage_service import azure_storage_service
     
     # Get document from database
-    document = Document.get_by_id(doc_id)
+    document = Document.query.get(doc_id)
     
     # Check if document exists and belongs to user
-    if not document or document.uploaded_by != current_user.id:
+    org_id = getattr(current_user, 'organization_id', None)
+    if not document:
         flash('Document not found or access denied.', 'error')
         return redirect(url_for('main.evidence_repository'))
+    if org_id:
+        if document.organization_id != org_id:
+            flash('Document not found or access denied.', 'error')
+            return redirect(url_for('main.evidence_repository'))
+    else:
+        if document.uploaded_by != current_user.id:
+            flash('Document not found or access denied.', 'error')
+            return redirect(url_for('main.evidence_repository'))
     
     try:
         # Delete from Azure Blob Storage
         azure_storage_service.delete_blob(document.blob_name)
         
         # Soft delete from database
-        document.delete()
+        document.is_active = False
+        db.session.commit()
         
-        flash(f'Document "{document.original_filename}" deleted successfully.', 'success')
+        flash(f'Document "{document.filename}" deleted successfully.', 'success')
     except Exception as e:
+        db.session.rollback()
         print(f"Error deleting document: {e}")
         flash('Error deleting document. Please try again.', 'error')
     
@@ -168,14 +216,21 @@ def document_details(doc_id):
     from flask import abort
     
     # Get document from database
-    document = Document.get_by_id(doc_id)
+    document = Document.query.get(doc_id)
     
     # Check if document exists and belongs to user
-    if not document or document.uploaded_by != current_user.id:
+    org_id = getattr(current_user, 'organization_id', None)
+    if not document:
         abort(404)
+    if org_id:
+        if document.organization_id != org_id:
+            abort(404)
+    else:
+        if document.uploaded_by != current_user.id:
+            abort(404)
     
     return render_template('main/document_details.html',
-                         title=f'Document: {document.original_filename}',
+                         title=f'Document: {document.filename}',
                          document=document)
 
 @bp.route('/ai-evidence')
@@ -210,6 +265,99 @@ def ai_evidence():
                          title='AI Evidence',
                          ai_evidence_entries=ai_evidence_entries)
 
+
+@bp.route('/organization/settings', methods=['GET', 'POST'])
+@login_required
+def organization_settings():
+    from flask import abort, flash
+    from app.main.forms import OrganizationSettingsForm
+    from werkzeug.utils import secure_filename
+    import uuid
+
+    if (current_user.role or '').lower() != 'admin':
+        abort(403)
+
+    if not getattr(current_user, 'organization_id', None):
+        flash('No organization is associated with this account.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    organization = Organization.query.get(current_user.organization_id)
+    if not organization:
+        abort(404)
+
+    form = OrganizationSettingsForm(obj=organization)
+
+    if form.validate_on_submit():
+        organization.name = form.name.data.strip()
+        organization.abn = (form.abn.data or '').strip() or None
+        organization.address = (form.address.data or '').strip() or None
+        organization.contact_email = (form.contact_email.data or '').strip().lower() or None
+
+        logo_file = form.logo.data
+        if logo_file and getattr(logo_file, 'filename', ''):
+            ext = (logo_file.filename.rsplit('.', 1)[-1] or '').lower()
+            safe_ext = ext if ext in {'png', 'jpg', 'jpeg', 'webp'} else 'png'
+            unique = uuid.uuid4().hex
+            blob_name = f"organizations/{organization.id}/branding/logo_{unique}.{safe_ext}"
+            content_type = getattr(logo_file, 'mimetype', None)
+
+            from app.services.azure_storage_service import azure_storage_service
+            data = logo_file.read()
+            if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type):
+                flash('Logo upload failed. Check Azure Storage configuration.', 'error')
+                return render_template(
+                    'main/organization_settings.html',
+                    title='Organization Settings',
+                    form=form,
+                    organization=organization,
+                )
+
+            organization.logo_blob_name = blob_name
+            organization.logo_content_type = content_type
+
+        try:
+            db.session.commit()
+            flash('Organization settings saved.', 'success')
+            return redirect(url_for('main.organization_settings'))
+        except Exception:
+            db.session.rollback()
+            flash('Failed to save settings. Please try again.', 'error')
+
+    return render_template(
+        'main/organization_settings.html',
+        title='Organization Settings',
+        form=form,
+        organization=organization,
+    )
+
+
+@bp.route('/organization/logo')
+@login_required
+def organization_logo():
+    from flask import abort, send_file
+    import io
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        abort(404)
+
+    organization = Organization.query.get(org_id)
+    if not organization or not organization.logo_blob_name:
+        abort(404)
+
+    from app.services.azure_storage_service import azure_storage_service
+    blob_data = azure_storage_service.download_blob(organization.logo_blob_name)
+    if not blob_data:
+        abort(404)
+
+    file_stream = io.BytesIO(blob_data)
+    file_stream.seek(0)
+    return send_file(
+        file_stream,
+        mimetype=organization.logo_content_type or 'application/octet-stream',
+        as_attachment=False,
+        download_name='logo'
+    )
+
 @bp.route('/ai-evidence/<int:entry_id>')
 @login_required
 def ai_evidence_detail(entry_id):
@@ -238,8 +386,8 @@ def ai_evidence_detail(entry_id):
 @login_required
 def document_detail(doc_id):
     """Document detail route."""
-    document = Document.get_by_id(doc_id)
-    if not document or document.user_id != current_user.id:
+    document = Document.query.get(doc_id)
+    if not document or document.uploaded_by != current_user.id:
         return redirect(url_for('main.documents'))
     
     return render_template('main/document_detail.html',
@@ -577,7 +725,11 @@ def generate_report(report_type):
     }
     
     # Get documents for audit pack
-    documents = Document.get_by_user(current_user.id)
+    documents = (
+        Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
     
     # Generate appropriate report
     try:

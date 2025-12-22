@@ -5,6 +5,7 @@ from app.upload import bp
 from app.services.azure_storage import AzureBlobStorageService
 from app.services.file_validation import FileValidationService
 from app.models import Document
+from app import db
 from datetime import datetime, timezone
 import logging
 
@@ -45,7 +46,8 @@ def upload_file():
         # Generate unique file path for ADLS
         file_path = storage_service.generate_blob_name(
             validation_result['original_filename'], 
-            current_user.id
+            current_user.id,
+            organization_id=getattr(current_user, 'organization_id', None)
         )
         
         # Prepare metadata
@@ -74,26 +76,23 @@ def upload_file():
         
         # Save document metadata to database
         try:
-            document = Document.create_document(
-                filename=validation_result['safe_filename'],
-                original_filename=validation_result['original_filename'],
+            document = Document(
+                filename=validation_result['original_filename'],
                 blob_name=file_path,
                 file_size=validation_result['file_size'],
                 content_type=validation_result['content_type'],
-                uploaded_by=current_user.id
+                uploaded_by=current_user.id,
+                organization_id=getattr(current_user, 'organization_id', None)
             )
-            
-            if document:
-                storage_type = upload_result.get('storage_type', 'ADLS_Gen2')
-                flash(f'File "{validation_result["original_filename"]}" uploaded successfully to {storage_type}!', 'success')
-                logger.info(f"File uploaded successfully: {file_path} by user {current_user.id} to {storage_type}")
-            else:
-                # If database save failed, try to clean up the uploaded file
-                storage_service.delete_file(file_path)
-                flash('Upload failed: Unable to save file information.', 'error')
-                logger.error(f"Database save failed for uploaded file: {file_path}")
+            db.session.add(document)
+            db.session.commit()
+
+            storage_type = upload_result.get('storage_type', 'ADLS_Gen2')
+            flash(f'File "{validation_result["original_filename"]}" uploaded successfully to {storage_type}!', 'success')
+            logger.info(f"File uploaded successfully: {file_path} by user {current_user.id} to {storage_type}")
         
         except Exception as e:
+            db.session.rollback()
             # If database save failed, try to clean up the uploaded file
             storage_service.delete_file(file_path)
             flash('Upload failed: Database error occurred.', 'error')

@@ -1,24 +1,40 @@
 from flask import Flask
 from flask_login import LoginManager
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from config import config
 import os
 
 login_manager = LoginManager()
 
+# Database (Milestone 1)
+db = SQLAlchemy()
+migrate = Migrate()
+
 @login_manager.user_loader
 def load_user(user_id):
     """Load user by ID for Flask-Login."""
     from app.models import User
-    return User.get_by_id(int(user_id))
+    return User.query.get(int(user_id))
 
 def create_app(config_name=None):
     """Application factory pattern."""
     if config_name is None:
         config_name = os.environ.get('FLASK_CONFIG') or 'default'
+
+    if isinstance(config_name, str):
+        config_name = config_name.strip()
+
+    if config_name not in config:
+        config_name = 'default'
     
     app = Flask(__name__)
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
+
+    # Initialize database extensions
+    db.init_app(app)
+    migrate.init_app(app, db)
     
     # Initialize extensions
     from flask_wtf.csrf import CSRFProtect
@@ -89,5 +105,20 @@ def create_app(config_name=None):
         if isinstance(value, datetime):
             return value.strftime(format)
         return 'Unknown date'
+
+    @app.template_filter('file_size_format')
+    def file_size_format(value):
+        """Format file size bytes for templates."""
+        if not value:
+            return 'Unknown'
+        try:
+            size = float(value)
+        except (TypeError, ValueError):
+            return 'Unknown'
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
     
     return app

@@ -29,10 +29,10 @@
                             {% endif %}
                         </div>
                         <div class="flex-grow-1">
-                            <h2 class="h3 fw-bold mb-2">{{ document.original_filename }}</h2>
+                            <h2 class="h3 fw-bold mb-2">{{ document.filename }}</h2>
                             <div class="d-flex flex-wrap gap-2 mb-3">
                                 <span class="badge bg-light text-dark">
-                                    <i class="bi bi-hdd me-1"></i>{{ document.get_file_size_formatted() }}
+                                    <i class="bi bi-hdd me-1"></i>{{ document.file_size | file_size_format }}
                                 </span>
                                 <span class="badge bg-light text-dark">
                                     {% if document.content_type == 'application/pdf' %}
@@ -49,7 +49,7 @@
                                 <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-primary">
                                     <i class="bi bi-download me-2"></i>Download
                                 </a>
-                                <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.original_filename }}')">
+                                <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}')">
                                     <i class="bi bi-trash me-2"></i>Delete
                                 </button>
                                 <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary">
@@ -80,7 +80,7 @@
                                 <td class="text-muted" style="width: 200px;">
                                     <i class="bi bi-file-earmark me-2"></i>Original Filename
                                 </td>
-                                <td class="fw-medium">{{ document.original_filename }}</td>
+                                <td class="fw-medium">{{ document.filename }}</td>
                             </tr>
                             <tr>
                                 <td class="text-muted">
@@ -99,7 +99,7 @@
                                     <i class="bi bi-hdd me-2"></i>File Size
                                 </td>
                                 <td>
-                                    {{ document.get_file_size_formatted() }}
+                                    {{ document.file_size | file_size_format }}
                                     <small class="text-muted">({{ "{:,}".format(document.file_size) }} bytes)</small>
                                 </td>
                             </tr>
@@ -167,7 +167,7 @@
                             <i class="bi bi-hash me-2"></i>Copy Document ID
                         </button>
                         <hr>
-                        <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.original_filename }}')">
+                        <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}')">
                             <i class="bi bi-trash me-2"></i>Delete Document
                         </button>
                     </div>

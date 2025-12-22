@@ -329,6 +329,21 @@
                 <i class="bi bi-person-circle me-1"></i>{{ current_user.email }}
               </a>
               <ul class="dropdown-menu">
+                {% if current_user.organization %}
+                <li>
+                  <span class="dropdown-item-text text-muted">
+                    <i class="bi bi-building me-2"></i>{{ current_user.organization.name }}
+                  </span>
+                </li>
+                {% endif %}
+                {% if (current_user.role or '').lower() == 'admin' %}
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
+                    <i class="bi bi-gear me-2"></i>Organization Settings
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                {% endif %}
                 <li>
                   <form
                     method="POST"

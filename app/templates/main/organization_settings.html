@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h2 fw-bold text-dark mb-1">Organization Settings</h1>
+          <p class="text-muted mb-0">Update your organization details and branding</p>
+        </div>
+        <div class="d-none d-md-block">
+          <i class="bi bi-building text-primary" style="font-size: 2.5rem"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-gear me-2 text-primary"></i>Organization Profile
+          </h5>
+        </div>
+        <div class="card-body p-4">
+          <form method="POST" enctype="multipart/form-data" novalidate>
+            {{ form.hidden_tag() }}
+
+            <div class="mb-3">
+              {{ form.name.label(class="form-label") }}
+              {{ form.name() }}
+              {% if form.name.errors %}
+                <div class="invalid-feedback d-block">
+                  {% for error in form.name.errors %}
+                    <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ form.abn.label(class="form-label") }}
+                {{ form.abn() }}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ form.contact_email.label(class="form-label") }}
+                {{ form.contact_email() }}
+              </div>
+            </div>
+
+            <div class="mb-3">
+              {{ form.address.label(class="form-label") }}
+              {{ form.address() }}
+            </div>
+
+            <div class="mb-4">
+              {{ form.logo.label(class="form-label") }}
+              {{ form.logo() }}
+              <small class="text-muted d-block mt-2">
+                Supported: PNG, JPG, WEBP.
+              </small>
+            </div>
+
+            <div class="d-grid d-md-flex gap-2">
+              {{ form.submit() }}
+              <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-lg">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4 mt-4 mt-lg-0">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-image me-2 text-primary"></i>Current Logo
+          </h5>
+        </div>
+        <div class="card-body text-center p-4">
+          {% if organization.logo_blob_name %}
+            <img
+              src="{{ url_for('main.organization_logo') }}"
+              alt="Organization logo"
+              class="img-fluid rounded border"
+              style="max-height: 140px;"
+            />
+          {% else %}
+            <div class="py-4">
+              <i class="bi bi-building text-muted" style="font-size: 3rem; opacity: 0.5"></i>
+              <p class="text-muted mt-3 mb-0">No logo uploaded</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

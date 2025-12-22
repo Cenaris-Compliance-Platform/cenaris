@@ -220,7 +220,7 @@
                 <div class="flex-grow-1 min-w-0" style="overflow: hidden">
                   <div
                     class="fw-medium"
-                    title="{{ document.original_filename }}"
+                    title="{{ document.filename }}"
                     style="
                       white-space: nowrap;
                       overflow: hidden;
@@ -228,7 +228,7 @@
                       max-width: 100%;
                     "
                   >
-                    {{ document.original_filename }}
+                    {{ document.filename }}
                   </div>
                   <small class="text-muted">
                     {{ document.uploaded_at | datetime_format('%b %d, %Y at

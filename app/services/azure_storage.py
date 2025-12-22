@@ -70,7 +70,7 @@ class AzureBlobStorageService:
                 self.blob_service_client is not None and 
                 self.datalake_service_client is not None)
     
-    def generate_blob_name(self, original_filename, user_id):
+    def generate_blob_name(self, original_filename, user_id, organization_id=None):
         """Generate a unique file path for ADLS Gen2."""
         # Get file extension
         file_ext = os.path.splitext(original_filename)[1].lower()
@@ -87,7 +87,13 @@ class AzureBlobStorageService:
         month = now.strftime('%m')
         
         # Combine to create unique file path with organized structure
-        file_path = f"compliance-docs/{year}/{month}/user_{user_id}/{timestamp}_{unique_id}{file_ext}"
+        if organization_id:
+            file_path = (
+                f"organizations/{organization_id}/documents/{year}/{month}/"
+                f"user_{user_id}/{timestamp}_{unique_id}{file_ext}"
+            )
+        else:
+            file_path = f"compliance-docs/{year}/{month}/user_{user_id}/{timestamp}_{unique_id}{file_ext}"
         
         return file_path
     

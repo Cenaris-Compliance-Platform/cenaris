@@ -32,6 +32,24 @@ class LoginForm(FlaskForm):
 
 class SignupForm(FlaskForm):
     """Signup form for user registration."""
+    organization_name = StringField('Organization Name', validators=[
+        DataRequired(message='Organization name is required.'),
+        Length(min=2, max=100, message='Organization name must be between 2 and 100 characters.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'Enter your organization name',
+        'autocomplete': 'organization'
+    })
+
+    full_name = StringField('Your Name', validators=[
+        DataRequired(message='Your name is required.'),
+        Length(min=2, max=100, message='Name must be between 2 and 100 characters.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'Enter your full name',
+        'autocomplete': 'name'
+    })
+
     email = StringField('Email Address', validators=[
         DataRequired(message='Email is required.'),
         Email(message='Please enter a valid email address.'),
@@ -66,6 +84,6 @@ class SignupForm(FlaskForm):
     
     def validate_email(self, field):
         """Check if email is already registered."""
-        user = User.get_by_email(field.data.lower().strip())
+        user = User.query.filter_by(email=field.data.lower().strip()).first()
         if user:
             raise ValidationError('This email address is already registered. Please use a different email or sign in.')

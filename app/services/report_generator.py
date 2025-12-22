@@ -29,6 +29,18 @@ def safe_datetime_format(dt, format_str='%d %B %Y'):
         return datetime.now().strftime(format_str)
 
 
+def format_file_size(size_bytes):
+    """Return a human-readable file size string."""
+    if not size_bytes:
+        return "Unknown"
+    size = float(size_bytes)
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} TB"
+
+
 class ReportGenerator:
     """Generate compliance reports in PDF format."""
     
@@ -446,8 +458,8 @@ class ReportGenerator:
             
             for document in documents[:20]:  # Limit to 20 documents
                 doc_data.append([
-                    Paragraph(document.original_filename, self.styles['Normal']),
-                    document.get_file_size_formatted(),
+                    Paragraph(document.filename, self.styles['Normal']),
+                    format_file_size(document.file_size),
                     safe_datetime_format(document.uploaded_at, '%d %b %Y'),
                     'Active' if document.is_active else 'Inactive'
                 ])
