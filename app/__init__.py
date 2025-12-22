@@ -133,6 +133,11 @@ def create_app(config_name=None):
     def inject_csrf_token():
         from flask_wtf.csrf import generate_csrf
         return dict(csrf_token=generate_csrf)
+
+    @app.context_processor
+    def inject_current_year():
+        from datetime import datetime, timezone
+        return {'current_year': datetime.now(timezone.utc).year}
     
     # Add custom template filters
     @app.template_filter('datetime_format')

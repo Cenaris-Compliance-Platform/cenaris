@@ -5,8 +5,8 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h1 class="h2 fw-bold text-dark mb-1">ADLS Connection Status</h1>
-          <p class="text-muted mb-0">
+          <h1 class="h2 fw-bold mb-1">ADLS Connection Status</h1>
+          <p class="text-body-secondary mb-0">
             Azure Data Lake Storage connection for ML compliance results
           </p>
         </div>
@@ -21,7 +21,7 @@
   <div class="row mb-4">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-cloud-arrow-down me-2 text-primary"></i>ADLS Configuration
           </h5>
@@ -31,19 +31,19 @@
             <div class="col-md-6">
               <table class="table table-borderless">
                 <tr>
-                  <td class="fw-medium text-muted">Storage Account:</td>
+                  <td class="fw-medium text-body-secondary">Storage Account:</td>
                   <td><code>{{ ml_summary.adls_path.split('@')[1].split('.')[0] }}</code></td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Container:</td>
+                  <td class="fw-medium text-body-secondary">Container:</td>
                   <td><code>processed-doc-intel</code></td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Results Path:</td>
+                  <td class="fw-medium text-body-secondary">Results Path:</td>
                   <td><code>compliance-results/</code></td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Full Path:</td>
+                  <td class="fw-medium text-body-secondary">Full Path:</td>
                   <td><small><code>{{ ml_summary.adls_path }}</code></small></td>
                 </tr>
               </table>
@@ -51,21 +51,21 @@
             <div class="col-md-6">
               <table class="table table-borderless">
                 <tr>
-                  <td class="fw-medium text-muted">Connection Status:</td>
+                  <td class="fw-medium text-body-secondary">Connection Status:</td>
                   <td>
                     <span class="badge bg-warning">{{ ml_summary.connection_status }}</span>
                   </td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Files Found:</td>
+                  <td class="fw-medium text-body-secondary">Files Found:</td>
                   <td>{{ ml_summary.total_files }}</td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Last Check:</td>
+                  <td class="fw-medium text-body-secondary">Last Check:</td>
                   <td>{{ ml_summary.last_updated.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Expected Format:</td>
+                  <td class="fw-medium text-body-secondary">Expected Format:</td>
                   <td><code>CSV/JSON</code></td>
                 </tr>
               </table>
@@ -80,18 +80,18 @@
   <div class="row mb-4">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-table me-2 text-primary"></i>Expected ADLS Data Structure
           </h5>
         </div>
         <div class="card-body">
-          <p class="text-muted mb-3">
+          <p class="text-body-secondary mb-3">
             Your ML analysis files should contain these exact columns:
           </p>
           <div class="table-responsive">
             <table class="table table-bordered">
-              <thead class="table-light">
+              <thead>
                 <tr>
                   <th>Column Name</th>
                   <th>Data Type</th>
@@ -172,7 +172,7 @@
   <div class="row">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-gear me-2 text-primary"></i>Setup Instructions
           </h5>
@@ -181,20 +181,20 @@
           <div class="row">
             <div class="col-md-6">
               <h6 class="fw-bold">1. Update Environment Variables</h6>
-              <p class="text-muted">Add your Azure connection string to <code>.env</code>:</p>
-              <pre class="bg-light p-3 rounded"><code>AZURE_STORAGE_CONNECTION_STRING=your_connection_string</code></pre>
+              <p class="text-body-secondary">Add your Azure connection string to <code>.env</code>:</p>
+              <pre class="bg-body-tertiary border p-3 rounded"><code>AZURE_STORAGE_CONNECTION_STRING=your_connection_string</code></pre>
               
               <h6 class="fw-bold mt-4">2. Upload ML Results</h6>
-              <p class="text-muted">Save your ML analysis results to ADLS path:</p>
-              <pre class="bg-light p-3 rounded"><code>{{ ml_summary.adls_path }}</code></pre>
+              <p class="text-body-secondary">Save your ML analysis results to ADLS path:</p>
+              <pre class="bg-body-tertiary border p-3 rounded"><code>{{ ml_summary.adls_path }}</code></pre>
             </div>
             <div class="col-md-6">
               <h6 class="fw-bold">3. File Format</h6>
-              <p class="text-muted">Ensure your files are in CSV format with the exact column names shown above.</p>
+              <p class="text-body-secondary">Ensure your files are in CSV format with the exact column names shown above.</p>
               
               <h6 class="fw-bold mt-4">4. Test Connection</h6>
-              <p class="text-muted">Run the setup script to test your connection:</p>
-              <pre class="bg-light p-3 rounded"><code>python3 setup_azure_ml.py</code></pre>
+              <p class="text-body-secondary">Run the setup script to test your connection:</p>
+              <pre class="bg-body-tertiary border p-3 rounded"><code>python3 setup_azure_ml.py</code></pre>
               
               <div class="mt-4">
                 <button class="btn btn-primary" onclick="testConnection()">

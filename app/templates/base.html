@@ -30,20 +30,50 @@
     <!-- Custom CSS -->
     <style>
       :root {
-        --primary-color: #0066cc;
+        /* Brand color: align Bootstrap variables so utilities like bg-opacity work in dark mode */
+        --bs-primary: #0066cc;
+        --bs-primary-rgb: 0, 102, 204;
+
+        --primary-color: var(--bs-primary);
         --primary-dark: #004499;
-        --secondary-color: #e3f2fd;
-        --success-color: #28a745;
-        --warning-color: #ffc107;
-        --danger-color: #dc3545;
-        --info-color: #17a2b8;
-        --light-color: #f8f9fa;
-        --dark-color: #212529;
-        --muted-color: #6c757d;
-        --border-color: #dee2e6;
+
         --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
         --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
         --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+      }
+
+      /*
+        Dark-mode compatibility layer.
+        Many templates still use Bootstrap "light" utility classes (bg-white, bg-light, text-dark, text-muted).
+        In BS5.3 dark theme, those can look broken. We remap them to theme variables only when dark.
+      */
+      [data-bs-theme="dark"] .bg-white {
+        background-color: var(--bs-body-bg) !important;
+      }
+
+      [data-bs-theme="dark"] .bg-light {
+        background-color: var(--bs-tertiary-bg) !important;
+      }
+
+      [data-bs-theme="dark"] .text-dark {
+        color: var(--bs-body-color) !important;
+      }
+
+      [data-bs-theme="dark"] .text-muted {
+        color: var(--bs-secondary-color) !important;
+      }
+
+      /*
+        In dark mode, shadows can be subtle and many templates use `border-0`.
+        Add a theme-consistent outline so cards remain visually separated.
+      */
+      [data-bs-theme="dark"] .card.border-0 {
+        border: 1px solid var(--bs-border-color) !important;
+      }
+
+      /* Make cards visually distinct from the page background in dark mode */
+      [data-bs-theme="dark"] .card {
+        background-color: var(--bs-tertiary-bg);
       }
 
       body {
@@ -67,18 +97,28 @@
       }
 
       .navbar-nav .nav-link {
-        color: var(--dark-color) !important;
+        color: var(--bs-body-color) !important;
         font-weight: 500;
-        padding: 0.75rem 1rem !important;
-        transition: color 0.15s ease-in-out;
+        transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
+          border-color 0.15s ease-in-out;
       }
 
-      .navbar-nav .nav-link:hover {
-        color: var(--primary-color) !important;
+      /* Make top-level navigation feel like real buttons */
+      .navbar-nav .nav-link.nav-btn {
+        padding: 0.5rem 0.9rem !important;
+        border-radius: 999px;
+        border: 1px solid transparent;
       }
 
-      .navbar-nav .nav-link.active {
-        color: var(--primary-color) !important;
+      .navbar-nav .nav-link.nav-btn:hover {
+        background-color: var(--bs-tertiary-bg);
+        border-color: var(--bs-border-color);
+      }
+
+      .navbar-nav .nav-link.nav-btn.active {
+        background-color: var(--bs-primary-bg-subtle);
+        border-color: var(--bs-primary-border-subtle);
+        color: var(--bs-primary-text-emphasis) !important;
         font-weight: 600;
       }
 
@@ -109,8 +149,8 @@
       }
 
       .card {
-        border: none;
-        box-shadow: var(--shadow);
+        border: 1px solid var(--bs-border-color);
+        box-shadow: var(--shadow-sm);
         border-radius: 0.75rem;
       }
 
@@ -122,7 +162,7 @@
       }
 
       .form-control {
-        border: 1px solid var(--border-color);
+        border: 1px solid var(--bs-border-color);
         border-radius: 0.5rem;
         padding: 0.75rem 1rem;
         font-size: 1rem;
@@ -141,48 +181,15 @@
       }
 
       .alert {
-        border: none;
         border-radius: 0.5rem;
         font-weight: 500;
       }
 
-      .alert-success {
-        background-color: #d4edda;
-        color: #155724;
-      }
-
-      .alert-danger {
-        background-color: #f8d7da;
-        color: #721c24;
-      }
-
-      .alert-info {
-        background-color: #cce7ff;
-        color: #004085;
-      }
-
-      .alert-warning {
-        background-color: #fff3cd;
-        color: #856404;
-      }
-
       .footer {
-        background-color: #ffffff;
-        border-top: 1px solid var(--border-color);
-        color: var(--muted-color);
+        background-color: var(--bs-body-bg);
+        border-top: 1px solid var(--bs-border-color);
+        color: var(--bs-secondary-color);
         font-size: 0.875rem;
-      }
-
-      .text-primary {
-        color: var(--primary-color) !important;
-      }
-
-      .bg-primary {
-        background-color: var(--primary-color) !important;
-      }
-
-      .border-primary {
-        border-color: var(--primary-color) !important;
       }
 
       /* Custom animations */
@@ -248,11 +255,11 @@
   </head>
   <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light">
+    <nav class="navbar navbar-expand-lg" data-bs-theme="{{ _theme }}">
       <div class="container">
-        <a class="navbar-brand" href="{{ url_for('main.index') }}">
+        <a class="navbar-brand" href="{{ url_for('main.index') }}" title="Cenaris Compliance Management">
           <i class="bi bi-shield-check me-2"></i>
-          Cenaris Compliance Management
+          CCM
         </a>
 
         <button
@@ -265,11 +272,11 @@
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav me-auto">
+          <ul class="navbar-nav me-auto gap-1">
             {% if current_user.is_authenticated %}
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
                 href="{{ url_for('main.dashboard') }}"
               >
                 <i class="bi bi-speedometer2 me-1"></i>Dashboard
@@ -277,7 +284,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}"
                 href="{{ url_for('main.evidence_repository') }}"
               >
                 <i class="bi bi-folder2-open me-1"></i>Evidence Repository
@@ -285,7 +292,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.ai_evidence' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.ai_evidence' %}active{% endif %}"
                 href="{{ url_for('main.ai_evidence') }}"
               >
                 <i class="bi bi-robot me-1"></i>AI Evidence
@@ -293,7 +300,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
                 href="{{ url_for('main.gap_analysis') }}"
               >
                 <i class="bi bi-graph-up me-1"></i>Gap Analysis
@@ -301,7 +308,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.audit_export' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.audit_export' %}active{% endif %}"
                 href="{{ url_for('main.audit_export') }}"
               >
                 <i class="bi bi-download me-1"></i>Audit Export
@@ -309,7 +316,7 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link {% if request.endpoint == 'main.user_roles' %}active{% endif %}"
+                class="nav-link nav-btn {% if request.endpoint == 'main.user_roles' %}active{% endif %}"
                 href="{{ url_for('main.user_roles') }}"
               >
                 <i class="bi bi-people me-1"></i>User Roles
@@ -318,7 +325,30 @@
             {% endif %}
           </ul>
 
-          <ul class="navbar-nav">
+          <ul class="navbar-nav gap-1">
+            <li class="nav-item d-flex align-items-center">
+              <form method="POST" action="{{ url_for('main.set_theme') }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input
+                  type="hidden"
+                  name="theme"
+                  value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}"
+                />
+                <input type="hidden" name="next" value="{{ request.full_path }}" />
+                <button
+                  type="submit"
+                  class="btn btn-sm btn-outline-secondary"
+                  title="Toggle theme"
+                  aria-label="Toggle theme"
+                >
+                  {% if _theme == 'dark' %}
+                  <i class="bi bi-sun-fill"></i>
+                  {% else %}
+                  <i class="bi bi-moon-stars-fill"></i>
+                  {% endif %}
+                </button>
+              </form>
+            </li>
             {% if current_user.is_authenticated %}
             <li class="nav-item dropdown">
               <a
@@ -328,24 +358,47 @@
                 role="button"
                 data-bs-toggle="dropdown"
               >
-                <i class="bi bi-person-circle me-1"></i>{{ current_user.email }}
+                {% if current_user.avatar_blob_name %}
+                <img
+                  src="{{ url_for('main.profile_avatar') }}"
+                  alt="Profile photo"
+                  class="rounded-circle me-2"
+                  style="width: 24px; height: 24px; object-fit: cover; border: 1px solid var(--bs-border-color);"
+                />
+                {% elif current_user.organization and current_user.organization.logo_blob_name %}
+                <img
+                  src="{{ url_for('main.organization_logo') }}"
+                  alt="Organization logo"
+                  class="rounded-circle me-2 bg-body-tertiary"
+                  style="width: 24px; height: 24px; object-fit: contain; padding: 2px; border: 1px solid var(--bs-border-color);"
+                />
+                {% else %}
+                <i class="bi bi-person-circle me-1"></i>
+                {% endif %}
+                {{ current_user.email }}
               </a>
               <ul class="dropdown-menu">
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('main.profile') }}">
+                    <i class="bi bi-person me-2"></i>My Profile
+                  </a>
+                </li>
                 {% if current_user.organization %}
                 <li>
-                  <span class="dropdown-item-text text-muted">
+                  <span class="dropdown-item-text text-body-secondary">
                     <i class="bi bi-building me-2"></i>{{ current_user.organization.name }}
                   </span>
                 </li>
                 {% endif %}
                 {% if (current_user.role or '').lower() == 'admin' %}
+                <li><hr class="dropdown-divider" /></li>
                 <li>
                   <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
                     <i class="bi bi-gear me-2"></i>Organization Settings
                   </a>
                 </li>
-                <li><hr class="dropdown-divider" /></li>
                 {% endif %}
+                <li><hr class="dropdown-divider" /></li>
                 <li>
                   <form
                     method="POST"
@@ -366,12 +419,12 @@
             </li>
             {% else %}
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('auth.login') }}">
+              <a class="nav-link nav-btn" href="{{ url_for('auth.login') }}">
                 <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('auth.signup') }}">
+              <a class="nav-link nav-btn" href="{{ url_for('auth.signup') }}">
                 <i class="bi bi-person-plus me-1"></i>Sign Up
               </a>
             </li>
@@ -420,8 +473,7 @@
         <div class="row">
           <div class="col-md-6">
             <p class="mb-0">
-              &copy; 2025 Compliance Document Management System. All rights
-              reserved.
+              &copy; {{ current_year }} CCM. All rights reserved.
             </p>
           </div>
           <div class="col-md-6 text-md-end">

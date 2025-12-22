@@ -16,10 +16,10 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-start">
                 <div class="flex-grow-1">
-                    <h1 class="h2 fw-bold text-dark mb-2">{{ entry.document_title }}</h1>
+                    <h1 class="h2 fw-bold mb-2">{{ entry.document_title }}</h1>
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         <span class="badge bg-primary">{{ entry.document_type }}</span>
-                        <span class="badge bg-light text-dark">{{ entry.source }}</span>
+                        <span class="badge bg-body-tertiary text-body border">{{ entry.source }}</span>
                         <span class="badge 
                             {% if entry.confidence_score >= 90 %}bg-success
                             {% elif entry.confidence_score >= 75 %}bg-info
@@ -59,7 +59,7 @@
         <div class="col-lg-8 mb-4">
             <!-- Summary Card -->
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-file-text me-2 text-primary"></i>Document Summary
                     </h5>
@@ -71,7 +71,7 @@
             
             <!-- AI Analysis Card -->
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-robot me-2 text-primary"></i>AI Analysis Notes
                     </h5>
@@ -84,7 +84,7 @@
                         <h6 class="fw-bold mb-2">Identified Keywords:</h6>
                         <div class="d-flex flex-wrap gap-1">
                             {% for keyword in entry.keywords %}
-                                <span class="badge bg-light text-dark border">{{ keyword }}</span>
+                                <span class="badge bg-body-tertiary text-body border">{{ keyword }}</span>
                             {% endfor %}
                         </div>
                     </div>
@@ -103,7 +103,7 @@
             
             <!-- Confidence Score Breakdown -->
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-graph-up me-2 text-primary"></i>Confidence Analysis
                     </h5>
@@ -124,7 +124,7 @@
                                     </svg>
                                     <div class="position-absolute top-50 start-50 translate-middle">
                                         <div class="h3 fw-bold mb-0">{{ entry.confidence_score }}%</div>
-                                        <small class="text-muted">Overall</small>
+                                        <small class="text-body-secondary">Overall</small>
                                     </div>
                                 </div>
                             </div>
@@ -167,7 +167,7 @@
         <div class="col-lg-4">
             <!-- Document Info -->
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h6 class="card-title mb-0">
                         <i class="bi bi-info-circle me-2 text-primary"></i>Document Information
                     </h6>
@@ -176,31 +176,31 @@
                     <div class="row g-3">
                         <div class="col-12">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">Upload Date:</span>
+                                <span class="text-body-secondary">Upload Date:</span>
                                 <span class="fw-medium">{{ entry.upload_date | datetime_format('%b %d, %Y') }}</span>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">File Size:</span>
+                                <span class="text-body-secondary">File Size:</span>
                                 <span class="fw-medium">{{ entry.file_size }}</span>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">Pages:</span>
+                                <span class="text-body-secondary">Pages:</span>
                                 <span class="fw-medium">{{ entry.pages }}</span>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">Language:</span>
+                                <span class="text-body-secondary">Language:</span>
                                 <span class="fw-medium">{{ entry.language }}</span>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="d-flex justify-content-between">
-                                <span class="text-muted">Last Reviewed:</span>
+                                <span class="text-body-secondary">Last Reviewed:</span>
                                 <span class="fw-medium">{{ entry.last_reviewed | datetime_format('%b %d, %Y') }}</span>
                             </div>
                         </div>
@@ -210,7 +210,7 @@
             
             <!-- Risk Assessment -->
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h6 class="card-title mb-0">
                         <i class="bi bi-shield-exclamation me-2 text-primary"></i>Risk Assessment
                     </h6>
@@ -225,7 +225,7 @@
                             {{ entry.risk_level }} Risk
                         </div>
                     </div>
-                    <div class="small text-muted text-center">
+                    <div class="small text-body-secondary text-center">
                         {% if entry.risk_level == 'Low' %}
                             Document shows strong compliance indicators with minimal risk factors identified.
                         {% elif entry.risk_level == 'Medium' %}
@@ -239,7 +239,7 @@
             
             <!-- Quick Actions -->
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h6 class="card-title mb-0">
                         <i class="bi bi-lightning me-2 text-primary"></i>Quick Actions
                     </h6>

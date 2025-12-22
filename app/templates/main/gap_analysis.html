@@ -5,11 +5,11 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h1 class="h2 fw-bold text-dark mb-1">Compliance Gap Analysis</h1>
-          <p class="text-muted mb-0">
+          <h1 class="h2 fw-bold mb-1">Compliance Gap Analysis</h1>
+          <p class="text-body-secondary mb-0">
             Identify and track compliance requirements and gaps across frameworks
           </p>
-          <small class="text-muted">
+          <small class="text-body-secondary">
             <i class="bi bi-clock me-1"></i>Last updated: {{ ml_summary.get('last_updated', 'Unknown') | datetime_format('%b %d, %Y %I:%M %p') }}
           </small>
         </div>
@@ -63,7 +63,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ summary_stats.total }}</div>
-              <div class="text-muted small">Total Requirements</div>
+              <div class="text-body-secondary small">Total Requirements</div>
             </div>
           </div>
         </div>
@@ -84,7 +84,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ summary_stats.met }}</div>
-              <div class="text-muted small">Requirements Met</div>
+              <div class="text-body-secondary small">Requirements Met</div>
             </div>
           </div>
         </div>
@@ -105,7 +105,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ summary_stats.pending }}</div>
-              <div class="text-muted small">Pending Review</div>
+              <div class="text-body-secondary small">Pending Review</div>
             </div>
           </div>
         </div>
@@ -126,7 +126,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ summary_stats.not_met }}</div>
-              <div class="text-muted small">Gaps Identified</div>
+              <div class="text-body-secondary small">Gaps Identified</div>
             </div>
           </div>
         </div>
@@ -139,7 +139,7 @@
     <!-- Compliance Overview Chart -->
     <div class="col-lg-6 mb-4">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-pie-chart me-2 text-primary"></i>Compliance Overview
           </h5>
@@ -204,7 +204,7 @@
                 <div class="h2 fw-bold mb-0 text-primary">
                   {{ summary_stats.compliance_percentage }}%
                 </div>
-                <small class="text-muted">Compliant</small>
+                <small class="text-body-secondary">Compliant</small>
               </div>
             </div>
             <div class="d-flex justify-content-center gap-3">
@@ -247,7 +247,7 @@
     <!-- Progress by Framework -->
     <div class="col-lg-6 mb-4">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-bar-chart me-2 text-primary"></i>Progress by
             Framework
@@ -263,19 +263,19 @@
               <div class="mb-3">
                 <div class="d-flex justify-content-between mb-2">
                   <span class="fw-medium">{{ item.requirement_name }}</span>
-                  <span class="text-muted">{{ percentage }}%</span>
+                  <span class="text-body-secondary">{{ percentage }}%</span>
                 </div>
                 <div class="progress mb-1" style="height: 8px">
                   <div class="progress-bar {{ progress_class }}" style="width: {{ percentage }}%"></div>
                 </div>
-                <small class="text-muted">Status: {{ status_text }}</small>
+                <small class="text-body-secondary">Status: {{ status_text }}</small>
               </div>
             {% endfor %}
           {% else %}
             <div class="text-center py-4">
-              <i class="bi bi-inbox text-muted" style="font-size: 3rem; opacity: 0.3;"></i>
-              <p class="text-muted mt-3">No framework data available</p>
-              <small class="text-muted">Upload compliance data to ADLS to see framework progress</small>
+              <i class="bi bi-inbox text-body-secondary" style="font-size: 3rem; opacity: 0.3;"></i>
+              <p class="text-body-secondary mt-3">No framework data available</p>
+              <small class="text-body-secondary">Upload compliance data to ADLS to see framework progress</small>
             </div>
           {% endif %}
         </div>
@@ -287,7 +287,7 @@
   <div class="row">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-table me-2 text-primary"></i>
@@ -343,7 +343,7 @@
         <div class="card-body">
           <div class="table-responsive">
             <table class="table table-hover align-middle" id="gapAnalysisTable">
-              <thead class="table-light">
+              <thead>
                 <tr>
                   <th scope="col" class="border-0">
                     <i class="bi bi-list-check me-1"></i>Requirement Name
@@ -400,7 +400,7 @@
                     </div>
                   </td>
                   <td>
-                    <small class="text-muted"
+                    <small class="text-body-secondary"
                       >{{ item.supporting_evidence }}</small
                     >
                   </td>
@@ -456,11 +456,11 @@
                 <tr>
                   <td colspan="6" class="text-center py-5">
                     <div class="text-center">
-                      <i class="bi bi-inbox text-muted" style="font-size: 3rem; opacity: 0.3;"></i>
-                      <p class="text-muted mt-3 mb-1"><strong>No Compliance Data Available</strong></p>
-                      <small class="text-muted">Upload your compliance_summary.csv file to ADLS to see gap analysis</small>
+                      <i class="bi bi-inbox text-body-secondary" style="font-size: 3rem; opacity: 0.3;"></i>
+                      <p class="text-body-secondary mt-3 mb-1"><strong>No Compliance Data Available</strong></p>
+                      <small class="text-body-secondary">Upload your compliance_summary.csv file to ADLS to see gap analysis</small>
                       <br>
-                      <small class="text-muted">Path: compliance-results/2025/11/user_{{ current_user.id }}/compliance_summary.csv</small>
+                      <small class="text-body-secondary">Path: compliance-results/2025/11/user_{{ current_user.id }}/compliance_summary.csv</small>
                     </div>
                   </td>
                 </tr>

@@ -45,6 +45,13 @@ class Config:
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or os.environ.get('MAIL_USERNAME')
+
+    # Email verification (token-based)
+    REQUIRE_EMAIL_VERIFICATION = (os.environ.get('REQUIRE_EMAIL_VERIFICATION') or 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+    # CAPTCHA (Cloudflare Turnstile) - optional
+    TURNSTILE_SITE_KEY = os.environ.get('TURNSTILE_SITE_KEY')
+    TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY')
     
     # File Upload Configuration
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
@@ -66,9 +73,15 @@ class DevelopmentConfig(Config):
     # Keep SQLAlchemy in sync
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
 
+    # Defaults for dev convenience
+    REQUIRE_EMAIL_VERIFICATION = (os.environ.get('REQUIRE_EMAIL_VERIFICATION') or 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
+
 class ProductionConfig(Config):
     """Production configuration."""
     DEBUG = False
+
+    # In production, default to requiring email verification unless explicitly disabled.
+    REQUIRE_EMAIL_VERIFICATION = (os.environ.get('REQUIRE_EMAIL_VERIFICATION') or 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
     
     @classmethod
     def init_app(cls, app):

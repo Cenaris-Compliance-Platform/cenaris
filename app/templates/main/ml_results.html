@@ -5,8 +5,8 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h1 class="h2 fw-bold text-dark mb-1">ML Compliance Analysis</h1>
-          <p class="text-muted mb-0">
+          <h1 class="h2 fw-bold mb-1">ML Compliance Analysis</h1>
+          <p class="text-body-secondary mb-0">
             Real-time compliance analysis results from Azure Machine Learning
           </p>
         </div>
@@ -30,7 +30,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ ml_summary.total_files }}</div>
-              <div class="text-muted small">Analysis Files</div>
+              <div class="text-body-secondary small">Analysis Files</div>
             </div>
           </div>
         </div>
@@ -48,7 +48,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ ml_summary.total_complete }}</div>
-              <div class="text-muted small">Complete</div>
+              <div class="text-body-secondary small">Complete</div>
             </div>
           </div>
         </div>
@@ -66,7 +66,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ ml_summary.total_needs_review }}</div>
-              <div class="text-muted small">Needs Review</div>
+              <div class="text-body-secondary small">Needs Review</div>
             </div>
           </div>
         </div>
@@ -84,7 +84,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ ml_summary.total_missing }}</div>
-              <div class="text-muted small">Missing</div>
+              <div class="text-body-secondary small">Missing</div>
             </div>
           </div>
         </div>
@@ -96,7 +96,7 @@
   <div class="row mb-4">
     <div class="col-lg-4 mb-4">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-pie-chart me-2 text-primary"></i>Overall Compliance
           </h5>
@@ -112,10 +112,10 @@
               </svg>
               <div class="position-absolute top-50 start-50 translate-middle text-center">
                 <div class="h2 fw-bold mb-0 text-primary">{{ ml_summary.avg_compliancy_rate }}%</div>
-                <small class="text-muted">Compliant</small>
+                <small class="text-body-secondary">Compliant</small>
               </div>
             </div>
-            <div class="text-muted">
+            <div class="text-body-secondary">
               Last updated: {{ ml_summary.last_updated.strftime('%b %d, %Y at %I:%M %p') }}
             </div>
           </div>
@@ -125,7 +125,7 @@
 
     <div class="col-lg-8 mb-4">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-bar-chart me-2 text-primary"></i>Framework Analysis
@@ -153,7 +153,7 @@
               </div>
               <div class="text-end">
                 <span class="fw-bold">{{ file_summary.compliancy_rate }}%</span>
-                <small class="text-muted d-block">{{ file_summary.total_requirements }} requirements</small>
+                <small class="text-body-secondary d-block">{{ file_summary.total_requirements }} requirements</small>
               </div>
             </div>
             <div class="progress mb-2" style="height: 10px;">
@@ -183,7 +183,7 @@
   <div class="row">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-table me-2 text-primary"></i>Analysis Files
@@ -207,7 +207,7 @@
         <div class="card-body">
           <div class="table-responsive">
             <table class="table table-hover align-middle" id="mlFilesTable">
-              <thead class="table-light">
+              <thead>
                 <tr>
                   <th scope="col" class="border-0">
                     <i class="bi bi-file-earmark me-1"></i>File Name
@@ -237,7 +237,7 @@
                 <tr data-status="{{ file_summary.overall_status }}">
                   <td>
                     <div class="fw-medium">{{ file_summary.file_name }}</div>
-                    <small class="text-muted">{{ (file_summary.file_name|length * 1024)|filesizeformat }}</small>
+                    <small class="text-body-secondary">{{ (file_summary.file_name|length * 1024)|filesizeformat }}</small>
                   </td>
                   <td>
                     <span class="badge bg-secondary">{{ file_summary.framework }}</span>

@@ -63,3 +63,21 @@ class OrganizationSettingsForm(FlaskForm):
         'Save Settings',
         render_kw={'class': 'btn btn-primary btn-lg'},
     )
+
+
+class UserAvatarForm(FlaskForm):
+    avatar = FileField(
+        'Profile Photo',
+        validators=[
+            FileAllowed(['png', 'jpg', 'jpeg', 'webp'], 'Avatar must be a PNG/JPG/WEBP image.')
+        ],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'accept': '.png,.jpg,.jpeg,.webp',
+        },
+    )
+
+    submit = SubmitField(
+        'Upload Photo',
+        render_kw={'class': 'btn btn-primary btn-lg'},
+    )

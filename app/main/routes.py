@@ -1,9 +1,36 @@
-from flask import render_template, redirect, url_for, jsonify
+from flask import render_template, redirect, url_for, jsonify, request, make_response
 from flask_login import login_required, current_user
 from app.main import bp
 from app.models import Document, Organization
 from app import db
 from app.services.azure_data_service import azure_data_service
+
+
+@bp.route('/theme', methods=['POST'])
+def set_theme():
+    """Persist theme preference in a cookie (light/dark)."""
+    theme = (request.form.get('theme') or '').strip().lower()
+    if theme not in {'light', 'dark'}:
+        theme = 'light'
+
+    # Redirect back to the originating page when possible.
+    next_url = (request.form.get('next') or '').strip()
+    if next_url and next_url.startswith('/'):
+        redirect_target = next_url
+    elif request.referrer:
+        redirect_target = request.referrer
+    else:
+        redirect_target = url_for('main.dashboard') if current_user.is_authenticated else url_for('main.index')
+
+    resp = make_response(redirect(redirect_target))
+    resp.set_cookie(
+        'theme',
+        theme,
+        max_age=60 * 60 * 24 * 365,  # 1 year
+        samesite='Lax',
+        secure=bool(request.is_secure),
+    )
+    return resp
 
 def get_mock_ml_summary():
     """Get mock ML summary data"""
@@ -536,11 +563,61 @@ def help():
     """Help route."""
     return render_template('main/help.html', title='Help & Documentation')
 
-@bp.route('/profile')
+@bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
     """User profile route."""
-    return render_template('main/profile.html', title='My Profile')
+    from flask import flash
+    from app.main.forms import UserAvatarForm
+
+    form = UserAvatarForm()
+    if form.validate_on_submit():
+        avatar_file = form.avatar.data
+        if avatar_file and getattr(avatar_file, 'filename', ''):
+            from uuid import uuid4
+            ext = (avatar_file.filename.rsplit('.', 1)[-1] or '').lower()
+            safe_ext = ext if ext in {'png', 'jpg', 'jpeg', 'webp'} else 'png'
+            unique = uuid4().hex
+            blob_name = f"users/{current_user.id}/avatar_{unique}.{safe_ext}"
+            content_type = getattr(avatar_file, 'mimetype', None)
+            data = avatar_file.read()
+
+            from app.services.azure_storage_service import azure_storage_service
+            if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type):
+                flash('Profile photo upload failed. Check Azure Storage configuration.', 'error')
+            else:
+                current_user.avatar_blob_name = blob_name
+                current_user.avatar_content_type = content_type
+                db.session.commit()
+                flash('Profile photo updated.', 'success')
+                return redirect(url_for('main.profile'))
+
+    return render_template('main/profile.html', title='My Profile', form=form)
+
+
+@bp.route('/profile/avatar')
+@login_required
+def profile_avatar():
+    """Serve the current user's avatar image."""
+    from flask import abort, send_file
+    import io
+
+    if not getattr(current_user, 'avatar_blob_name', None):
+        abort(404)
+
+    from app.services.azure_storage_service import azure_storage_service
+    blob_data = azure_storage_service.download_blob(current_user.avatar_blob_name)
+    if not blob_data:
+        abort(404)
+
+    file_stream = io.BytesIO(blob_data)
+    file_stream.seek(0)
+    return send_file(
+        file_stream,
+        mimetype=getattr(current_user, 'avatar_content_type', None) or 'application/octet-stream',
+        as_attachment=False,
+        download_name='avatar'
+    )
 
 @bp.route('/notifications')
 @login_required

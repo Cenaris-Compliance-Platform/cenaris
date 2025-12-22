@@ -12,8 +12,8 @@
               <li class="breadcrumb-item active">{{ file_analysis.file_name }}</li>
             </ol>
           </nav>
-          <h1 class="h2 fw-bold text-dark mb-1">{{ file_analysis.file_name }}</h1>
-          <p class="text-muted mb-0">
+          <h1 class="h2 fw-bold mb-1">{{ file_analysis.file_name }}</h1>
+          <p class="text-body-secondary mb-0">
             Detailed ML analysis results and compliance breakdown
           </p>
         </div>
@@ -37,7 +37,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ file_analysis.compliancy_rate }}%</div>
-              <div class="text-muted small">Compliance Rate</div>
+              <div class="text-body-secondary small">Compliance Rate</div>
             </div>
           </div>
         </div>
@@ -55,7 +55,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ file_analysis.complete_count }}</div>
-              <div class="text-muted small">Complete</div>
+              <div class="text-body-secondary small">Complete</div>
             </div>
           </div>
         </div>
@@ -73,7 +73,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ file_analysis.needs_review_count }}</div>
-              <div class="text-muted small">Needs Review</div>
+              <div class="text-body-secondary small">Needs Review</div>
             </div>
           </div>
         </div>
@@ -91,7 +91,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ file_analysis.missing_count }}</div>
-              <div class="text-muted small">Missing</div>
+              <div class="text-body-secondary small">Missing</div>
             </div>
           </div>
         </div>
@@ -103,7 +103,7 @@
   <div class="row mb-4">
     <div class="col-lg-8 mb-4">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-info-circle me-2 text-primary"></i>File Information
           </h5>
@@ -113,15 +113,15 @@
             <div class="col-md-6">
               <table class="table table-borderless">
                 <tr>
-                  <td class="fw-medium text-muted">File Name:</td>
+                  <td class="fw-medium text-body-secondary">File Name:</td>
                   <td>{{ file_analysis.file_name }}</td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Total Requirements:</td>
+                  <td class="fw-medium text-body-secondary">Total Requirements:</td>
                   <td>{{ file_analysis.total_requirements }}</td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Overall Status:</td>
+                  <td class="fw-medium text-body-secondary">Overall Status:</td>
                   <td>
                     {% if file_analysis.overall_status == 'Excellent' %}
                       <span class="badge bg-success">{{ file_analysis.overall_status }}</span>
@@ -135,7 +135,7 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Weighted Score:</td>
+                  <td class="fw-medium text-body-secondary">Weighted Score:</td>
                   <td>{{ file_analysis.weighted_score }}/10</td>
                 </tr>
               </table>
@@ -143,19 +143,19 @@
             <div class="col-md-6">
               <table class="table table-borderless">
                 <tr>
-                  <td class="fw-medium text-muted">Last Updated:</td>
+                  <td class="fw-medium text-body-secondary">Last Updated:</td>
                   <td>{{ file_analysis.last_updated.strftime('%b %d, %Y at %I:%M %p') }}</td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Complete:</td>
+                  <td class="fw-medium text-body-secondary">Complete:</td>
                   <td><span class="text-success fw-bold">{{ file_analysis.complete_count }}</span></td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Needs Review:</td>
+                  <td class="fw-medium text-body-secondary">Needs Review:</td>
                   <td><span class="text-warning fw-bold">{{ file_analysis.needs_review_count }}</span></td>
                 </tr>
                 <tr>
-                  <td class="fw-medium text-muted">Missing:</td>
+                  <td class="fw-medium text-body-secondary">Missing:</td>
                   <td><span class="text-danger fw-bold">{{ file_analysis.missing_count }}</span></td>
                 </tr>
               </table>
@@ -167,7 +167,7 @@
 
     <div class="col-lg-4 mb-4">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-pie-chart me-2 text-primary"></i>Compliance Breakdown
           </h5>
@@ -196,7 +196,7 @@
               </svg>
               <div class="position-absolute top-50 start-50 translate-middle text-center">
                 <div class="h3 fw-bold mb-0 text-primary">{{ file_analysis.compliancy_rate }}%</div>
-                <small class="text-muted">Compliant</small>
+                <small class="text-body-secondary">Compliant</small>
               </div>
             </div>
             <div class="d-flex justify-content-center gap-3">
@@ -232,7 +232,7 @@
   <div class="row">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-table me-2 text-primary"></i>Requirement Details
@@ -258,7 +258,7 @@
         <div class="card-body">
           <div class="table-responsive">
             <table class="table table-hover align-middle" id="requirementsTable">
-              <thead class="table-light">
+              <thead>
                 <tr>
                   <th scope="col" class="border-0">Requirement</th>
                   <th scope="col" class="border-0">Rule</th>
@@ -276,7 +276,7 @@
                     <div class="fw-medium">{{ req.Requirement }}</div>
                   </td>
                   <td>
-                    <small class="text-muted">{{ req.Rule }}</small>
+                    <small class="text-body-secondary">{{ req.Rule }}</small>
                   </td>
                   <td>
                     {% if req.Status == 'Complete' %}
@@ -313,7 +313,7 @@
                     <span class="fw-medium">{{ req.Status_Score }}</span>
                   </td>
                   <td>
-                    <span class="text-muted">{{ req.Weight }}</span>
+                    <span class="text-body-secondary">{{ req.Weight }}</span>
                   </td>
                   <td>
                     <span class="fw-bold">{{ req.Weighted_Score }}</span>

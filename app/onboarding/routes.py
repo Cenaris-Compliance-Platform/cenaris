@@ -1,10 +1,66 @@
-from flask import render_template, redirect, url_for, flash, request, make_response, abort
+from datetime import datetime, timezone
+
+from flask import render_template, redirect, url_for, flash, request, make_response, abort, current_app
 from flask_login import login_required, current_user
+
+from flask_mail import Message
 
 from app.onboarding import bp
 from app.onboarding.forms import OnboardingOrganizationForm, OnboardingLogoForm, OnboardingThemeForm
-from app import db
+from app import db, mail
 from app.models import Organization, User
+
+
+def _mail_configured() -> bool:
+    return bool(current_app.config.get('MAIL_SERVER') and current_app.config.get('MAIL_DEFAULT_SENDER'))
+
+
+def _send_welcome_email(user: User, dashboard_url: str) -> bool:
+    if not _mail_configured():
+        current_app.logger.warning(
+            'MAIL not configured; welcome email skipped for %s (dashboard: %s)',
+            user.email,
+            dashboard_url,
+        )
+        return False
+
+    msg = Message(
+        subject='Welcome to CCM',
+        recipients=[user.email],
+        body=(
+            'Welcome to CCM. Your organization setup is complete.\n\n'
+            f'Dashboard: {dashboard_url}\n\n'
+            'You can now upload documents and start managing your compliance evidence.\n'
+        ),
+    )
+    mail.send(msg)
+    return True
+
+
+def _maybe_send_welcome_email(user_id: int) -> None:
+    user: User | None = User.query.get(int(user_id))
+    if not user or not getattr(user, 'email', None):
+        return
+
+    if getattr(user, 'welcome_email_sent_at', None):
+        return
+
+    dashboard_url = url_for('main.dashboard', _external=True)
+
+    try:
+        sent = _send_welcome_email(user, dashboard_url)
+    except Exception:
+        current_app.logger.exception('Failed to send welcome email')
+        return
+
+    if not sent:
+        return
+
+    user.welcome_email_sent_at = datetime.now(timezone.utc)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _safe_theme(value: str | None) -> str:
@@ -119,6 +175,7 @@ def theme():
 
     if request.method == 'POST' and request.form.get('skip') == '1':
         flash('You can change the theme later in Organization Settings.', 'info')
+        _maybe_send_welcome_email(int(current_user.id))
         return redirect(url_for('main.dashboard'))
 
     if request.method == 'GET':
@@ -135,6 +192,7 @@ def theme():
             secure=_cookie_secure(),
         )
         flash('Setup complete. Welcome!', 'success')
+        _maybe_send_welcome_email(int(current_user.id))
         return response
 
     return render_template('onboarding/theme.html', title='Choose Theme', form=form)

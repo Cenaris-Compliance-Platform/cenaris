@@ -1,6 +1,7 @@
 from flask import render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, current_user
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+import requests
 
 from flask_mail import Message
 from app.auth import bp
@@ -40,6 +41,74 @@ def _mail_configured() -> bool:
     return bool(current_app.config.get('MAIL_SERVER') and current_app.config.get('MAIL_DEFAULT_SENDER'))
 
 
+def _email_verification_required() -> bool:
+    return bool(current_app.config.get('REQUIRE_EMAIL_VERIFICATION'))
+
+
+def _email_verify_token(user: User) -> str:
+    return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt='email-verify')
+
+
+def _verify_email_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 7) -> dict | None:
+    try:
+        data = _serializer().loads(token, salt='email-verify', max_age=max_age_seconds)
+        if not isinstance(data, dict):
+            return None
+        if 'user_id' not in data or 'email' not in data:
+            return None
+        return data
+    except (BadSignature, SignatureExpired):
+        return None
+
+
+def _send_email_verification_email(user: User, verify_url: str) -> None:
+    if not _mail_configured():
+        current_app.logger.warning('MAIL not configured; verify-email URL: %s', verify_url)
+        return
+
+    msg = Message(
+        subject='Verify your email',
+        recipients=[user.email],
+        body=(
+            'Welcome to CCM. Please verify your email address to activate your account.\n\n'
+            f'Verify link: {verify_url}\n\n'
+            'If you did not create this account, you can ignore this email.'
+        ),
+    )
+    mail.send(msg)
+
+
+def _turnstile_enabled() -> bool:
+    return bool(current_app.config.get('TURNSTILE_SECRET_KEY'))
+
+
+def _verify_turnstile() -> bool:
+    """Verify Cloudflare Turnstile CAPTCHA if configured; otherwise allow."""
+    if not _turnstile_enabled():
+        return True
+
+    token = (request.form.get('cf-turnstile-response') or '').strip()
+    if not token:
+        return False
+
+    secret = current_app.config.get('TURNSTILE_SECRET_KEY')
+    try:
+        resp = requests.post(
+            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+            data={
+                'secret': secret,
+                'response': token,
+                'remoteip': request.remote_addr,
+            },
+            timeout=5,
+        )
+        data = resp.json() if resp is not None else {}
+        return bool(data.get('success'))
+    except Exception:
+        current_app.logger.exception('Turnstile verification failed')
+        return False
+
+
 def _send_password_reset_email(user: User, reset_url: str) -> None:
     # If mail isn't configured (common for local dev), we still provide the link via logs.
     if not _mail_configured():
@@ -72,6 +141,9 @@ def login():
         user = User.query.filter_by(email=email).first()
         
         if user and user.check_password(password) and user.is_active:
+            if _email_verification_required() and not getattr(user, 'email_verified', False):
+                flash('Please verify your email before signing in. You can request a new verification link below.', 'warning')
+                return redirect(url_for('auth.verify_email_request', email=email))
             login_user(user, remember=form.remember_me.data)
             flash('Welcome back! You have been successfully signed in.', 'success')
             
@@ -94,6 +166,10 @@ def signup():
     form = RegisterForm()
     
     if form.validate_on_submit():
+        if not _verify_turnstile():
+            flash('CAPTCHA verification failed. Please try again.', 'error')
+            return render_template('auth/signup.html', form=form, title='Create Account')
+
         full_name = form.full_name.data.strip()
         email = form.email.data.lower().strip()
         password = form.password.data
@@ -103,11 +179,24 @@ def signup():
                 email=email,
                 full_name=full_name,
                 role='User',
-                organization_id=None
+                organization_id=None,
+                email_verified=False,
             )
             user.set_password(password)
             db.session.add(user)
             db.session.commit()
+
+            if _email_verification_required():
+                token = _email_verify_token(user)
+                verify_url = url_for('auth.verify_email', token=token, _external=True)
+                try:
+                    _send_email_verification_email(user, verify_url)
+                except Exception:
+                    current_app.logger.exception('Failed to send verification email')
+
+                flash('Account created. Please verify your email to continue.', 'info')
+                return redirect(url_for('auth.login'))
+
             login_user(user)
             flash('Account created. Let\'s finish your setup.', 'success')
             return redirect(url_for('onboarding.organization'))
@@ -125,6 +214,10 @@ def forgot_password():
 
     form = ForgotPasswordForm()
     if form.validate_on_submit():
+        if not _verify_turnstile():
+            flash('CAPTCHA verification failed. Please try again.', 'error')
+            return render_template('auth/forgot_password.html', form=form, title='Forgot Password')
+
         email = form.email.data.lower().strip()
         user = User.query.filter_by(email=email).first()
 
@@ -224,7 +317,7 @@ def oauth_callback(provider):
 
     user = User.query.filter_by(email=email).first()
     if not user:
-        user = User(email=email, full_name=full_name, role='User', organization_id=None)
+        user = User(email=email, full_name=full_name, role='User', organization_id=None, email_verified=True)
         db.session.add(user)
         try:
             db.session.commit()
@@ -240,6 +333,61 @@ def oauth_callback(provider):
     login_user(user)
     flash('Signed in successfully.', 'success')
     return _after_login_redirect()
+
+
+@bp.route('/verify-email/<token>')
+def verify_email(token):
+    if current_user.is_authenticated:
+        return _after_login_redirect()
+
+    data = _verify_email_token(token)
+    if not data:
+        flash('This verification link is invalid or has expired. Please request a new one.', 'error')
+        return redirect(url_for('auth.verify_email_request'))
+
+    user = User.query.get(int(data['user_id']))
+    if not user or (user.email or '').lower().strip() != (data.get('email') or '').lower().strip():
+        flash('This verification link is invalid. Please request a new one.', 'error')
+        return redirect(url_for('auth.verify_email_request'))
+
+    user.email_verified = True
+    try:
+        db.session.commit()
+        flash('Email verified successfully. You can now sign in.', 'success')
+    except Exception:
+        db.session.rollback()
+        flash('Failed to verify email. Please try again.', 'error')
+
+    return redirect(url_for('auth.login'))
+
+
+@bp.route('/verify-email', methods=['GET', 'POST'])
+def verify_email_request():
+    if current_user.is_authenticated:
+        return _after_login_redirect()
+
+    email_prefill = (request.args.get('email') or '').strip().lower()
+    if request.method == 'POST':
+        email_prefill = (request.form.get('email') or '').strip().lower()
+        # Optional: protect resend form too.
+        if not _verify_turnstile():
+            flash('CAPTCHA verification failed. Please try again.', 'error')
+            return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill)
+
+        user = User.query.filter_by(email=email_prefill).first()
+        flash('If that email exists, a verification link has been sent.', 'info')
+
+        if user and user.is_active and not getattr(user, 'email_verified', False):
+            token = _email_verify_token(user)
+            verify_url = url_for('auth.verify_email', token=token, _external=True)
+            try:
+                _send_email_verification_email(user, verify_url)
+            except Exception:
+                current_app.logger.exception('Failed to resend verification email')
+
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill)
 
 @bp.route('/logout', methods=['POST'])
 def logout():

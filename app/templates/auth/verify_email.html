@@ -11,36 +11,37 @@
           <div class="card-body p-5">
             <div class="text-center mb-4">
               <div class="mb-3">
-                <i class="bi bi-key-fill text-primary" style="font-size: 3rem;"></i>
+                <i class="bi bi-envelope-check-fill text-primary" style="font-size: 3rem;"></i>
               </div>
-              <h1 class="h3 mb-2 fw-bold">Forgot Password</h1>
-              <p class="text-body-secondary">We’ll send you a reset link.</p>
+              <h1 class="h3 mb-2 fw-bold">Verify Email</h1>
+              <p class="text-body-secondary">We’ll send you a verification link.</p>
             </div>
 
             <form method="POST" novalidate>
-              {{ form.hidden_tag() }}
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
               <div class="mb-4">
-                {{ form.email.label(class="form-label") }}
-                {{ form.email() }}
-                {% if form.email.errors %}
-                  <div class="invalid-feedback d-block">
-                    {% for error in form.email.errors %}
-                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
-                    {% endfor %}
-                  </div>
-                {% endif %}
-              </div>
-
-              <div class="d-grid mb-3">
-                {{ form.submit() }}
+                <label class="form-label" for="email">Email</label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  class="form-control"
+                  value="{{ email or '' }}"
+                  required
+                  autocomplete="email"
+                />
               </div>
 
               {% if config.get('TURNSTILE_SITE_KEY') %}
-              <div class="mb-3">
+              <div class="mb-4">
                 <div class="cf-turnstile" data-sitekey="{{ config.get('TURNSTILE_SITE_KEY') }}"></div>
               </div>
               {% endif %}
+
+              <div class="d-grid mb-3">
+                <button type="submit" class="btn btn-primary">Send verification link</button>
+              </div>
             </form>
 
             <div class="text-center mt-3">

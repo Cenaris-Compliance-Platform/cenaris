@@ -5,8 +5,8 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h1 class="h2 fw-bold text-dark mb-1">ADLS Raw Data</h1>
-          <p class="text-muted mb-0">
+          <h1 class="h2 fw-bold mb-1">ADLS Raw Data</h1>
+          <p class="text-body-secondary mb-0">
             Exact data from Azure Data Lake Storage - no processing, just raw ML results
           </p>
         </div>
@@ -21,7 +21,7 @@
   <div class="row">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-database me-2 text-primary"></i>Raw ML Analysis Results
@@ -39,7 +39,7 @@
         <div class="card-body">
           <div class="table-responsive">
             <table class="table table-hover align-middle" id="adlsRawTable">
-              <thead class="table-light">
+              <thead>
                 <tr>
                   <th scope="col" class="border-0">Best Match Page</th>
                   <th scope="col" class="border-0">Outcome Code</th>
@@ -62,9 +62,9 @@
                     <td><code>{{ req.Outcome_Code }}</code></td>
                     <td>
                       <div class="fw-medium">{{ req.Requirement }}</div>
-                      <small class="text-muted">{{ file_summary.framework }}</small>
+                      <small class="text-body-secondary">{{ file_summary.framework }}</small>
                     </td>
-                    <td><small class="text-muted">{{ req.Rule }}</small></td>
+                    <td><small class="text-body-secondary">{{ req.Rule }}</small></td>
                     <td>
                       {% if req.Rule_Status == 'Complete' %}
                         <span class="badge bg-success">{{ req.Rule_Status }}</span>
@@ -108,7 +108,7 @@
                       {% endif %}
                     </td>
                     <td><span class="fw-medium">{{ req.Status_Score }}</span></td>
-                    <td><span class="text-muted">{{ req.Weight }}</span></td>
+                    <td><span class="text-body-secondary">{{ req.Weight }}</span></td>
                     <td><span class="fw-bold">{{ req.Weighted_Score }}</span></td>
                   </tr>
                   {% endfor %}
@@ -125,7 +125,7 @@
   <div class="row mt-4">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-files me-2 text-primary"></i>Files in ADLS
           </h5>
@@ -137,15 +137,15 @@
               <div class="border rounded p-3">
                 <h6 class="fw-bold">{{ file_summary.file_name }}</h6>
                 <div class="d-flex justify-content-between">
-                  <small class="text-muted">Framework:</small>
+                  <small class="text-body-secondary">Framework:</small>
                   <span class="badge bg-secondary">{{ file_summary.framework }}</span>
                 </div>
                 <div class="d-flex justify-content-between mt-1">
-                  <small class="text-muted">Requirements:</small>
+                  <small class="text-body-secondary">Requirements:</small>
                   <span>{{ file_summary.total_requirements }}</span>
                 </div>
                 <div class="d-flex justify-content-between mt-1">
-                  <small class="text-muted">Last Updated:</small>
+                  <small class="text-body-secondary">Last Updated:</small>
                   <small>{{ file_summary.last_updated.strftime('%Y-%m-%d') }}</small>
                 </div>
               </div>

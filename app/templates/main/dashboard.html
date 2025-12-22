@@ -5,10 +5,10 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h1 class="h2 fw-bold text-dark mb-1">
+          <h1 class="h2 fw-bold mb-1">
             Welcome back, {{ current_user.email.split('@')[0].title() }}
           </h1>
-          <p class="text-muted mb-0">
+          <p class="text-body-secondary mb-0">
             Manage your compliance documents securely and efficiently
           </p>
         </div>
@@ -38,7 +38,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ total_documents }}</div>
-              <div class="text-muted small">Total Documents</div>
+              <div class="text-body-secondary small">Total Documents</div>
             </div>
           </div>
         </div>
@@ -59,7 +59,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ total_documents }}</div>
-              <div class="text-muted small">Stored Securely</div>
+              <div class="text-body-secondary small">Stored Securely</div>
             </div>
           </div>
         </div>
@@ -80,7 +80,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ ml_summary.avg_compliancy_rate }}%</div>
-              <div class="text-muted small">ML Compliance Rate</div>
+              <div class="text-body-secondary small">ML Compliance Rate</div>
             </div>
           </div>
         </div>
@@ -101,7 +101,7 @@
             </div>
             <div class="flex-grow-1 ms-3">
               <div class="fw-bold h4 mb-0">{{ ml_summary.total_files }}</div>
-              <div class="text-muted small">ML Analysis Files</div>
+              <div class="text-body-secondary small">ML Analysis Files</div>
             </div>
           </div>
         </div>
@@ -114,7 +114,7 @@
     <!-- Upload Section -->
     <div class="col-lg-8 mb-4">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-cloud-upload me-2 text-primary"></i>Upload Documents
           </h5>
@@ -128,7 +128,7 @@
               ></i>
             </div>
             <h6 class="fw-bold mb-3">Upload Your Compliance Documents</h6>
-            <p class="text-muted mb-4">
+            <p class="text-body-secondary mb-4">
               Securely upload PDF and DOCX files to your compliance repository.
               All files are encrypted and stored in Azure Blob Storage.
             </p>
@@ -171,7 +171,7 @@
             </form>
 
             <div class="mt-3">
-              <small class="text-muted">
+              <small class="text-body-secondary">
                 <i class="bi bi-info-circle me-1"></i>
                 Supported formats: PDF, DOCX • Maximum file size: 16MB
               </small>
@@ -184,7 +184,7 @@
     <!-- Recent Documents -->
     <div class="col-lg-4 mb-4">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-clock-history me-2 text-primary"></i>Recent
@@ -230,7 +230,7 @@
                   >
                     {{ document.filename }}
                   </div>
-                  <small class="text-muted">
+                  <small class="text-body-secondary">
                     {{ document.uploaded_at | datetime_format('%b %d, %Y at
                     %I:%M %p') }} • {{ current_user.email.split('@')[0] }}
                   </small>
@@ -242,11 +242,11 @@
           {% else %}
           <div class="text-center py-4">
             <i
-              class="bi bi-inbox text-muted"
+              class="bi bi-inbox text-body-secondary"
               style="font-size: 3rem; opacity: 0.5"
             ></i>
-            <p class="text-muted mt-3 mb-0">No documents uploaded yet</p>
-            <small class="text-muted"
+            <p class="text-body-secondary mt-3 mb-0">No documents uploaded yet</p>
+            <small class="text-body-secondary"
               >Upload your first document to get started</small
             >
           </div>
@@ -261,7 +261,7 @@
   <div class="row mb-4">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-cpu me-2 text-primary"></i>ML Compliance Analysis
@@ -281,7 +281,7 @@
                     <div class="d-flex justify-content-between align-items-start mb-2">
                       <div class="flex-grow-1">
                         <h6 class="fw-bold mb-1">{{ file_summary.framework }}</h6>
-                        <small class="text-muted">{{ file_summary.file_name[:30] }}...</small>
+                        <small class="text-body-secondary">{{ file_summary.file_name[:30] }}...</small>
                       </div>
                       {% if file_summary.overall_status == 'Excellent' %}
                         <span class="badge bg-success">{{ file_summary.overall_status }}</span>
@@ -295,7 +295,7 @@
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-2">
                       <span class="fw-bold h5 mb-0">{{ file_summary.compliancy_rate }}%</span>
-                      <small class="text-muted">{{ file_summary.total_requirements }} requirements</small>
+                      <small class="text-body-secondary">{{ file_summary.total_requirements }} requirements</small>
                     </div>
                     <div class="progress mb-2" style="height: 6px;">
                       {% if file_summary.compliancy_rate >= 90 %}
@@ -329,22 +329,22 @@
                   </svg>
                   <div class="position-absolute top-50 start-50 translate-middle text-center">
                     <div class="h3 fw-bold mb-0 text-primary">{{ ml_summary.avg_compliancy_rate }}%</div>
-                    <small class="text-muted">Overall</small>
+                    <small class="text-body-secondary">Overall</small>
                   </div>
                 </div>
                 <div class="text-center">
                   <div class="row g-2">
                     <div class="col-4">
                       <div class="fw-bold text-success">{{ ml_summary.total_complete }}</div>
-                      <small class="text-muted d-block">Complete</small>
+                      <small class="text-body-secondary d-block">Complete</small>
                     </div>
                     <div class="col-4">
                       <div class="fw-bold text-warning">{{ ml_summary.total_needs_review }}</div>
-                      <small class="text-muted d-block">Review</small>
+                      <small class="text-body-secondary d-block">Review</small>
                     </div>
                     <div class="col-4">
                       <div class="fw-bold text-danger">{{ ml_summary.total_missing }}</div>
-                      <small class="text-muted d-block">Missing</small>
+                      <small class="text-body-secondary d-block">Missing</small>
                     </div>
                   </div>
                 </div>
@@ -361,7 +361,7 @@
   <div class="row">
     <div class="col-12">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom">
+        <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-lightning me-2 text-primary"></i>Quick Actions
           </h5>

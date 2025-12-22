@@ -31,10 +31,10 @@
                         <div class="flex-grow-1">
                             <h2 class="h3 fw-bold mb-2">{{ document.filename }}</h2>
                             <div class="d-flex flex-wrap gap-2 mb-3">
-                                <span class="badge bg-light text-dark">
+                                <span class="badge bg-body-tertiary text-body border">
                                     <i class="bi bi-hdd me-1"></i>{{ document.file_size | file_size_format }}
                                 </span>
-                                <span class="badge bg-light text-dark">
+                                <span class="badge bg-body-tertiary text-body border">
                                     {% if document.content_type == 'application/pdf' %}
                                         <i class="bi bi-file-earmark-pdf me-1"></i>PDF Document
                                     {% else %}
@@ -67,7 +67,7 @@
     <div class="row">
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-info-circle me-2 text-primary"></i>
                         Document Information
@@ -77,55 +77,55 @@
                     <table class="table table-borderless">
                         <tbody>
                             <tr>
-                                <td class="text-muted" style="width: 200px;">
+                                <td class="text-body-secondary" style="width: 200px;">
                                     <i class="bi bi-file-earmark me-2"></i>Original Filename
                                 </td>
                                 <td class="fw-medium">{{ document.filename }}</td>
                             </tr>
                             <tr>
-                                <td class="text-muted">
+                                <td class="text-body-secondary">
                                     <i class="bi bi-hash me-2"></i>System Filename
                                 </td>
                                 <td><code>{{ document.filename }}</code></td>
                             </tr>
                             <tr>
-                                <td class="text-muted">
+                                <td class="text-body-secondary">
                                     <i class="bi bi-cloud me-2"></i>Blob Name
                                 </td>
                                 <td><code>{{ document.blob_name }}</code></td>
                             </tr>
                             <tr>
-                                <td class="text-muted">
+                                <td class="text-body-secondary">
                                     <i class="bi bi-hdd me-2"></i>File Size
                                 </td>
                                 <td>
                                     {{ document.file_size | file_size_format }}
-                                    <small class="text-muted">({{ "{:,}".format(document.file_size) }} bytes)</small>
+                                    <small class="text-body-secondary">({{ "{:,}".format(document.file_size) }} bytes)</small>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="text-muted">
+                                <td class="text-body-secondary">
                                     <i class="bi bi-file-earmark-code me-2"></i>Content Type
                                 </td>
                                 <td><code>{{ document.content_type }}</code></td>
                             </tr>
                             <tr>
-                                <td class="text-muted">
+                                <td class="text-body-secondary">
                                     <i class="bi bi-calendar-plus me-2"></i>Upload Date
                                 </td>
                                 <td>
                                     {{ document.uploaded_at | datetime_format('%B %d, %Y at %I:%M %p') }}
-                                    <small class="text-muted">({{ document.uploaded_at | datetime_format('%Z') }})</small>
+                                    <small class="text-body-secondary">({{ document.uploaded_at | datetime_format('%Z') }})</small>
                                 </td>
                             </tr>
                             <tr>
-                                <td class="text-muted">
+                                <td class="text-body-secondary">
                                     <i class="bi bi-person me-2"></i>Uploaded By
                                 </td>
                                 <td>User ID: {{ document.uploaded_by }}</td>
                             </tr>
                             <tr>
-                                <td class="text-muted">
+                                <td class="text-body-secondary">
                                     <i class="bi bi-shield-check me-2"></i>Status
                                 </td>
                                 <td>
@@ -149,7 +149,7 @@
         <div class="col-lg-4">
             <!-- Quick Actions -->
             <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-lightning me-2 text-primary"></i>
                         Quick Actions
@@ -176,7 +176,7 @@
             
             <!-- Storage Info -->
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-body-tertiary border-bottom">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-cloud-arrow-up me-2 text-primary"></i>
                         Storage Information
@@ -184,15 +184,15 @@
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
-                        <small class="text-muted d-block mb-1">Storage Location</small>
+                        <small class="text-body-secondary d-block mb-1">Storage Location</small>
                         <div class="fw-medium">Azure Blob Storage</div>
                     </div>
                     <div class="mb-3">
-                        <small class="text-muted d-block mb-1">Container</small>
+                        <small class="text-body-secondary d-block mb-1">Container</small>
                         <code class="small">user-uploads</code>
                     </div>
                     <div class="mb-0">
-                        <small class="text-muted d-block mb-1">Encryption</small>
+                        <small class="text-body-secondary d-block mb-1">Encryption</small>
                         <span class="badge bg-success">
                             <i class="bi bi-shield-lock me-1"></i>AES-256 Encrypted
                         </span>
@@ -223,7 +223,7 @@
                             <div class="alert alert-warning">
                                 <strong>${filename}</strong>
                             </div>
-                            <p class="text-muted mb-0">
+                            <p class="text-body-secondary mb-0">
                                 <i class="bi bi-info-circle me-1"></i>
                                 This action cannot be undone. The document will be removed from both the database and Azure storage.
                             </p>
