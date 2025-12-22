@@ -42,6 +42,35 @@
 
                             <!-- Full Name Field -->
                             <div class="mb-3">
+                                {{ form.organization_name.label(class="form-label") }}
+                                {{ form.organization_name() }}
+                                {% if form.organization_name.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.organization_name.errors %}
+                                            <small class="text-danger">
+                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            </small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                {{ form.abn.label(class="form-label") }}
+                                {{ form.abn() }}
+                                {% if form.abn.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.abn.errors %}
+                                            <small class="text-danger">
+                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            </small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Full Name Field -->
+                            <div class="mb-3">
                                 {{ form.full_name.label(class="form-label") }}
                                 {{ form.full_name() }}
                                 {% if form.full_name.errors %}
@@ -121,8 +150,22 @@
                             
                             <!-- Terms and Privacy -->
                             <div class="mb-4">
-                                <small class="text-body-secondary">
-                                    By creating an account, you agree to our terms of service and privacy policy. 
+                                <div class="form-check">
+                                    {{ form.accept_terms() }}
+                                    <label class="form-check-label" for="{{ form.accept_terms.id }}">
+                                        I agree to the Terms of Service and Privacy Policy
+                                    </label>
+                                </div>
+                                {% if form.accept_terms.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.accept_terms.errors %}
+                                            <small class="text-danger">
+                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            </small>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="text-body-secondary d-block mt-2">
                                     Your data will be handled in accordance with compliance regulations.
                                 </small>
                             </div>

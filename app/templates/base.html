@@ -326,29 +326,6 @@
           </ul>
 
           <ul class="navbar-nav gap-1">
-            <li class="nav-item d-flex align-items-center">
-              <form method="POST" action="{{ url_for('main.set_theme') }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <input
-                  type="hidden"
-                  name="theme"
-                  value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}"
-                />
-                <input type="hidden" name="next" value="{{ request.full_path }}" />
-                <button
-                  type="submit"
-                  class="btn btn-sm btn-outline-secondary"
-                  title="Toggle theme"
-                  aria-label="Toggle theme"
-                >
-                  {% if _theme == 'dark' %}
-                  <i class="bi bi-sun-fill"></i>
-                  {% else %}
-                  <i class="bi bi-moon-stars-fill"></i>
-                  {% endif %}
-                </button>
-              </form>
-            </li>
             {% if current_user.is_authenticated %}
             <li class="nav-item dropdown">
               <a
@@ -429,6 +406,30 @@
               </a>
             </li>
             {% endif %}
+
+            <li class="nav-item d-flex align-items-center">
+              <form method="POST" action="{{ url_for('main.set_theme') }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input
+                  type="hidden"
+                  name="theme"
+                  value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}"
+                />
+                <input type="hidden" name="next" value="{{ request.full_path }}" />
+                <button
+                  type="submit"
+                  class="btn btn-sm btn-outline-secondary"
+                  title="Toggle theme"
+                  aria-label="Toggle theme"
+                >
+                  {% if _theme == 'dark' %}
+                  <i class="bi bi-sun-fill"></i>
+                  {% else %}
+                  <i class="bi bi-moon-stars-fill"></i>
+                  {% endif %}
+                </button>
+              </form>
+            </li>
           </ul>
         </div>
       </div>

@@ -12,7 +12,7 @@
             <div class="mb-4">
               <div class="d-flex justify-content-between align-items-center">
                 <h1 class="h3 fw-bold mb-0">Setup your organization</h1>
-                <span class="badge bg-primary">Step 1 of 3</span>
+                <span class="badge bg-primary">Step 1 of 4</span>
               </div>
               <p class="text-body-secondary mb-0">Add your organization details. You can edit these later.</p>
             </div>
@@ -36,10 +36,47 @@
                 {% endif %}
               </div>
 
+              <div class="mb-3">
+                {{ form.trading_name.label(class="form-label") }}
+                {{ form.trading_name() }}
+              </div>
+
               <div class="row">
                 <div class="col-md-6 mb-3">
                   {{ form.abn.label(class="form-label") }}
                   {{ form.abn() }}
+                  {% if form.abn.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.abn.errors %}
+                        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                  {{ form.organization_type.label(class="form-label") }}
+                  {{ form.organization_type() }}
+                  {% if form.organization_type.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.organization_type.errors %}
+                        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  {{ form.industry.label(class="form-label") }}
+                  {{ form.industry() }}
+                  {% if form.industry.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.industry.errors %}
+                        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
                 </div>
                 <div class="col-md-6 mb-3">
                   {{ form.contact_email.label(class="form-label") }}
@@ -57,6 +94,13 @@
               <div class="mb-4">
                 {{ form.address.label(class="form-label") }}
                 {{ form.address() }}
+                {% if form.address.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in form.address.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
               </div>
 
               <div class="d-grid">

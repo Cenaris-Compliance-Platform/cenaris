@@ -6,9 +6,16 @@ from flask_login import login_required, current_user
 from flask_mail import Message
 
 from app.onboarding import bp
-from app.onboarding.forms import OnboardingOrganizationForm, OnboardingLogoForm, OnboardingThemeForm
+from app.onboarding.forms import OnboardingOrganizationForm, OnboardingBillingForm, OnboardingLogoForm, OnboardingThemeForm
 from app import db, mail
 from app.models import Organization, User
+
+
+def _require_verified():
+    if getattr(current_user, 'email_verified', False):
+        return None
+    flash('Please verify your email to continue.', 'warning')
+    return redirect(url_for('auth.verify_email_request', email=getattr(current_user, 'email', '')))
 
 
 def _mail_configured() -> bool:
@@ -76,37 +83,51 @@ def _cookie_secure() -> bool:
 @bp.route('/organization', methods=['GET', 'POST'])
 @login_required
 def organization():
-    # If already onboarded, skip ahead.
-    if getattr(current_user, 'organization_id', None):
-        return redirect(url_for('onboarding.logo'))
+    maybe = _require_verified()
+    if maybe is not None:
+        return maybe
+
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        abort(401)
+
+    organization = Organization.query.get(int(org_id))
+    if not organization:
+        abort(404)
+
+    # If org core fields already captured, skip ahead.
+    if (
+        (organization.name or '').strip()
+        and (organization.abn or '').strip()
+        and (organization.organization_type or '').strip()
+        and (organization.contact_email or '').strip()
+        and (organization.address or '').strip()
+        and (organization.industry or '').strip()
+    ):
+        return redirect(url_for('onboarding.billing'))
 
     form = OnboardingOrganizationForm()
 
+    if request.method == 'GET':
+        form.organization_name.data = organization.name
+        form.trading_name.data = getattr(organization, 'trading_name', None)
+        form.abn.data = organization.abn
+        form.organization_type.data = getattr(organization, 'organization_type', '') or ''
+        form.contact_email.data = organization.contact_email or (current_user.email or '').strip().lower()
+        form.address.data = organization.address
+        form.industry.data = getattr(organization, 'industry', '') or ''
+
     if form.validate_on_submit():
-        org_name = form.organization_name.data.strip()
-        email = (current_user.email or '').strip().lower()
-
-        organization = Organization(
-            name=org_name,
-            abn=(form.abn.data or '').strip() or None,
-            address=(form.address.data or '').strip() or None,
-            contact_email=((form.contact_email.data or '').strip().lower() or email or None),
-        )
-        db.session.add(organization)
-        db.session.flush()
-
-        user: User = User.query.get(int(current_user.id))
-        if not user:
-            db.session.rollback()
-            abort(401)
-
-        user.organization_id = organization.id
-        # First org creator becomes Admin
-        user.role = 'Admin'
-
         try:
+            organization.name = form.organization_name.data.strip()
+            organization.trading_name = (form.trading_name.data or '').strip() or None
+            organization.abn = (form.abn.data or '').strip() or None
+            organization.organization_type = (form.organization_type.data or '').strip() or None
+            organization.industry = (form.industry.data or '').strip() or None
+            organization.address = (form.address.data or '').strip() or None
+            organization.contact_email = (form.contact_email.data or '').strip().lower() or None
             db.session.commit()
-            return redirect(url_for('onboarding.logo'))
+            return redirect(url_for('onboarding.billing'))
         except Exception:
             db.session.rollback()
             flash('Failed to create organization. Please try again.', 'error')
@@ -114,15 +135,57 @@ def organization():
     return render_template('onboarding/organization.html', title='Setup Organization', form=form)
 
 
+@bp.route('/billing', methods=['GET', 'POST'])
+@login_required
+def billing():
+    maybe = _require_verified()
+    if maybe is not None:
+        return maybe
+
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        abort(401)
+
+    organization = Organization.query.get(int(org_id))
+    if not organization:
+        abort(404)
+
+    form = OnboardingBillingForm()
+
+    if request.method == 'GET':
+        form.billing_email.data = getattr(organization, 'billing_email', None) or organization.contact_email
+        form.billing_address.data = getattr(organization, 'billing_address', None) or organization.address
+
+    if form.validate_on_submit():
+        organization.billing_email = (form.billing_email.data or '').strip().lower() or None
+        organization.billing_address = (form.billing_address.data or '').strip() or None
+        try:
+            db.session.commit()
+            return redirect(url_for('onboarding.logo'))
+        except Exception:
+            db.session.rollback()
+            flash('Failed to save billing details. Please try again.', 'error')
+
+    return render_template('onboarding/billing.html', title='Billing Details', form=form)
+
+
 @bp.route('/logo', methods=['GET', 'POST'])
 @login_required
 def logo():
+    maybe = _require_verified()
+    if maybe is not None:
+        return maybe
+
     org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         return redirect(url_for('onboarding.organization'))
 
     organization = Organization.query.get(org_id)
     if not organization:
+        return redirect(url_for('onboarding.organization'))
+
+    # Ensure core + billing details exist before allowing logo step.
+    if not organization.onboarding_complete():
         return redirect(url_for('onboarding.organization'))
 
     form = OnboardingLogoForm()
@@ -167,6 +230,10 @@ def logo():
 @bp.route('/theme', methods=['GET', 'POST'])
 @login_required
 def theme():
+    maybe = _require_verified()
+    if maybe is not None:
+        return maybe
+
     org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         return redirect(url_for('onboarding.organization'))

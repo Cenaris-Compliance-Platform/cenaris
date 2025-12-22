@@ -128,13 +128,12 @@ def upload():
 def documents():
     """Documents listing route."""
     org_id = getattr(current_user, 'organization_id', None)
-    user_documents = (
+    query = (
         Document.query.filter_by(organization_id=org_id, is_active=True)
         if org_id
         else Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
-        .order_by(Document.uploaded_at.desc())
-        .all()
     )
+    user_documents = query.order_by(Document.uploaded_at.desc()).all()
     return render_template('main/documents.html', 
                          title='My Documents',
                          documents=user_documents)
@@ -144,13 +143,12 @@ def documents():
 def evidence_repository():
     """Evidence repository route to display all documents."""
     org_id = getattr(current_user, 'organization_id', None)
-    documents = (
+    query = (
         Document.query.filter_by(organization_id=org_id, is_active=True)
         if org_id
         else Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
-        .order_by(Document.uploaded_at.desc())
-        .all()
     )
+    documents = query.order_by(Document.uploaded_at.desc()).all()
     return render_template('main/evidence_repository.html', 
                          title='Evidence Repository',
                          documents=documents)

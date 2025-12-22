@@ -8,9 +8,14 @@ class Organization(db.Model):
     __tablename__ = 'organizations'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    trading_name = db.Column(db.String(100))
     abn = db.Column(db.String(20))
-    address = db.Column(db.String(255))
+    organization_type = db.Column(db.String(40))
     contact_email = db.Column(db.String(120))
+    address = db.Column(db.String(255))
+    industry = db.Column(db.String(60))
+    billing_email = db.Column(db.String(120))
+    billing_address = db.Column(db.String(255))
     logo_blob_name = db.Column(db.String(255))
     logo_content_type = db.Column(db.String(100))
     subscription_tier = db.Column(db.String(20), default='Starter')
@@ -18,6 +23,18 @@ class Organization(db.Model):
     # Relationships
     users = db.relationship('User', backref='organization', lazy='dynamic')
     documents = db.relationship('Document', backref='organization', lazy='dynamic')
+
+    def onboarding_complete(self) -> bool:
+        return bool(
+            (self.name or '').strip()
+            and (self.abn or '').strip()
+            and (self.organization_type or '').strip()
+            and (self.contact_email or '').strip()
+            and (self.address or '').strip()
+            and (self.industry or '').strip()
+            and (self.billing_email or '').strip()
+            and (self.billing_address or '').strip()
+        )
 
 
 class User(UserMixin, db.Model):
@@ -28,6 +45,7 @@ class User(UserMixin, db.Model):
     full_name = db.Column(db.String(100))
     email_verified = db.Column(db.Boolean, default=False, nullable=False)
     welcome_email_sent_at = db.Column(db.DateTime, nullable=True)
+    terms_accepted_at = db.Column(db.DateTime, nullable=True)
     avatar_blob_name = db.Column(db.String(255))
     avatar_content_type = db.Column(db.String(100))
     role = db.Column(db.String(20), default='User')

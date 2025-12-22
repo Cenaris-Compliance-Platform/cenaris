@@ -6,13 +6,20 @@ import requests
 from flask_mail import Message
 from app.auth import bp
 from app.auth.forms import LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm
-from app.models import User
+from datetime import datetime, timezone
+
+from app.models import User, Organization
 from app import db, oauth, mail
 
 
 def _after_login_redirect():
     # If onboarding not complete, force the wizard.
-    if not getattr(current_user, 'organization_id', None):
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        return redirect(url_for('onboarding.organization'))
+
+    org = Organization.query.get(int(org_id))
+    if not org or not org.onboarding_complete():
         return redirect(url_for('onboarding.organization'))
     return redirect(url_for('main.dashboard'))
 
@@ -42,7 +49,8 @@ def _mail_configured() -> bool:
 
 
 def _email_verification_required() -> bool:
-    return bool(current_app.config.get('REQUIRE_EMAIL_VERIFICATION'))
+    # Always require email verification (production best practice).
+    return True
 
 
 def _email_verify_token(user: User) -> str:
@@ -170,17 +178,28 @@ def signup():
             flash('CAPTCHA verification failed. Please try again.', 'error')
             return render_template('auth/signup.html', form=form, title='Create Account')
 
+        org_name = form.organization_name.data.strip()
+        abn = (form.abn.data or '').strip()
         full_name = form.full_name.data.strip()
         email = form.email.data.lower().strip()
         password = form.password.data
         
         try:
+            organization = Organization(
+                name=org_name,
+                abn=abn,
+                contact_email=email,
+            )
+            db.session.add(organization)
+            db.session.flush()
+
             user = User(
                 email=email,
                 full_name=full_name,
-                role='User',
-                organization_id=None,
+                role='Admin',
+                organization_id=organization.id,
                 email_verified=False,
+                terms_accepted_at=datetime.now(timezone.utc),
             )
             user.set_password(password)
             db.session.add(user)
@@ -193,6 +212,9 @@ def signup():
                     _send_email_verification_email(user, verify_url)
                 except Exception:
                     current_app.logger.exception('Failed to send verification email')
+
+                if not _mail_configured():
+                    flash('Email is required to continue. MAIL is not configured; check the server logs for the verification link.', 'warning')
 
                 flash('Account created. Please verify your email to continue.', 'info')
                 return redirect(url_for('auth.login'))
@@ -337,7 +359,10 @@ def oauth_callback(provider):
 
 @bp.route('/verify-email/<token>')
 def verify_email(token):
-    if current_user.is_authenticated:
+    # Allow verifying from an email link even if the user is currently signed in.
+    # Otherwise, an authenticated-but-unverified session can get stuck in a redirect loop
+    # between the main blueprint guard and the resend/verify endpoints.
+    if current_user.is_authenticated and getattr(current_user, 'email_verified', False):
         return _after_login_redirect()
 
     data = _verify_email_token(token)
@@ -363,7 +388,9 @@ def verify_email(token):
 
 @bp.route('/verify-email', methods=['GET', 'POST'])
 def verify_email_request():
-    if current_user.is_authenticated:
+    # If the user is signed in but not verified yet, they must be able to access this page.
+    # Redirecting them back into the app creates an infinite redirect loop.
+    if current_user.is_authenticated and getattr(current_user, 'email_verified', False):
         return _after_login_redirect()
 
     email_prefill = (request.args.get('email') or '').strip().lower()

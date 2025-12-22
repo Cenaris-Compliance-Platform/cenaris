@@ -31,7 +31,25 @@ class LoginForm(FlaskForm):
     })
 
 class RegisterForm(FlaskForm):
-    """Generic registration form (organization setup happens after account creation)."""
+    """Registration form (creates org workspace + admin)."""
+
+    organization_name = StringField('Legal Organization Name', validators=[
+        DataRequired(message='Organization name is required.'),
+        Length(min=2, max=100, message='Organization name must be between 2 and 100 characters.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'Legal organization name',
+        'autocomplete': 'organization'
+    })
+
+    abn = StringField('ABN / ACN', validators=[
+        DataRequired(message='ABN / ACN is required.'),
+        Length(max=20, message='ABN / ACN must be less than 20 characters.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'ABN / ACN',
+        'autocomplete': 'off'
+    })
     full_name = StringField('Your Name', validators=[
         DataRequired(message='Your name is required.'),
         Length(min=2, max=100, message='Name must be between 2 and 100 characters.')
@@ -72,6 +90,10 @@ class RegisterForm(FlaskForm):
     submit = SubmitField('Create Account', render_kw={
         'class': 'btn btn-primary btn-lg w-100'
     })
+
+    accept_terms = BooleanField('I agree to the Terms of Service and Privacy Policy', validators=[
+        DataRequired(message='You must accept the terms and privacy policy to continue.')
+    ], render_kw={'class': 'form-check-input'})
     
     def validate_email(self, field):
         """Check if email is already registered."""

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center bg-body-tertiary">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-6">
+        <div class="card fade-in">
+          <div class="card-body p-5">
+            <div class="mb-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 fw-bold mb-0">Billing details</h1>
+                <span class="badge bg-primary">Step 2 of 4</span>
+              </div>
+              <p class="text-body-secondary mb-0">Used for invoices and billing communications.</p>
+            </div>
+
+            <div class="progress mb-4" style="height: 6px;">
+              <div class="progress-bar" style="width: 50%"></div>
+            </div>
+
+            <form method="POST" novalidate>
+              {{ form.hidden_tag() }}
+
+              <div class="mb-3">
+                {{ form.billing_email.label(class="form-label") }}
+                {{ form.billing_email() }}
+                {% if form.billing_email.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in form.billing_email.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="mb-4">
+                {{ form.billing_address.label(class="form-label") }}
+                {{ form.billing_address() }}
+                {% if form.billing_address.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in form.billing_address.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="d-grid">
+                {{ form.submit() }}
+              </div>
+            </form>
+
+            <div class="text-center mt-3">
+              <a href="{{ url_for('auth.logout') }}" class="small text-decoration-none" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                Sign out
+              </a>
+              <form id="logout-form" method="POST" action="{{ url_for('auth.logout') }}" class="d-none">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
