@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, redirect, request
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -42,6 +42,35 @@ def create_app(config_name=None):
     os.makedirs(app.instance_path, exist_ok=True)
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
+
+    @app.before_request
+    def _normalize_localhost_for_turnstile():
+        """Turnstile widgets are bound to hostnames; localhost != 127.0.0.1.
+
+        In local development, users often browse via http://127.0.0.1:PORT.
+        If Turnstile is configured for 'localhost' only, Cloudflare shows
+        'Invalid domain'. Redirect GET/HEAD requests to localhost to match.
+        """
+        # The error happens at widget render time, so the site key alone is
+        # sufficient to consider Turnstile "enabled" for this normalization.
+        if not app.config.get('TURNSTILE_SITE_KEY'):
+            return None
+
+        if request.method not in {'GET', 'HEAD'}:
+            return None
+
+        host = (request.host or '')
+        host_only = host.split(':', 1)[0]
+        if host_only != '127.0.0.1':
+            return None
+
+        port = host.split(':', 1)[1] if ':' in host else ''
+        new_host = f'localhost:{port}' if port else 'localhost'
+
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(request.url)
+        return redirect(urlunsplit((parts.scheme, new_host, parts.path, parts.query, parts.fragment)), code=302)
 
     # Initialize database extensions
     db.init_app(app)
