@@ -311,17 +311,8 @@ def organization_settings():
         abort(404)
 
     form = OrganizationSettingsForm(obj=organization)
-    if request.method == 'GET':
-        current_theme = (request.cookies.get('theme', 'light') or 'light').strip().lower()
-        if current_theme not in {'light', 'dark'}:
-            current_theme = 'light'
-        form.theme.data = current_theme
 
     if form.validate_on_submit():
-        theme = (form.theme.data or 'light').strip().lower()
-        if theme not in {'light', 'dark'}:
-            theme = 'light'
-
         organization.name = form.name.data.strip()
         organization.abn = (form.abn.data or '').strip() or None
         organization.address = (form.address.data or '').strip() or None
@@ -352,15 +343,7 @@ def organization_settings():
         try:
             db.session.commit()
             flash('Organization settings saved.', 'success')
-            response = make_response(redirect(url_for('main.organization_settings')))
-            response.set_cookie(
-                'theme',
-                theme,
-                max_age=60 * 60 * 24 * 365,
-                samesite='Lax',
-                secure=not bool(request.host.startswith('127.0.0.1')),
-            )
-            return response
+            return redirect(url_for('main.organization_settings'))
         except Exception:
             db.session.rollback()
             flash('Failed to save settings. Please try again.', 'error')

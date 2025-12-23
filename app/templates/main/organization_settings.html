@@ -64,18 +64,6 @@
               </small>
             </div>
 
-            <div class="mb-4">
-              <label class="form-label">Theme</label>
-              <div class="d-flex gap-3">
-                {% for subfield in form.theme %}
-                  <div class="form-check">
-                    {{ subfield(class="form-check-input", id=subfield.id) }}
-                    <label class="form-check-label" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
-                  </div>
-                {% endfor %}
-              </div>
-            </div>
-
             <div class="d-grid d-md-flex gap-2">
               {{ form.submit() }}
               <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-lg">Cancel</a>
