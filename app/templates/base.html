@@ -527,6 +527,35 @@
           });
         });
       });
+
+      // On validation errors, bring the first error into view.
+      document.addEventListener("DOMContentLoaded", function () {
+        // Prefer any visible field-level invalid feedback blocks.
+        const feedback = document.querySelector(
+          ".invalid-feedback.d-block, .text-danger:has(i.bi-exclamation-circle)"
+        );
+
+        if (!feedback) return;
+
+        const field = feedback
+          .closest(".mb-3, .mb-4, .mb-5, .form-group")
+          ?.querySelector("input, select, textarea");
+
+        const target = field || feedback;
+        try {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+        } catch (e) {
+          target.scrollIntoView(true);
+        }
+
+        if (field) {
+          try {
+            field.focus({ preventScroll: true });
+          } catch (e) {
+            field.focus();
+          }
+        }
+      });
     </script>
 
     {% block extra_js %}{% endblock %}

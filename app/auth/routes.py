@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, current_app
+from flask import render_template, redirect, url_for, flash, request, current_app, session
 from flask_login import login_user, logout_user, current_user
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import requests
@@ -10,6 +10,24 @@ from datetime import datetime, timezone
 
 from app.models import User, Organization
 from app import db, oauth, mail
+
+
+_RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS = 60
+_RESET_PASSWORD_REQUEST_COOLDOWN_SECONDS = 60
+
+
+def _now_ts() -> int:
+    return int(datetime.now(timezone.utc).timestamp())
+
+
+def _get_pending_verification_email() -> str:
+    if current_user.is_authenticated and not getattr(current_user, 'email_verified', False):
+        return (current_user.email or '').strip().lower()
+    return (session.get('pending_verification_email') or '').strip().lower()
+
+
+def _get_pending_reset_email() -> str:
+    return (session.get('pending_reset_email') or '').strip().lower()
 
 
 def _after_login_redirect():
@@ -213,11 +231,16 @@ def signup():
                 except Exception:
                     current_app.logger.exception('Failed to send verification email')
 
+                # Carry the email through to the verify screen so the user does not
+                # need to type it again just to resend.
+                session['pending_verification_email'] = user.email
+                session['verify_email_last_sent_at'] = _now_ts()
+
                 if not _mail_configured():
                     flash('Email is required to continue. MAIL is not configured; check the server logs for the verification link.', 'warning')
 
                 flash('Account created. Please verify your email to continue.', 'info')
-                return redirect(url_for('auth.login'))
+                return redirect(url_for('auth.verify_email_request'))
 
             login_user(user)
             flash('Account created. Let\'s finish your setup.', 'success')
@@ -235,16 +258,33 @@ def forgot_password():
         return _after_login_redirect()
 
     form = ForgotPasswordForm()
+
+    # Prefill the email when arriving from login, or after a previous request.
+    email_prefill = (request.args.get('email') or '').strip().lower() or _get_pending_reset_email()
+    if request.method == 'GET' and email_prefill and not (form.email.data or '').strip():
+        form.email.data = email_prefill
+
+    sent = (request.args.get('sent') or '').strip() in {'1', 'true', 'yes'}
+
     if form.validate_on_submit():
+        last_sent_at = int(session.get('reset_password_last_sent_at') or 0)
+        wait_seconds = _RESET_PASSWORD_REQUEST_COOLDOWN_SECONDS - (_now_ts() - last_sent_at)
+        if wait_seconds > 0:
+            flash(f'Please wait {wait_seconds} seconds before requesting another reset link.', 'warning')
+            return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=False)
+
         if not _verify_turnstile():
             flash('CAPTCHA verification failed. Please try again.', 'error')
-            return render_template('auth/forgot_password.html', form=form, title='Forgot Password')
+            return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=False)
 
         email = form.email.data.lower().strip()
         user = User.query.filter_by(email=email).first()
 
         # Always show the same message to avoid account enumeration.
         flash('If that email exists, a reset link has been sent.', 'info')
+
+        session['pending_reset_email'] = email
+        session['reset_password_last_sent_at'] = _now_ts()
 
         if user and user.is_active:
             token = _password_reset_token(user)
@@ -253,9 +293,10 @@ def forgot_password():
                 _send_password_reset_email(user, reset_url)
             except Exception:
                 current_app.logger.exception('Failed to send password reset email')
-        return redirect(url_for('auth.login'))
 
-    return render_template('auth/forgot_password.html', form=form, title='Forgot Password')
+        return redirect(url_for('auth.forgot_password', sent='1'))
+
+    return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=sent)
 
 
 @bp.route('/reset-password/<token>', methods=['GET', 'POST'])
@@ -278,6 +319,11 @@ def reset_password(token):
         user.set_password(form.password.data)
         try:
             db.session.commit()
+            try:
+                session.pop('pending_reset_email', None)
+                session.pop('reset_password_last_sent_at', None)
+            except Exception:
+                pass
             flash('Your password has been reset. You can now sign in.', 'success')
             return redirect(url_for('auth.login'))
         except Exception:
@@ -378,6 +424,17 @@ def verify_email(token):
     user.email_verified = True
     try:
         db.session.commit()
+        # Clear any pending verification state once verified.
+        try:
+            session.pop('pending_verification_email', None)
+            session.pop('verify_email_last_sent_at', None)
+        except Exception:
+            pass
+        if user.is_active:
+            login_user(user)
+            flash('Email verified successfully.', 'success')
+            return _after_login_redirect()
+
         flash('Email verified successfully. You can now sign in.', 'success')
     except Exception:
         db.session.rollback()
@@ -394,12 +451,24 @@ def verify_email_request():
         return _after_login_redirect()
 
     email_prefill = (request.args.get('email') or '').strip().lower()
+    if not email_prefill:
+        email_prefill = _get_pending_verification_email()
+
+    prefilled = bool(email_prefill)
     if request.method == 'POST':
-        email_prefill = (request.form.get('email') or '').strip().lower()
+        email_prefill = (request.form.get('email') or '').strip().lower() or _get_pending_verification_email()
+        prefilled = bool(email_prefill)
+
+        last_sent_at = int(session.get('verify_email_last_sent_at') or 0)
+        wait_seconds = _RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS - (_now_ts() - last_sent_at)
+        if wait_seconds > 0:
+            flash(f'Please wait {wait_seconds} seconds before resending.', 'warning')
+            return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill, prefilled=prefilled, cooldown_seconds=max(wait_seconds, 0))
+
         # Optional: protect resend form too.
         if not _verify_turnstile():
             flash('CAPTCHA verification failed. Please try again.', 'error')
-            return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill)
+            return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill, prefilled=prefilled)
 
         user = User.query.filter_by(email=email_prefill).first()
         flash('If that email exists, a verification link has been sent.', 'info')
@@ -409,12 +478,15 @@ def verify_email_request():
             verify_url = url_for('auth.verify_email', token=token, _external=True)
             try:
                 _send_email_verification_email(user, verify_url)
+                session['pending_verification_email'] = user.email
+                session['verify_email_last_sent_at'] = _now_ts()
             except Exception:
                 current_app.logger.exception('Failed to resend verification email')
 
-        return redirect(url_for('auth.login'))
+        # Keep the user on the "check your email" screen.
+        return redirect(url_for('auth.verify_email_request'))
 
-    return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill)
+    return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill, prefilled=prefilled, cooldown_seconds=0)
 
 @bp.route('/logout', methods=['POST'])
 def logout():

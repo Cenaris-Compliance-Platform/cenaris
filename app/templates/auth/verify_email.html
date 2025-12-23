@@ -14,12 +14,19 @@
                 <i class="bi bi-envelope-check-fill text-primary" style="font-size: 3rem;"></i>
               </div>
               <h1 class="h3 mb-2 fw-bold">Verify Email</h1>
+              {% if prefilled and email %}
+              <p class="text-body-secondary">We sent a verification link to <span class="fw-semibold">{{ email }}</span>.</p>
+              {% else %}
               <p class="text-body-secondary">We’ll send you a verification link.</p>
+              {% endif %}
             </div>
 
             <form method="POST" novalidate>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
+              {% if prefilled and email %}
+              <input type="hidden" name="email" value="{{ email }}" />
+              {% else %}
               <div class="mb-4">
                 <label class="form-label" for="email">Email</label>
                 <input
@@ -32,6 +39,7 @@
                   autocomplete="email"
                 />
               </div>
+              {% endif %}
 
               {% if config.get('TURNSTILE_SITE_KEY') %}
               <div class="mb-4">
@@ -40,7 +48,11 @@
               {% endif %}
 
               <div class="d-grid mb-3">
+                {% if prefilled and email %}
+                <button type="submit" class="btn btn-primary">Resend verification link</button>
+                {% else %}
                 <button type="submit" class="btn btn-primary">Send verification link</button>
+                {% endif %}
               </div>
             </form>
 

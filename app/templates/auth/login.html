@@ -83,7 +83,7 @@
                                     {{ form.remember_me.label(class="form-check-label") }}
                                 </div>
                                 <div class="mt-2 text-end">
-                                    <a class="small text-decoration-none" href="{{ url_for('auth.forgot_password') }}">Forgot password?</a>
+                                    <a class="small text-decoration-none" id="forgot-password-link" href="{{ url_for('auth.forgot_password') }}">Forgot password?</a>
                                 </div>
                             </div>
                             
@@ -141,6 +141,19 @@
         const firstInput = document.querySelector('input[type="email"]');
         if (firstInput) {
             firstInput.focus();
+        }
+
+        const forgotLink = document.getElementById('forgot-password-link');
+        const emailInput = document.querySelector('input[type="email"]');
+        if (forgotLink && emailInput) {
+            const baseHref = forgotLink.getAttribute('href');
+            const updateHref = () => {
+                const email = (emailInput.value || '').trim();
+                forgotLink.setAttribute('href', email ? `${baseHref}?email=${encodeURIComponent(email)}` : baseHref);
+            };
+            updateHref();
+            emailInput.addEventListener('input', updateHref);
+            emailInput.addEventListener('change', updateHref);
         }
     });
 </script>
