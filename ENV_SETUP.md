@@ -245,6 +245,23 @@ Reset local DB if needed:
 flask reset-local-db
 ```
 
+Wipe application data (so you can reuse the same email and re-test signup/onboarding):
+
+```bat
+flask wipe-test-data
+```
+
+Reset onboarding/billing state for one organization (keeps users/memberships):
+
+```bat
+flask reset-org-state --org-id 1
+```
+
+Notes:
+
+- `wipe-test-data` deletes app data (users/orgs/memberships/documents) but keeps schema + migrations.
+- It refuses to run when `DEBUG` is false unless you pass `--force` and set `ALLOW_DATA_WIPE=1`.
+
 This app supports **email verification via a signed token link**.
 
 ### How it works

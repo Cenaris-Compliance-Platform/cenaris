@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, BooleanField
-from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError, Optional
+from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField
+from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError, Optional, Regexp
 from app.models import User
 
 class LoginForm(FlaskForm):
@@ -50,14 +50,56 @@ class RegisterForm(FlaskForm):
         'placeholder': 'ABN / ACN',
         'autocomplete': 'off'
     })
-    full_name = StringField('Your Name', validators=[
-        DataRequired(message='Your name is required.'),
-        Length(min=2, max=100, message='Name must be between 2 and 100 characters.')
+    first_name = StringField('First Name', validators=[
+        DataRequired(message='First name is required.'),
+        Length(min=1, max=60, message='First name must be 60 characters or less.')
     ], render_kw={
         'class': 'form-control form-control-lg',
-        'placeholder': 'Enter your full name',
-        'autocomplete': 'name'
+        'placeholder': 'First name',
+        'autocomplete': 'given-name'
     })
+
+    last_name = StringField('Last Name', validators=[
+        DataRequired(message='Last name is required.'),
+        Length(min=1, max=60, message='Last name must be 60 characters or less.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'Last name',
+        'autocomplete': 'family-name'
+    })
+
+    title = StringField('Role / Title', validators=[
+        DataRequired(message='Role/title is required.'),
+        Length(max=80, message='Role/title must be 80 characters or less.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'e.g. Director, Practice Manager',
+        'autocomplete': 'organization-title'
+    })
+
+    mobile_number = StringField('Mobile Number (optional)', validators=[
+        Optional(),
+        Length(max=40, message='Mobile number must be 40 characters or less.')
+    ], render_kw={
+        'class': 'form-control form-control-lg',
+        'placeholder': 'Optional (for security alerts / MFA later)',
+        'autocomplete': 'tel'
+    })
+
+    time_zone = SelectField(
+        'Time Zone',
+        choices=[
+            ('Australia/Sydney', 'Australia/Sydney'),
+            ('Australia/Melbourne', 'Australia/Melbourne'),
+            ('Australia/Brisbane', 'Australia/Brisbane'),
+            ('Australia/Perth', 'Australia/Perth'),
+            ('Australia/Adelaide', 'Australia/Adelaide'),
+            ('Australia/Hobart', 'Australia/Hobart'),
+        ],
+        default='Australia/Sydney',
+        validators=[DataRequired(message='Time zone is required.')],
+        render_kw={'class': 'form-select form-select-lg'},
+    )
 
     email = StringField('Email Address', validators=[
         DataRequired(message='Email is required.'),
@@ -71,10 +113,12 @@ class RegisterForm(FlaskForm):
     
     password = PasswordField('Password', validators=[
         DataRequired(message='Password is required.'),
-        Length(min=6, message='Password must be at least 6 characters long.')
+        Length(min=8, message='Password must be at least 8 characters long.'),
+        Regexp(r'.*[A-Za-z].*', message='Password must contain at least one letter.'),
+        Regexp(r'.*\d.*', message='Password must contain at least one number.'),
     ], render_kw={
         'class': 'form-control form-control-lg',
-        'placeholder': 'Create a password (min. 6 characters)',
+        'placeholder': 'Create a password (min. 8 chars, letter + number)',
         'autocomplete': 'new-password'
     })
     

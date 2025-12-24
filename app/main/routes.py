@@ -1,9 +1,280 @@
-from flask import render_template, redirect, url_for, jsonify, request, make_response
+from flask import render_template, redirect, url_for, jsonify, request, make_response, flash, abort, current_app
 from flask_login import login_required, current_user
 from app.main import bp
-from app.models import Document, Organization
-from app import db
+from app.models import Document, Organization, OrganizationMembership, User
+from app import db, mail
 from app.services.azure_data_service import azure_data_service
+
+from flask_mail import Message
+from itsdangerous import URLSafeTimedSerializer
+
+
+def _active_org_id() -> int | None:
+    org_id = getattr(current_user, 'organization_id', None)
+    return int(org_id) if org_id else None
+
+
+def _require_active_org():
+    org_id = _active_org_id()
+    if not org_id:
+        flash('Please select an organization to continue.', 'info')
+        return redirect(url_for('onboarding.organization'))
+
+    membership = (
+        OrganizationMembership.query
+        .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+        .first()
+    )
+    if not membership:
+        flash('You do not have access to that organization.', 'error')
+        return redirect(url_for('onboarding.organization'))
+    return None
+
+
+def _require_org_admin():
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+    if not current_user.is_org_admin(_active_org_id()):
+        abort(403)
+    return None
+
+
+def _serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+
+
+def _mail_configured() -> bool:
+    return bool(current_app.config.get('MAIL_SERVER') and current_app.config.get('MAIL_DEFAULT_SENDER'))
+
+
+def _password_reset_token(user: User) -> str:
+    # Must match the implementation in auth/routes.py
+    return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt='password-reset')
+
+
+def _send_invite_email(user: User, reset_url: str, organization: Organization) -> None:
+    if not _mail_configured():
+        current_app.logger.warning('MAIL not configured; invite reset URL: %s', reset_url)
+        return
+
+    msg = Message(
+        subject=f"You're invited to {organization.name}",
+        recipients=[user.email],
+        body=(
+            f"You've been invited to join {organization.name} on Cenaris.\n\n"
+            f"Set your password here: {reset_url}\n\n"
+            "If you weren't expecting this invite, you can ignore this email."
+        ),
+    )
+    mail.send(msg)
+
+
+@bp.route('/org/switch', methods=['POST'])
+@login_required
+def switch_organization():
+    """Switch the active organization for the current user."""
+    org_id_raw = (request.form.get('organization_id') or '').strip()
+    if not org_id_raw.isdigit():
+        flash('Invalid organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    org_id = int(org_id_raw)
+    membership = (
+        OrganizationMembership.query
+        .filter_by(user_id=int(current_user.id), organization_id=org_id, is_active=True)
+        .first()
+    )
+    if not membership:
+        flash('You do not have access to that organization.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    current_user.organization_id = org_id
+    db.session.commit()
+    flash('Organization switched.', 'success')
+    return redirect(request.referrer or url_for('main.dashboard'))
+
+
+@bp.route('/org/admin')
+@login_required
+def org_admin_dashboard():
+    """Organization admin overview."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import InviteMemberForm, MembershipActionForm
+
+    org_id = _active_org_id()
+    organization = Organization.query.get(org_id)
+    if not organization:
+        abort(404)
+
+    members = (
+        OrganizationMembership.query
+        .filter_by(organization_id=int(org_id))
+        .join(User, User.id == OrganizationMembership.user_id)
+        .order_by(OrganizationMembership.is_active.desc(), User.email.asc())
+        .all()
+    )
+
+    user_count = sum(1 for m in members if bool(m.is_active))
+    document_count = Document.query.filter_by(organization_id=int(org_id), is_active=True).count()
+
+    invite_form = InviteMemberForm()
+    member_action_form = MembershipActionForm()
+
+    return render_template(
+        'main/org_admin_dashboard.html',
+        title='Org Admin Dashboard',
+        organization=organization,
+        members=members,
+        user_count=user_count,
+        document_count=document_count,
+        invite_form=invite_form,
+        member_action_form=member_action_form,
+    )
+
+
+@bp.route('/org/admin/invite', methods=['POST'])
+@login_required
+def org_admin_invite_member():
+    """Invite/add a user to the active organization by email."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import InviteMemberForm
+    from datetime import datetime, timezone
+
+    org_id = _active_org_id()
+    organization = Organization.query.get(int(org_id))
+    if not organization:
+        abort(404)
+
+    form = InviteMemberForm()
+    if not form.validate_on_submit():
+        flash('Please correct the invite form errors and try again.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    email = (form.email.data or '').strip().lower()
+    role = (form.role.data or 'User').strip()
+    if role not in {'User', 'Admin'}:
+        role = 'User'
+
+    user = User.query.filter_by(email=email).first()
+    created_user = False
+    try:
+        if not user:
+            user = User(
+                email=email,
+                role='User',
+                email_verified=False,
+                is_active=True,
+                created_at=datetime.now(timezone.utc),
+                organization_id=int(org_id),
+            )
+            db.session.add(user)
+            db.session.flush()
+            created_user = True
+
+        membership = (
+            OrganizationMembership.query
+            .filter_by(organization_id=int(org_id), user_id=int(user.id))
+            .first()
+        )
+        if membership:
+            membership.is_active = True
+            membership.role = role
+        else:
+            membership = OrganizationMembership(
+                organization_id=int(org_id),
+                user_id=int(user.id),
+                role=role,
+                is_active=True,
+            )
+            db.session.add(membership)
+
+        # Only set a default active org for the user if they don't have one.
+        if not getattr(user, 'organization_id', None):
+            user.organization_id = int(org_id)
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash('Failed to invite member. Please try again.', 'error')
+        current_app.logger.exception('Failed inviting member')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    # Send invite email with password-set link (works for both existing + new users).
+    try:
+        token = _password_reset_token(user)
+        reset_url = url_for('auth.reset_password', token=token, _external=True)
+        _send_invite_email(user, reset_url, organization)
+    except Exception:
+        current_app.logger.exception('Failed to send invite email')
+
+    if created_user:
+        flash('User created and added to the organization. Invite email sent (or logged if mail not configured).', 'success')
+    else:
+        flash('User added to the organization. Invite email sent (or logged if mail not configured).', 'success')
+    return redirect(url_for('main.org_admin_dashboard'))
+
+
+@bp.route('/org/admin/members/disable', methods=['POST'])
+@login_required
+def org_admin_disable_member():
+    """Disable a user's membership in the active organization."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import MembershipActionForm
+
+    org_id = _active_org_id()
+    form = MembershipActionForm()
+    if not form.validate_on_submit():
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership_id_raw = (form.membership_id.data or '').strip()
+    if not membership_id_raw.isdigit():
+        flash('Invalid membership.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership_id = int(membership_id_raw)
+    membership = OrganizationMembership.query.get(membership_id)
+    if not membership or int(membership.organization_id) != int(org_id):
+        flash('Membership not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    if int(membership.user_id) == int(current_user.id):
+        flash('You cannot disable your own access.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    # Guard: do not disable the last active admin.
+    is_admin = (membership.role or '').strip().lower() == 'admin'
+    if is_admin and membership.is_active:
+        active_admins = (
+            OrganizationMembership.query
+            .filter_by(organization_id=int(org_id), is_active=True)
+            .filter(OrganizationMembership.role.ilike('admin'))
+            .count()
+        )
+        if active_admins <= 1:
+            flash('You cannot disable the last admin for this organization.', 'error')
+            return redirect(url_for('main.org_admin_dashboard'))
+
+    try:
+        membership.is_active = False
+        db.session.commit()
+        flash('Member disabled.', 'success')
+    except Exception:
+        db.session.rollback()
+        flash('Failed to disable member. Please try again.', 'error')
+        current_app.logger.exception('Failed disabling member')
+
+    return redirect(url_for('main.org_admin_dashboard'))
 
 
 @bp.route('/theme', methods=['POST'])
@@ -93,20 +364,18 @@ def index():
 @login_required
 def dashboard():
     """Dashboard route for authenticated users."""
-    org_id = getattr(current_user, 'organization_id', None)
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
     recent_documents = (
         Document.query.filter_by(organization_id=org_id, is_active=True)
-        if org_id
-        else Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
         .order_by(Document.uploaded_at.desc())
         .limit(5)
         .all()
     )
-    total_documents = (
-        Document.query.filter_by(organization_id=org_id, is_active=True).count()
-        if org_id
-        else Document.query.filter_by(uploaded_by=current_user.id, is_active=True).count()
-    )
+    total_documents = Document.query.filter_by(organization_id=org_id, is_active=True).count()
     
     # Get real ADLS data
     ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
@@ -121,18 +390,21 @@ def dashboard():
 @login_required
 def upload():
     """Upload page route."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
     return render_template('main/upload.html', title='Upload Document')
 
 @bp.route('/documents')
 @login_required
 def documents():
     """Documents listing route."""
-    org_id = getattr(current_user, 'organization_id', None)
-    query = (
-        Document.query.filter_by(organization_id=org_id, is_active=True)
-        if org_id
-        else Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
-    )
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    query = Document.query.filter_by(organization_id=org_id, is_active=True)
     user_documents = query.order_by(Document.uploaded_at.desc()).all()
     return render_template('main/documents.html', 
                          title='My Documents',
@@ -142,12 +414,12 @@ def documents():
 @login_required
 def evidence_repository():
     """Evidence repository route to display all documents."""
-    org_id = getattr(current_user, 'organization_id', None)
-    query = (
-        Document.query.filter_by(organization_id=org_id, is_active=True)
-        if org_id
-        else Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
-    )
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    query = Document.query.filter_by(organization_id=org_id, is_active=True)
     documents = query.order_by(Document.uploaded_at.desc()).all()
     return render_template('main/evidence_repository.html', 
                          title='Evidence Repository',
@@ -157,6 +429,10 @@ def evidence_repository():
 @login_required
 def download_document(doc_id):
     """Download a document."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
     from flask import send_file, abort
     from app.services.azure_storage_service import azure_storage_service
     import io
@@ -165,15 +441,11 @@ def download_document(doc_id):
     document = Document.query.get(doc_id)
     
     # Check if document exists and belongs to user
-    org_id = getattr(current_user, 'organization_id', None)
+    org_id = _active_org_id()
     if not document:
         abort(404)
-    if org_id:
-        if document.organization_id != org_id:
-            abort(404)
-    else:
-        if document.uploaded_by != current_user.id:
-            abort(404)
+    if document.organization_id != org_id:
+        abort(404)
     
     try:
         # Download from Azure Blob Storage
@@ -198,6 +470,10 @@ def download_document(doc_id):
 @login_required
 def delete_document(doc_id):
     """Delete a document."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
     from flask import flash, redirect
     from app.services.azure_storage_service import azure_storage_service
     
@@ -205,18 +481,13 @@ def delete_document(doc_id):
     document = Document.query.get(doc_id)
     
     # Check if document exists and belongs to user
-    org_id = getattr(current_user, 'organization_id', None)
+    org_id = _active_org_id()
     if not document:
         flash('Document not found or access denied.', 'error')
         return redirect(url_for('main.evidence_repository'))
-    if org_id:
-        if document.organization_id != org_id:
-            flash('Document not found or access denied.', 'error')
-            return redirect(url_for('main.evidence_repository'))
-    else:
-        if document.uploaded_by != current_user.id:
-            flash('Document not found or access denied.', 'error')
-            return redirect(url_for('main.evidence_repository'))
+    if document.organization_id != org_id:
+        flash('Document not found or access denied.', 'error')
+        return redirect(url_for('main.evidence_repository'))
     
     try:
         # Delete from Azure Blob Storage
@@ -238,21 +509,21 @@ def delete_document(doc_id):
 @login_required
 def document_details(doc_id):
     """View document details."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
     from flask import abort
     
     # Get document from database
     document = Document.query.get(doc_id)
     
     # Check if document exists and belongs to user
-    org_id = getattr(current_user, 'organization_id', None)
+    org_id = _active_org_id()
     if not document:
         abort(404)
-    if org_id:
-        if document.organization_id != org_id:
-            abort(404)
-    else:
-        if document.uploaded_by != current_user.id:
-            abort(404)
+    if document.organization_id != org_id:
+        abort(404)
     
     return render_template('main/document_details.html',
                          title=f'Document: {document.filename}',
@@ -299,8 +570,9 @@ def organization_settings():
     from werkzeug.utils import secure_filename
     import uuid
 
-    if (current_user.role or '').lower() != 'admin':
-        abort(403)
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
 
     if not getattr(current_user, 'organization_id', None):
         flash('No organization is associated with this account.', 'error')
@@ -317,6 +589,8 @@ def organization_settings():
         organization.abn = (form.abn.data or '').strip() or None
         organization.address = (form.address.data or '').strip() or None
         organization.contact_email = (form.contact_email.data or '').strip().lower() or None
+        organization.billing_email = (form.billing_email.data or '').strip().lower() or None
+        organization.billing_address = (form.billing_address.data or '').strip() or None
 
         logo_file = form.logo.data
         if logo_file and getattr(logo_file, 'filename', ''):
@@ -739,18 +1013,31 @@ def debug_adls():
 @login_required
 def generate_report(report_type):
     """Generate and download compliance reports."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
     from flask import send_file
     from app.services.report_generator import report_generator
     from datetime import datetime
+
+    org_id = _active_org_id()
+    organization = Organization.query.get(org_id)
+    if not organization:
+        abort(404)
+
+    if not organization.billing_complete():
+        flash('Add billing details to generate reports.', 'warning')
+        return redirect(url_for('onboarding.billing'))
     
     # Get organization data (you can customize this)
     org_data = {
-        'name': 'Your Organisation Name',
-        'abn': '12 345 678 901',
-        'address': '123 Main Street, City, State, Postcode',
-        'contact_name': 'Contact Person',
-        'email': current_user.email,
-        'framework': 'NDIS / Aged Care / ISO9001',
+        'name': organization.name,
+        'abn': organization.abn or '',
+        'address': organization.address or '',
+        'contact_name': current_user.display_name(),
+        'email': organization.contact_email or current_user.email,
+        'framework': organization.industry or '',
         'audit_type': 'Initial'
     }
     
@@ -801,7 +1088,7 @@ def generate_report(report_type):
     
     # Get documents for audit pack
     documents = (
-        Document.query.filter_by(uploaded_by=current_user.id, is_active=True)
+        Document.query.filter_by(organization_id=int(org_id), is_active=True)
         .order_by(Document.uploaded_at.desc())
         .all()
     )

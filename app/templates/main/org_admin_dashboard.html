@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Org Admin Dashboard</h1>
+      <p class="text-body-secondary mb-0">Overview for {{ organization.name }}</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-primary" href="{{ url_for('main.organization_settings') }}">
+        <i class="bi bi-gear me-2"></i>Organization Settings
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="text-body-secondary small">Users</div>
+              <div class="h4 fw-bold mb-0">{{ user_count }}</div>
+            </div>
+            <i class="bi bi-people fs-4 text-body-secondary"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="text-body-secondary small">Documents</div>
+              <div class="h4 fw-bold mb-0">{{ document_count }}</div>
+            </div>
+            <i class="bi bi-folder2-open fs-4 text-body-secondary"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-body-secondary small mb-2">Status</div>
+          <div class="d-flex flex-column gap-2">
+            <div class="d-flex align-items-center justify-content-between">
+              <span>Core details</span>
+              {% if organization.core_details_complete() %}
+              <span class="badge bg-success">Complete</span>
+              {% else %}
+              <span class="badge bg-warning text-dark">Incomplete</span>
+              {% endif %}
+            </div>
+            <div class="d-flex align-items-center justify-content-between">
+              <span>Declarations</span>
+              {% if organization.declarations_complete() %}
+              <span class="badge bg-success">Complete</span>
+              {% else %}
+              <span class="badge bg-warning text-dark">Incomplete</span>
+              {% endif %}
+            </div>
+            <div class="d-flex align-items-center justify-content-between">
+              <span>Billing</span>
+              {% if organization.billing_complete() %}
+              <span class="badge bg-success">Complete</span>
+              {% else %}
+              <span class="badge bg-secondary">Deferred</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Members</div>
+    <div class="card-body">
+      <form method="post" action="{{ url_for('main.org_admin_invite_member') }}" class="row g-2 align-items-end">
+        {{ invite_form.csrf_token }}
+        <div class="col-12 col-md-6">
+          <label class="form-label mb-1">Email</label>
+          {{ invite_form.email() }}
+          {% if invite_form.email.errors %}
+          <div class="text-danger small mt-1">{{ invite_form.email.errors[0] }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label mb-1">Role</label>
+          {{ invite_form.role() }}
+          {% if invite_form.role.errors %}
+          <div class="text-danger small mt-1">{{ invite_form.role.errors[0] }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3 d-grid">
+          {{ invite_form.submit() }}
+        </div>
+      </form>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th class="px-3">Email</th>
+              <th>Role</th>
+              <th>Active</th>
+              <th class="text-end px-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in members %}
+            <tr>
+              <td class="px-3">{{ m.user.email }}</td>
+              <td>{{ m.role }}</td>
+              <td>
+                {% if m.is_active %}
+                <span class="badge bg-success">Yes</span>
+                {% else %}
+                <span class="badge bg-secondary">No</span>
+                {% endif %}
+              </td>
+              <td class="text-end px-3">
+                {% if m.is_active and m.user.id != current_user.id %}
+                <form method="post" action="{{ url_for('main.org_admin_disable_member') }}" class="d-inline">
+                  {{ member_action_form.csrf_token }}
+                  {{ member_action_form.membership_id(value=m.id) }}
+                  {{ member_action_form.submit() }}
+                </form>
+                {% else %}
+                <span class="text-body-secondary small">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

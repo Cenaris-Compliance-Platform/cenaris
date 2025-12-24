@@ -391,8 +391,33 @@
                     <i class="bi bi-person me-2"></i>My Profile
                   </a>
                 </li>
-                {% if (current_user.role or '').lower() == 'admin' %}
+
+                {% if user_organizations and (user_organizations|length) > 1 %}
                 <li><hr class="dropdown-divider" /></li>
+                <li class="px-3 py-1 text-body-secondary small">Switch organization</li>
+                {% for org in user_organizations %}
+                <li>
+                  <form method="POST" action="{{ url_for('main.switch_organization') }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <input type="hidden" name="organization_id" value="{{ org.id }}" />
+                    <button type="submit" class="dropdown-item d-flex align-items-center justify-content-between">
+                      <span class="text-truncate" style="max-width: 240px;">{{ org.name }}</span>
+                      {% if current_user.organization_id == org.id %}
+                      <i class="bi bi-check2"></i>
+                      {% endif %}
+                    </button>
+                  </form>
+                </li>
+                {% endfor %}
+                {% endif %}
+
+                {% if is_org_admin_active %}
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('main.org_admin_dashboard') }}">
+                    <i class="bi bi-speedometer me-2"></i>Org Admin Dashboard
+                  </a>
+                </li>
                 <li>
                   <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
                     <i class="bi bi-gear me-2"></i>Organization Settings

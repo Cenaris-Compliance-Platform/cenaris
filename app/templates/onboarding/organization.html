@@ -103,6 +103,73 @@
                 {% endif %}
               </div>
 
+              <div class="mb-4">
+                <h2 class="h6 fw-bold mb-2">Declarations</h2>
+                <p class="text-body-secondary small mb-3">
+                  These confirmations help with governance and compliance expectations.
+                </p>
+
+                <div class="form-check mb-2">
+                  {{ form.operates_in_australia() }}
+                  <label class="form-check-label" for="{{ form.operates_in_australia.id }}">{{ form.operates_in_australia.label.text }}</label>
+                </div>
+                {% if form.operates_in_australia.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.operates_in_australia.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mb-2">
+                  {{ form.platform_disclaimer_ack() }}
+                  <label class="form-check-label" for="{{ form.platform_disclaimer_ack.id }}">{{ form.platform_disclaimer_ack.label.text }}</label>
+                </div>
+                {% if form.platform_disclaimer_ack.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.platform_disclaimer_ack.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mb-2">
+                  {{ form.responsibility_ack() }}
+                  <label class="form-check-label" for="{{ form.responsibility_ack.id }}">{{ form.responsibility_ack.label.text }}</label>
+                </div>
+                {% if form.responsibility_ack.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.responsibility_ack.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mb-2">
+                  {{ form.authority_to_upload_ack() }}
+                  <label class="form-check-label" for="{{ form.authority_to_upload_ack.id }}">{{ form.authority_to_upload_ack.label.text }}</label>
+                </div>
+                {% if form.authority_to_upload_ack.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.authority_to_upload_ack.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="form-check mt-3">
+                  {{ form.data_processing_ack() }}
+                  <label class="form-check-label" for="{{ form.data_processing_ack.id }}">{{ form.data_processing_ack.label.text }}</label>
+                </div>
+                {% if form.data_processing_ack.errors %}
+                  <div class="invalid-feedback d-block mb-2">
+                    {% for error in form.data_processing_ack.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
               <div class="d-grid">
                 {{ form.submit() }}
               </div>

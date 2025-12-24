@@ -117,6 +117,13 @@ def organization():
         form.address.data = organization.address
         form.industry.data = getattr(organization, 'industry', '') or ''
 
+        # Default acknowledgements to unchecked if not set yet.
+        form.operates_in_australia.data = bool(organization.operates_in_australia) if organization.operates_in_australia is not None else False
+        form.platform_disclaimer_ack.data = bool(getattr(organization, 'declarations_accepted_at', None))
+        form.responsibility_ack.data = bool(getattr(organization, 'declarations_accepted_at', None))
+        form.authority_to_upload_ack.data = bool(getattr(organization, 'declarations_accepted_at', None))
+        form.data_processing_ack.data = bool(getattr(organization, 'data_processing_ack_at', None))
+
     if form.validate_on_submit():
         try:
             organization.name = form.organization_name.data.strip()
@@ -126,6 +133,14 @@ def organization():
             organization.industry = (form.industry.data or '').strip() or None
             organization.address = (form.address.data or '').strip() or None
             organization.contact_email = (form.contact_email.data or '').strip().lower() or None
+
+            # Compliance + privacy acknowledgements.
+            organization.operates_in_australia = True if form.operates_in_australia.data else False
+            now = datetime.now(timezone.utc)
+            organization.declarations_accepted_at = now
+            organization.declarations_accepted_by_user_id = int(current_user.id)
+            organization.data_processing_ack_at = now
+            organization.data_processing_ack_by_user_id = int(current_user.id)
             db.session.commit()
             return redirect(url_for('onboarding.billing'))
         except Exception:
@@ -151,6 +166,10 @@ def billing():
         abort(404)
 
     form = OnboardingBillingForm()
+
+    if request.method == 'POST' and request.form.get('skip') == '1':
+        flash('You can add billing details later. Uploads and reports may be restricted until billing is completed.', 'info')
+        return redirect(url_for('onboarding.logo'))
 
     if request.method == 'GET':
         form.billing_email.data = getattr(organization, 'billing_email', None) or organization.contact_email

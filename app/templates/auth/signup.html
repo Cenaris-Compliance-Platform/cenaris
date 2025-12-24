@@ -69,13 +69,41 @@
                                 {% endif %}
                             </div>
 
-                            <!-- Full Name Field -->
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form.first_name.label(class="form-label") }}
+                                    {{ form.first_name() }}
+                                    {% if form.first_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.first_name.errors %}
+                                                <small class="text-danger">
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                </small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form.last_name.label(class="form-label") }}
+                                    {{ form.last_name() }}
+                                    {% if form.last_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.last_name.errors %}
+                                                <small class="text-danger">
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                </small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
                             <div class="mb-3">
-                                {{ form.full_name.label(class="form-label") }}
-                                {{ form.full_name() }}
-                                {% if form.full_name.errors %}
+                                {{ form.title.label(class="form-label") }}
+                                {{ form.title() }}
+                                {% if form.title.errors %}
                                     <div class="invalid-feedback d-block">
-                                        {% for error in form.full_name.errors %}
+                                        {% for error in form.title.errors %}
                                             <small class="text-danger">
                                                 <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
                                             </small>
@@ -97,6 +125,35 @@
                                         {% endfor %}
                                     </div>
                                 {% endif %}
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form.mobile_number.label(class="form-label") }}
+                                    {{ form.mobile_number() }}
+                                    {% if form.mobile_number.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.mobile_number.errors %}
+                                                <small class="text-danger">
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                </small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form.time_zone.label(class="form-label") }}
+                                    {{ form.time_zone() }}
+                                    {% if form.time_zone.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.time_zone.errors %}
+                                                <small class="text-danger">
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                </small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
                             </div>
                             
                             <!-- Password Field -->

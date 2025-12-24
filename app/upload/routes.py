@@ -4,7 +4,7 @@ from werkzeug.utils import secure_filename
 from app.upload import bp
 from app.services.azure_storage import AzureBlobStorageService
 from app.services.file_validation import FileValidationService
-from app.models import Document
+from app.models import Document, Organization
 from app import db
 from datetime import datetime, timezone
 import logging
@@ -16,6 +16,20 @@ logger = logging.getLogger(__name__)
 def upload_file():
     """Handle file upload to Azure Blob Storage."""
     try:
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            flash('Please select an organization before uploading.', 'info')
+            return redirect(url_for('onboarding.organization'))
+
+        organization = Organization.query.get(int(org_id))
+        if not organization:
+            flash('Organization not found.', 'error')
+            return redirect(url_for('onboarding.organization'))
+
+        if not organization.billing_complete():
+            flash('Please add billing details before uploading documents.', 'warning')
+            return redirect(url_for('onboarding.billing'))
+
         # Check if file is present in request
         if 'file' not in request.files:
             flash('No file selected. Please choose a file to upload.', 'error')
@@ -45,9 +59,9 @@ def upload_file():
         
         # Generate unique file path for ADLS
         file_path = storage_service.generate_blob_name(
-            validation_result['original_filename'], 
+            validation_result['original_filename'],
             current_user.id,
-            organization_id=getattr(current_user, 'organization_id', None)
+            organization_id=int(org_id),
         )
         
         # Prepare metadata
@@ -82,7 +96,7 @@ def upload_file():
                 file_size=validation_result['file_size'],
                 content_type=validation_result['content_type'],
                 uploaded_by=current_user.id,
-                organization_id=getattr(current_user, 'organization_id', None)
+                organization_id=int(org_id)
             )
             db.session.add(document)
             db.session.commit()

@@ -167,6 +167,39 @@ def create_app(config_name=None):
     def inject_current_year():
         from datetime import datetime, timezone
         return {'current_year': datetime.now(timezone.utc).year}
+
+    @app.context_processor
+    def inject_org_switcher():
+        """Provide organization switcher data to templates."""
+        try:
+            from flask_login import current_user
+            if not getattr(current_user, 'is_authenticated', False):
+                return {}
+
+            from app.models import Organization, OrganizationMembership
+
+            orgs = (
+                Organization.query
+                .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
+                .filter(OrganizationMembership.user_id == int(current_user.id), OrganizationMembership.is_active.is_(True))
+                .order_by(Organization.name.asc())
+                .all()
+            )
+
+            active_org_id = getattr(current_user, 'organization_id', None)
+            is_org_admin_active = False
+            if active_org_id:
+                try:
+                    is_org_admin_active = bool(current_user.is_org_admin(int(active_org_id)))
+                except Exception:
+                    is_org_admin_active = False
+
+            return {
+                'user_organizations': orgs,
+                'is_org_admin_active': is_org_admin_active,
+            }
+        except Exception:
+            return {}
     
     # Add custom template filters
     @app.template_filter('datetime_format')
@@ -247,5 +280,131 @@ def create_app(config_name=None):
         click.echo('Applying migrations...')
         subprocess.run(cmd, cwd=project_root, check=True)
         click.echo('Migrations applied. Local DB is ready.')
+
+    @app.cli.command('wipe-test-data')
+    @click.option('--yes', is_flag=True, help='Skip confirmation prompt.')
+    @click.option(
+        '--force',
+        is_flag=True,
+        help='Allow running even when DEBUG is false (requires ALLOW_DATA_WIPE=1).',
+    )
+    def wipe_test_data(yes: bool, force: bool):
+        """Wipe application data (users/orgs/docs) but keep schema + migrations.
+
+        Intended for development/testing so you can reuse the same email and rerun flows.
+        Refuses to run in production unless --force and ALLOW_DATA_WIPE=1 are set.
+        """
+        from sqlalchemy import text
+
+        is_debug = bool(app.config.get('DEBUG'))
+        allow_force = (os.environ.get('ALLOW_DATA_WIPE') or '').strip() in {'1', 'true', 'yes', 'on'}
+        if not is_debug:
+            if not (force and allow_force):
+                raise click.ClickException(
+                    'Refusing to wipe data because DEBUG is false. '\
+                    'Use a dev database, or run with --force and set ALLOW_DATA_WIPE=1.'
+                )
+
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI')
+        dialect = db.engine.dialect.name
+
+        if not yes:
+            click.echo('This will permanently delete application data (users, orgs, memberships, documents).')
+            click.echo(f'Database: {dialect} ({uri})')
+            if not click.confirm('Continue?', default=False):
+                click.echo('Aborted.')
+                return
+
+        # Wipe tables defined in SQLAlchemy metadata (keeps alembic_version intact).
+        table_names = [t.name for t in db.metadata.sorted_tables]
+        if not table_names:
+            click.echo('No tables found in metadata; nothing to wipe.')
+            return
+
+        try:
+            if dialect == 'postgresql':
+                quoted = ', '.join([f'"{name}"' for name in table_names])
+                db.session.execute(text(f'TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE'))
+            else:
+                # SQLite/MySQL/etc: delete rows in reverse dependency order.
+                for name in reversed(table_names):
+                    db.session.execute(text(f'DELETE FROM "{name}"'))
+
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Failed wiping data: {e}')
+
+        click.echo('Wiped application data. Schema + migrations remain unchanged.')
+
+    @app.cli.command('reset-org-state')
+    @click.option('--org-id', type=int, required=True, help='Organization ID to reset.')
+    @click.option('--yes', is_flag=True, help='Skip confirmation prompt.')
+    @click.option(
+        '--force',
+        is_flag=True,
+        help='Allow running even when DEBUG is false (requires ALLOW_DATA_WIPE=1).',
+    )
+    @click.option('--reset-declarations/--keep-declarations', default=True, show_default=True)
+    @click.option('--reset-privacy-ack/--keep-privacy-ack', default=True, show_default=True)
+    @click.option('--reset-billing/--keep-billing', default=True, show_default=True)
+    def reset_org_state(
+        org_id: int,
+        yes: bool,
+        force: bool,
+        reset_declarations: bool,
+        reset_privacy_ack: bool,
+        reset_billing: bool,
+    ):
+        """Reset onboarding/billing fields for a single org (DEV ONLY).
+
+        This is useful when you want to re-test onboarding steps without creating new users.
+        It does NOT delete users or memberships.
+        """
+        from app.models import Organization
+
+        is_debug = bool(app.config.get('DEBUG'))
+        allow_force = (os.environ.get('ALLOW_DATA_WIPE') or '').strip() in {'1', 'true', 'yes', 'on'}
+        if not is_debug:
+            if not (force and allow_force):
+                raise click.ClickException(
+                    'Refusing to reset org state because DEBUG is false. '\
+                    'Use a dev database, or run with --force and set ALLOW_DATA_WIPE=1.'
+                )
+
+        org = Organization.query.get(int(org_id))
+        if not org:
+            raise click.ClickException(f'Organization not found: {org_id}')
+
+        if not yes:
+            click.echo(f'Organization: {org.id} / {org.name}')
+            click.echo('This will reset selected fields:')
+            click.echo(f'- Declarations: {reset_declarations}')
+            click.echo(f'- Privacy ack:  {reset_privacy_ack}')
+            click.echo(f'- Billing:      {reset_billing}')
+            if not click.confirm('Continue?', default=False):
+                click.echo('Aborted.')
+                return
+
+        try:
+            if reset_declarations:
+                org.operates_in_australia = None
+                org.declarations_accepted_at = None
+                org.declarations_accepted_by_user_id = None
+
+            if reset_privacy_ack:
+                org.data_processing_ack_at = None
+                org.data_processing_ack_by_user_id = None
+
+            if reset_billing:
+                org.billing_email = None
+                org.billing_address = None
+
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Failed resetting org state: {e}')
+
+        click.echo('Organization state reset. Users/memberships were not changed.')
     
     return app

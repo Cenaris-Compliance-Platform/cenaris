@@ -51,6 +51,31 @@
               </div>
             </div>
 
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ form.billing_email.label(class="form-label") }}
+                {{ form.billing_email() }}
+                {% if form.billing_email.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in form.billing_email.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ form.billing_address.label(class="form-label") }}
+                {{ form.billing_address() }}
+                {% if form.billing_address.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in form.billing_address.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
             <div class="mb-3">
               {{ form.address.label(class="form-label") }}
               {{ form.address() }}

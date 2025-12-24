@@ -8,7 +8,7 @@ from app.auth import bp
 from app.auth.forms import LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm
 from datetime import datetime, timezone
 
-from app.models import User, Organization
+from app.models import User, Organization, OrganizationMembership
 from app import db, oauth, mail
 
 
@@ -31,6 +31,21 @@ def _get_pending_reset_email() -> str:
 
 
 def _after_login_redirect():
+    # If the user has org memberships but no active org selected, select one.
+    if not getattr(current_user, 'organization_id', None):
+        membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), is_active=True)
+            .order_by(OrganizationMembership.created_at.asc())
+            .first()
+        )
+        if membership:
+            current_user.organization_id = int(membership.organization_id)
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
     # If onboarding not complete, force the wizard.
     org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
@@ -198,7 +213,11 @@ def signup():
 
         org_name = form.organization_name.data.strip()
         abn = (form.abn.data or '').strip()
-        full_name = form.full_name.data.strip()
+        first_name = (form.first_name.data or '').strip()
+        last_name = (form.last_name.data or '').strip()
+        title = (form.title.data or '').strip()
+        mobile_number = (form.mobile_number.data or '').strip() or None
+        time_zone = (form.time_zone.data or '').strip() or 'Australia/Sydney'
         email = form.email.data.lower().strip()
         password = form.password.data
         
@@ -213,7 +232,12 @@ def signup():
 
             user = User(
                 email=email,
-                full_name=full_name,
+                first_name=first_name,
+                last_name=last_name,
+                title=title,
+                mobile_number=mobile_number,
+                time_zone=time_zone,
+                full_name=(f"{first_name} {last_name}").strip(),
                 role='Admin',
                 organization_id=organization.id,
                 email_verified=False,
@@ -221,6 +245,15 @@ def signup():
             )
             user.set_password(password)
             db.session.add(user)
+            db.session.flush()
+
+            membership = OrganizationMembership(
+                organization_id=organization.id,
+                user_id=user.id,
+                role='Admin',
+                is_active=True,
+            )
+            db.session.add(membership)
             db.session.commit()
 
             if _email_verification_required():
