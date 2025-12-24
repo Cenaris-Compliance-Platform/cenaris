@@ -113,6 +113,36 @@
         padding: 0.5rem 0.9rem !important;
         border-radius: 999px;
         border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+      }
+
+      /* Prevent long labels (e.g., org names) from reflowing the navbar */
+      .navbar-user-label {
+        max-width: 240px;
+      }
+
+      @media (min-width: 992px) {
+        .navbar-nav {
+          flex-wrap: nowrap;
+        }
+
+        .navbar-nav .nav-link {
+          white-space: nowrap;
+        }
+      }
+
+      @media (max-width: 991.98px) {
+        /* Make collapsed nav easier to tap and avoid cramped pills */
+        .navbar-nav .nav-link.nav-btn {
+          width: 100%;
+          justify-content: flex-start;
+        }
+
+        .navbar-user-label {
+          max-width: 100%;
+        }
       }
 
       .navbar-nav .nav-link.nav-btn:hover {
@@ -350,7 +380,10 @@
                 {% else %}
                 <i class="bi bi-person-circle me-1"></i>
                 {% endif %}
-                {{ current_user.email }}
+                {% set _org_name = ((current_user.organization.name if current_user.organization else '') or '') %}
+                <span class="navbar-user-label text-truncate d-inline-block align-middle">
+                  {{ _org_name.strip() if _org_name.strip() else current_user.email }}
+                </span>
               </a>
               <ul class="dropdown-menu">
                 <li>

@@ -22,7 +22,8 @@ def upgrade():
         batch_op.add_column(sa.Column('email_verified', sa.Boolean(), nullable=False, server_default=sa.false()))
 
     # Treat pre-existing accounts as verified to avoid lockouts after deployment.
-    op.execute(sa.text('UPDATE users SET email_verified = 1'))
+    # Use a real boolean literal for Postgres compatibility (SQLite also accepts TRUE).
+    op.execute(sa.text('UPDATE users SET email_verified = TRUE'))
 
     # ### end Alembic commands ###
 
