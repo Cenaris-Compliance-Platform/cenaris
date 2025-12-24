@@ -94,8 +94,23 @@ class ProductionConfig(Config):
         file_handler.setLevel(logging.INFO)
         app.logger.addHandler(file_handler)
 
+
+class TestingConfig(DevelopmentConfig):
+    """Testing configuration.
+
+    Uses a local SQLite database and disables CSRF so Flask test clients can
+    post forms without having to scrape tokens.
+    """
+
+    TESTING = True
+    WTF_CSRF_ENABLED = False
+    WTF_CSRF_CHECK_DEFAULT = False
+    DATABASE_URL = _normalize_database_url(os.environ.get('TEST_DATABASE_URL')) or 'sqlite:///test.db'
+    SQLALCHEMY_DATABASE_URI = DATABASE_URL
+
 config = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,
+    'testing': TestingConfig,
     'default': DevelopmentConfig
 }

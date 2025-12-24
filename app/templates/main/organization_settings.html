@@ -26,14 +26,14 @@
         </div>
         <div class="card-body p-4">
           <form method="POST" enctype="multipart/form-data" novalidate>
-            {{ form.hidden_tag() }}
+            {{ profile_form.hidden_tag() }}
 
             <div class="mb-3">
-              {{ form.name.label(class="form-label") }}
-              {{ form.name() }}
-              {% if form.name.errors %}
+              {{ profile_form.name.label(class="form-label") }}
+              {{ profile_form.name() }}
+              {% if profile_form.name.errors %}
                 <div class="invalid-feedback d-block">
-                  {% for error in form.name.errors %}
+                  {% for error in profile_form.name.errors %}
                     <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
                   {% endfor %}
                 </div>
@@ -42,56 +42,73 @@
 
             <div class="row">
               <div class="col-md-6 mb-3">
-                {{ form.abn.label(class="form-label") }}
-                {{ form.abn() }}
+                {{ profile_form.abn.label(class="form-label") }}
+                {{ profile_form.abn() }}
               </div>
               <div class="col-md-6 mb-3">
-                {{ form.contact_email.label(class="form-label") }}
-                {{ form.contact_email() }}
-              </div>
-            </div>
-
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                {{ form.billing_email.label(class="form-label") }}
-                {{ form.billing_email() }}
-                {% if form.billing_email.errors %}
-                  <div class="invalid-feedback d-block">
-                    {% for error in form.billing_email.errors %}
-                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
-                    {% endfor %}
-                  </div>
-                {% endif %}
-              </div>
-              <div class="col-md-6 mb-3">
-                {{ form.billing_address.label(class="form-label") }}
-                {{ form.billing_address() }}
-                {% if form.billing_address.errors %}
-                  <div class="invalid-feedback d-block">
-                    {% for error in form.billing_address.errors %}
-                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
-                    {% endfor %}
-                  </div>
-                {% endif %}
+                {{ profile_form.contact_email.label(class="form-label") }}
+                {{ profile_form.contact_email() }}
               </div>
             </div>
 
             <div class="mb-3">
-              {{ form.address.label(class="form-label") }}
-              {{ form.address() }}
+              {{ profile_form.address.label(class="form-label") }}
+              {{ profile_form.address() }}
             </div>
 
             <div class="mb-4">
-              {{ form.logo.label(class="form-label") }}
-              {{ form.logo() }}
+              {{ profile_form.logo.label(class="form-label") }}
+              {{ profile_form.logo() }}
               <small class="text-body-secondary d-block mt-2">
                 Supported: PNG, JPG, WEBP.
               </small>
             </div>
 
             <div class="d-grid d-md-flex gap-2">
-              {{ form.submit() }}
+              {{ profile_form.submit() }}
               <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-lg">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-receipt me-2 text-primary"></i>Billing
+          </h5>
+        </div>
+        <div class="card-body p-4">
+          <form method="POST" novalidate>
+            {{ billing_form.hidden_tag() }}
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                {{ billing_form.billing_email.label(class="form-label") }}
+                {{ billing_form.billing_email() }}
+                {% if billing_form.billing_email.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in billing_form.billing_email.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ billing_form.billing_address.label(class="form-label") }}
+                {{ billing_form.billing_address() }}
+                {% if billing_form.billing_address.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in billing_form.billing_address.errors %}
+                      <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="d-grid d-md-flex gap-2">
+              {{ billing_form.submit() }}
             </div>
           </form>
         </div>

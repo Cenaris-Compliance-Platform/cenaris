@@ -112,7 +112,9 @@ def create_app(config_name=None):
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Please sign in to access this page.'
     login_manager.login_message_category = 'info'
-    login_manager.session_protection = 'strong'  # Enhanced session protection
+    # Flask-Login's FlaskLoginClient (used in tests) only seeds _user_id/_fresh.
+    # With 'strong' protection, Flask-Login may invalidate those sessions.
+    login_manager.session_protection = 'basic' if app.config.get('TESTING') else 'strong'
     login_manager.refresh_view = 'auth.login'
     login_manager.needs_refresh_message = 'Please re-authenticate to access this page.'
     login_manager.needs_refresh_message_category = 'info'

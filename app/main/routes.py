@@ -566,8 +566,7 @@ def ai_evidence():
 @login_required
 def organization_settings():
     from flask import abort, flash, make_response, request
-    from app.main.forms import OrganizationSettingsForm
-    from werkzeug.utils import secure_filename
+    from app.main.forms import OrganizationBillingForm, OrganizationProfileSettingsForm
     import uuid
 
     maybe = _require_org_admin()
@@ -582,50 +581,70 @@ def organization_settings():
     if not organization:
         abort(404)
 
-    form = OrganizationSettingsForm(obj=organization)
+    profile_form = OrganizationProfileSettingsForm(obj=organization)
+    billing_form = OrganizationBillingForm(obj=organization)
 
-    if form.validate_on_submit():
-        organization.name = form.name.data.strip()
-        organization.abn = (form.abn.data or '').strip() or None
-        organization.address = (form.address.data or '').strip() or None
-        organization.contact_email = (form.contact_email.data or '').strip().lower() or None
-        organization.billing_email = (form.billing_email.data or '').strip().lower() or None
-        organization.billing_address = (form.billing_address.data or '').strip() or None
+    if request.method == 'POST':
+        submitted = (request.form.get('form_name') or '').strip()
 
-        logo_file = form.logo.data
-        if logo_file and getattr(logo_file, 'filename', ''):
-            ext = (logo_file.filename.rsplit('.', 1)[-1] or '').lower()
-            safe_ext = ext if ext in {'png', 'jpg', 'jpeg', 'webp'} else 'png'
-            unique = uuid.uuid4().hex
-            blob_name = f"organizations/{organization.id}/branding/logo_{unique}.{safe_ext}"
-            content_type = getattr(logo_file, 'mimetype', None)
+        if submitted == 'profile':
+            if profile_form.validate_on_submit():
+                organization.name = profile_form.name.data.strip()
+                organization.abn = (profile_form.abn.data or '').strip() or None
+                organization.address = (profile_form.address.data or '').strip() or None
+                organization.contact_email = (profile_form.contact_email.data or '').strip().lower() or None
 
-            from app.services.azure_storage_service import azure_storage_service
-            data = logo_file.read()
-            if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type):
-                flash('Logo upload failed. Check Azure Storage configuration.', 'error')
-                return render_template(
-                    'main/organization_settings.html',
-                    title='Organization Settings',
-                    form=form,
-                    organization=organization,
-                )
+                logo_file = profile_form.logo.data
+                if logo_file and getattr(logo_file, 'filename', ''):
+                    ext = (logo_file.filename.rsplit('.', 1)[-1] or '').lower()
+                    safe_ext = ext if ext in {'png', 'jpg', 'jpeg', 'webp'} else 'png'
+                    unique = uuid.uuid4().hex
+                    blob_name = f"organizations/{organization.id}/branding/logo_{unique}.{safe_ext}"
+                    content_type = getattr(logo_file, 'mimetype', None)
 
-            organization.logo_blob_name = blob_name
-            organization.logo_content_type = content_type
+                    from app.services.azure_storage_service import azure_storage_service
+                    data = logo_file.read()
+                    if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type):
+                        flash('Logo upload failed. Check Azure Storage configuration.', 'error')
+                        return render_template(
+                            'main/organization_settings.html',
+                            title='Organization Settings',
+                            profile_form=profile_form,
+                            billing_form=billing_form,
+                            organization=organization,
+                        )
 
-        try:
-            db.session.commit()
-            flash('Organization settings saved.', 'success')
-            return redirect(url_for('main.organization_settings'))
-        except Exception:
-            db.session.rollback()
-            flash('Failed to save settings. Please try again.', 'error')
+                    organization.logo_blob_name = blob_name
+                    organization.logo_content_type = content_type
+
+                try:
+                    db.session.commit()
+                    flash('Organization profile saved.', 'success')
+                    return redirect(url_for('main.organization_settings'))
+                except Exception:
+                    db.session.rollback()
+                    flash('Failed to save organization profile. Please try again.', 'error')
+
+        elif submitted == 'billing':
+            if billing_form.validate_on_submit():
+                organization.billing_email = (billing_form.billing_email.data or '').strip().lower() or None
+                organization.billing_address = (billing_form.billing_address.data or '').strip() or None
+
+                try:
+                    db.session.commit()
+                    flash('Billing details saved.', 'success')
+                    return redirect(url_for('main.organization_settings'))
+                except Exception:
+                    db.session.rollback()
+                    flash('Failed to save billing details. Please try again.', 'error')
+        else:
+            flash('Invalid form submission.', 'error')
 
     return render_template(
         'main/organization_settings.html',
         title='Organization Settings',
-        form=form,
+        profile_form=profile_form,
+        billing_form=billing_form,
         organization=organization,
     )
 

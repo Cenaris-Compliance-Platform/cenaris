@@ -4,7 +4,9 @@ from wtforms import HiddenField, SelectField, StringField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, Optional
 
 
-class OrganizationSettingsForm(FlaskForm):
+class OrganizationProfileSettingsForm(FlaskForm):
+    form_name = HiddenField(default='profile')
+
     name = StringField(
         'Organization Name',
         validators=[DataRequired(), Length(min=2, max=100)],
@@ -41,6 +43,26 @@ class OrganizationSettingsForm(FlaskForm):
         },
     )
 
+    logo = FileField(
+        'Organization Logo',
+        validators=[
+            FileAllowed(['png', 'jpg', 'jpeg', 'webp'], 'Logo must be a PNG/JPG/WEBP image.')
+        ],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'accept': '.png,.jpg,.jpeg,.webp'
+        },
+    )
+
+    submit = SubmitField(
+        'Save Profile',
+        render_kw={'class': 'btn btn-primary btn-lg'},
+    )
+
+
+class OrganizationBillingForm(FlaskForm):
+    form_name = HiddenField(default='billing')
+
     billing_email = StringField(
         'Billing Email',
         validators=[Optional(), Email(), Length(max=120)],
@@ -59,19 +81,8 @@ class OrganizationSettingsForm(FlaskForm):
         },
     )
 
-    logo = FileField(
-        'Organization Logo',
-        validators=[
-            FileAllowed(['png', 'jpg', 'jpeg', 'webp'], 'Logo must be a PNG/JPG/WEBP image.')
-        ],
-        render_kw={
-            'class': 'form-control form-control-lg',
-            'accept': '.png,.jpg,.jpeg,.webp'
-        },
-    )
-
     submit = SubmitField(
-        'Save Settings',
+        'Save Billing',
         render_kw={'class': 'btn btn-primary btn-lg'},
     )
 
