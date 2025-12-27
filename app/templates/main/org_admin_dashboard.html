@@ -78,30 +78,507 @@
     </div>
   </div>
 
+  <!-- Departments Management -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Departments</span>
+      <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#departmentModal">
+        <i class="bi bi-plus-circle me-1"></i>Add Department
+      </button>
+    </div>
+    <div class="card-body">
+      {% if departments and departments|length > 0 %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width: 40px;"></th>
+              <th>Name</th>
+              <th>Members</th>
+              <th class="text-end" style="width: 60px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for dept in departments %}
+            <tr data-dept-id="{{ dept.id }}">
+              <td>
+                <span class="d-inline-block rounded-circle bg-{{ dept.color }}" style="width: 18px; height: 18px;"></span>
+              </td>
+              <td>{{ dept.name }}</td>
+              <td>
+                {% set member_count = dept.memberships.count() %}
+                <span class="text-body-secondary">{{ member_count }} {% if member_count == 1 %}member{% else %}members{% endif %}</span>
+              </td>
+              <td class="text-end">
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-link text-body-secondary p-0" type="button" data-bs-toggle="dropdown" aria-label="Department actions">
+                    <i class="bi bi-three-dots-vertical"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item dept-edit-link" href="#" data-dept-id="{{ dept.id }}" data-dept-name="{{ dept.name }}" data-dept-color="{{ dept.color }}">
+                        <i class="bi bi-pencil me-2"></i>Edit
+                      </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <a class="dropdown-item text-danger dept-delete-link" href="#" data-dept-id="{{ dept.id }}" data-dept-name="{{ dept.name }}">
+                        <i class="bi bi-trash me-2"></i>Delete
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-body-secondary mb-0">No departments yet. Add one to organize your members.</p>
+      {% endif %}
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-header">Members</div>
     <div class="card-body">
       <form method="post" action="{{ url_for('main.org_admin_invite_member') }}" class="row g-2 align-items-end">
         {{ invite_form.csrf_token }}
-        <div class="col-12 col-md-6">
+        <div class="col-12 col-md-4">
           <label class="form-label mb-1">Email</label>
           {{ invite_form.email() }}
           {% if invite_form.email.errors %}
           <div class="text-danger small mt-1">{{ invite_form.email.errors[0] }}</div>
           {% endif %}
         </div>
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-2">
           <label class="form-label mb-1">Role</label>
           {{ invite_form.role() }}
           {% if invite_form.role.errors %}
           <div class="text-danger small mt-1">{{ invite_form.role.errors[0] }}</div>
           {% endif %}
         </div>
+        <div class="col-12 col-md-3">
+          <div class="d-flex align-items-center justify-content-between">
+            <label class="form-label mb-1">Department</label>
+            <button
+              type="button"
+              class="btn btn-sm btn-link text-body-secondary p-0 dept-add"
+              data-bs-toggle="modal"
+              data-bs-target="#departmentModal"
+              data-bs-tooltip="Add"
+              data-bs-placement="top"
+              aria-label="Add department"
+              title="Add"
+            >
+              <i class="bi bi-pencil"></i>
+            </button>
+          </div>
+          <select name="department_id" id="department_id" class="form-select">
+            <option value="">No department</option>
+            {% for dept in departments %}
+            <option value="{{ dept.id }}">
+              {{ dept.name }}
+            </option>
+            {% endfor %}
+          </select>
+          {% if invite_form.department_id.errors %}
+          <div class="text-danger small mt-1">{{ invite_form.department_id.errors[0] }}</div>
+          {% endif %}
+
+          {# Keep these fields in the form so POST includes them; editing happens in the modal. #}
+          <div class="d-none">
+            {{ invite_form.csrf_token }}
+            {{ invite_form.new_department_name() }}
+            {{ invite_form.new_department_color() }}
+          </div>
+        </div>
         <div class="col-12 col-md-3 d-grid">
           {{ invite_form.submit() }}
         </div>
       </form>
     </div>
+
+    <style>
+      /* Only show pencil on hover to keep UI clean */
+      .dept-add { opacity: 0; transition: opacity .12s ease-in-out; }
+      .dept-add:focus { opacity: 1; }
+      .col-12.col-md-3:hover .dept-add { opacity: 1; }
+
+      /* Custom department selector with color indicators */
+      #department_id option[value]:not([value=""]) {
+        padding-left: 24px;
+        background-repeat: no-repeat;
+        background-position: 4px center;
+        background-size: 12px 12px;
+      }
+      {% for dept in departments %}
+      #department_id option[value="{{ dept.id }}"] {
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><circle cx="6" cy="6" r="5" fill="%23{{ {
+          "primary": "0d6efd",
+          "secondary": "6c757d",
+          "success": "198754",
+          "info": "0dcaf0",
+          "warning": "ffc107",
+          "danger": "dc3545",
+          "dark": "212529"
+        }[dept.color] or "0d6efd" }}"/></svg>');
+      }
+      {% endfor %}
+    </style>
+
+    <!-- Department Modal -->
+    <div class="modal fade" id="departmentModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Add Department</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Department name</label>
+              <input type="text" class="form-control" id="deptNameInput" placeholder="e.g., Finance" autocomplete="off" />
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Color</label>
+              <div class="d-flex flex-wrap gap-3" id="deptColorChoices" role="radiogroup" aria-label="Department color">
+                <input class="btn-check" type="radio" name="deptColorChoice" id="deptColor_primary" value="primary" autocomplete="off" checked>
+                <label class="btn p-0 position-relative" for="deptColor_primary" aria-label="Blue" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-primary border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="deptColorChoice" id="deptColor_secondary" value="secondary" autocomplete="off">
+                <label class="btn p-0 position-relative" for="deptColor_secondary" aria-label="Gray" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-secondary border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="deptColorChoice" id="deptColor_success" value="success" autocomplete="off">
+                <label class="btn p-0 position-relative" for="deptColor_success" aria-label="Green" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-success border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="deptColorChoice" id="deptColor_info" value="info" autocomplete="off">
+                <label class="btn p-0 position-relative" for="deptColor_info" aria-label="Teal" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-info border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="deptColorChoice" id="deptColor_warning" value="warning" autocomplete="off">
+                <label class="btn p-0 position-relative" for="deptColor_warning" aria-label="Yellow" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-warning border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-dark d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(255,255,255,0.7);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="deptColorChoice" id="deptColor_danger" value="danger" autocomplete="off">
+                <label class="btn p-0 position-relative" for="deptColor_danger" aria-label="Red" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-danger border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="deptColorChoice" id="deptColor_dark" value="dark" autocomplete="off">
+                <label class="btn p-0 position-relative" for="deptColor_dark" aria-label="Dark" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-dark border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+              </div>
+            </div>
+            <div class="text-body-secondary small">Created immediately and selectable for invites.</div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="saveDepartmentBtn">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Department Modal -->
+    <div class="modal fade" id="editDepartmentModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Edit Department</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="editDeptId" />
+            <div class="mb-3">
+              <label class="form-label">Department name</label>
+              <input type="text" class="form-control" id="editDeptNameInput" placeholder="e.g., Finance" autocomplete="off" />
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Color</label>
+              <div class="d-flex flex-wrap gap-3" id="editDeptColorChoices" role="radiogroup" aria-label="Department color">
+                <input class="btn-check" type="radio" name="editDeptColorChoice" id="editDeptColor_primary" value="primary" autocomplete="off">
+                <label class="btn p-0 position-relative" for="editDeptColor_primary" aria-label="Blue" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-primary border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="editDeptColorChoice" id="editDeptColor_secondary" value="secondary" autocomplete="off">
+                <label class="btn p-0 position-relative" for="editDeptColor_secondary" aria-label="Gray" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-secondary border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="editDeptColorChoice" id="editDeptColor_success" value="success" autocomplete="off">
+                <label class="btn p-0 position-relative" for="editDeptColor_success" aria-label="Green" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-success border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="editDeptColorChoice" id="editDeptColor_info" value="info" autocomplete="off">
+                <label class="btn p-0 position-relative" for="editDeptColor_info" aria-label="Teal" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-info border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="editDeptColorChoice" id="editDeptColor_warning" value="warning" autocomplete="off">
+                <label class="btn p-0 position-relative" for="editDeptColor_warning" aria-label="Yellow" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-warning border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-dark d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(255,255,255,0.7);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="editDeptColorChoice" id="editDeptColor_danger" value="danger" autocomplete="off">
+                <label class="btn p-0 position-relative" for="editDeptColor_danger" aria-label="Red" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-danger border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+
+                <input class="btn-check" type="radio" name="editDeptColorChoice" id="editDeptColor_dark" value="dark" autocomplete="off">
+                <label class="btn p-0 position-relative" for="editDeptColor_dark" aria-label="Dark" style="cursor: pointer;">
+                  <span class="d-inline-block rounded-circle bg-dark border border-2" style="width: 32px; height: 32px;"></span>
+                  <i class="bi bi-check-circle-fill position-absolute top-50 start-50 translate-middle text-white d-none" style="font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="saveEditDepartmentBtn">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+        // Enable tooltips
+        document.querySelectorAll('[data-bs-tooltip]').forEach((el) => {
+          try {
+            new bootstrap.Tooltip(el, { title: el.getAttribute('data-bs-tooltip') || el.getAttribute('title') || '' });
+          } catch (e) { /* ignore */ }
+        });
+
+        // Color selection visual feedback helper
+        function setupColorSelectionFeedback(containerSelector, radioName) {
+          const container = document.querySelector(containerSelector);
+          if (!container) return;
+
+          container.querySelectorAll(`input[name="${radioName}"]`).forEach(radio => {
+            radio.addEventListener('change', () => {
+              container.querySelectorAll('.bi-check-circle-fill').forEach(icon => icon.classList.add('d-none'));
+              const label = container.querySelector(`label[for="${radio.id}"]`);
+              if (label) {
+                const icon = label.querySelector('.bi-check-circle-fill');
+                if (icon) icon.classList.remove('d-none');
+              }
+            });
+          });
+
+          // Show checkmark on initially checked radio
+          const checked = container.querySelector(`input[name="${radioName}"]:checked`);
+          if (checked) {
+            const label = container.querySelector(`label[for="${checked.id}"]`);
+            if (label) {
+              const icon = label.querySelector('.bi-check-circle-fill');
+              if (icon) icon.classList.remove('d-none');
+            }
+          }
+        }
+
+        setupColorSelectionFeedback('#deptColorChoices', 'deptColorChoice');
+        setupColorSelectionFeedback('#editDeptColorChoices', 'editDeptColorChoice');
+
+        // === ADD DEPARTMENT MODAL ===
+        const modalEl = document.getElementById('departmentModal');
+        const saveBtn = document.getElementById('saveDepartmentBtn');
+        if (modalEl && saveBtn) {
+          const deptNameInput = document.getElementById('deptNameInput');
+          const getChosenColor = () => (document.querySelector('input[name="deptColorChoice"]:checked')?.value || 'primary');
+          const hiddenName = document.querySelector('input[name="new_department_name"]');
+          const hiddenColor = document.querySelector('select[name="new_department_color"]');
+          const deptSelect = document.querySelector('select[name="department_id"]');
+
+          // Pre-fill modal from hidden fields
+          modalEl.addEventListener('show.bs.modal', function () {
+            if (deptNameInput) deptNameInput.value = '';
+            const defaultRadio = document.getElementById('deptColor_primary');
+            if (defaultRadio) defaultRadio.checked = true;
+            setupColorSelectionFeedback('#deptColorChoices', 'deptColorChoice');
+            setTimeout(() => { if (deptNameInput) deptNameInput.focus(); }, 50);
+          });
+
+          saveBtn.addEventListener('click', function () {
+            const name = (deptNameInput?.value || '').trim();
+            const color = (getChosenColor() || 'primary').trim() || 'primary';
+
+            if (!name) {
+              if (hiddenName) hiddenName.value = '';
+              if (hiddenColor) hiddenColor.value = 'primary';
+              const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+              modal.hide();
+              return;
+            }
+
+            const fd = new FormData();
+            fd.append('csrf_token', csrfToken);
+            fd.append('name', name);
+            fd.append('color', color);
+
+            fetch('{{ url_for('main.org_admin_create_department') }}', {
+              method: 'POST',
+              body: fd,
+              credentials: 'same-origin',
+            })
+              .then((r) => r.json().then((j) => ({ ok: r.ok, json: j })))
+              .then(({ ok, json }) => {
+                if (!ok || !json?.success) {
+                  if (hiddenName) hiddenName.value = name;
+                  if (hiddenColor) hiddenColor.value = color;
+                  if (deptSelect) deptSelect.value = '';
+                  return;
+                }
+
+                const dept = json.department;
+                if (dept?.id) {
+                  // Reload page to show new department in the list
+                  window.location.reload();
+                }
+
+                if (hiddenName) hiddenName.value = '';
+                if (hiddenColor) hiddenColor.value = 'primary';
+              })
+              .catch(() => {
+                if (hiddenName) hiddenName.value = name;
+                if (hiddenColor) hiddenColor.value = color;
+                if (deptSelect) deptSelect.value = '';
+              })
+              .finally(() => {
+                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                modal.hide();
+              });
+          });
+        }
+
+        // === EDIT DEPARTMENT ===
+        const editModalEl = document.getElementById('editDepartmentModal');
+        const saveEditBtn = document.getElementById('saveEditDepartmentBtn');
+        if (editModalEl && saveEditBtn) {
+          const editDeptIdInput = document.getElementById('editDeptId');
+          const editDeptNameInput = document.getElementById('editDeptNameInput');
+          const getEditChosenColor = () => (document.querySelector('input[name="editDeptColorChoice"]:checked')?.value || 'primary');
+
+          document.querySelectorAll('.dept-edit-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+              e.preventDefault();
+              const deptId = link.dataset.deptId;
+              const deptName = link.dataset.deptName;
+              const deptColor = link.dataset.deptColor || 'primary';
+
+              if (editDeptIdInput) editDeptIdInput.value = deptId;
+              if (editDeptNameInput) editDeptNameInput.value = deptName;
+
+              const radio = document.getElementById('editDeptColor_' + deptColor);
+              if (radio) radio.checked = true;
+              setupColorSelectionFeedback('#editDeptColorChoices', 'editDeptColorChoice');
+
+              const modal = new bootstrap.Modal(editModalEl);
+              modal.show();
+              setTimeout(() => { if (editDeptNameInput) editDeptNameInput.focus(); }, 100);
+            });
+          });
+
+          saveEditBtn.addEventListener('click', function () {
+            const deptId = editDeptIdInput?.value;
+            const name = (editDeptNameInput?.value || '').trim();
+            const color = (getEditChosenColor() || 'primary').trim() || 'primary';
+
+            if (!deptId || !name) {
+              const modal = bootstrap.Modal.getInstance(editModalEl) || new bootstrap.Modal(editModalEl);
+              modal.hide();
+              return;
+            }
+
+            const fd = new FormData();
+            fd.append('csrf_token', csrfToken);
+            fd.append('name', name);
+            fd.append('color', color);
+
+            fetch(`/org/admin/departments/${deptId}/edit`, {
+              method: 'POST',
+              body: fd,
+              credentials: 'same-origin',
+            })
+              .then((r) => r.json().then((j) => ({ ok: r.ok, json: j })))
+              .then(({ ok, json }) => {
+                if (ok && json?.success) {
+                  window.location.reload();
+                } else {
+                  alert(json?.error || 'Failed to update department');
+                }
+              })
+              .catch(() => {
+                alert('Failed to update department');
+              })
+              .finally(() => {
+                const modal = bootstrap.Modal.getInstance(editModalEl) || new bootstrap.Modal(editModalEl);
+                modal.hide();
+              });
+          });
+        }
+
+        // === DELETE DEPARTMENT ===
+        document.querySelectorAll('.dept-delete-link').forEach(link => {
+          link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const deptId = link.dataset.deptId;
+            const deptName = link.dataset.deptName;
+
+            if (!confirm(`Delete department "${deptName}"? Members in this department will have it unassigned.`)) {
+              return;
+            }
+
+            const fd = new FormData();
+            fd.append('csrf_token', csrfToken);
+
+            fetch(`/org/admin/departments/${deptId}/delete`, {
+              method: 'POST',
+              body: fd,
+              credentials: 'same-origin',
+            })
+              .then((r) => r.json().then((j) => ({ ok: r.ok, json: j })))
+              .then(({ ok, json }) => {
+                if (ok && json?.success) {
+                  window.location.reload();
+                } else {
+                  alert(json?.error || 'Failed to delete department');
+                }
+              })
+              .catch(() => {
+                alert('Failed to delete department');
+              });
+          });
+        });
+      })();
+    </script>
 
     {% if pending_invites and pending_invites|length > 0 %}
     <div class="card-body pt-0">
@@ -167,6 +644,7 @@
             <tr>
               <th class="px-3">Email</th>
               <th>Role</th>
+              <th>Department</th>
               <th>Active</th>
               <th class="text-end px-3">Actions</th>
             </tr>
@@ -176,6 +654,13 @@
             <tr>
               <td class="px-3">{{ m.user.email }}</td>
               <td>{{ m.role }}</td>
+              <td>
+                {% if m.department %}
+                  <span class="badge bg-{{ m.department.color }}">{{ m.department.name }}</span>
+                {% else %}
+                  <span class="text-body-secondary">—</span>
+                {% endif %}
+              </td>
               <td>
                 {% if m.is_active %}
                 <span class="badge bg-success">Yes</span>

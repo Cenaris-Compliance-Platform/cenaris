@@ -9,6 +9,7 @@ class OrganizationMembership(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     role = db.Column(db.String(20), default='User', nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
@@ -23,6 +24,27 @@ class OrganizationMembership(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('organization_id', 'user_id', name='uq_org_membership_org_user'),
+    )
+
+    department = db.relationship('Department', lazy='joined')
+
+
+class Department(db.Model):
+    __tablename__ = 'departments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    # Store a Bootstrap contextual color token: primary/secondary/success/info/warning/danger/dark
+    color = db.Column(db.String(20), nullable=False, default='primary')
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    # Relationship to see members in this department
+    memberships = db.relationship('OrganizationMembership', foreign_keys='OrganizationMembership.department_id', lazy='dynamic', overlaps="department")
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'name', name='uq_departments_org_name'),
+        db.Index('ix_departments_org_id', 'organization_id'),
     )
 
 
@@ -54,6 +76,7 @@ class Organization(db.Model):
     users = db.relationship('User', backref='organization', lazy='dynamic')
     documents = db.relationship('Document', backref='organization', lazy='dynamic')
     memberships = db.relationship('OrganizationMembership', backref='organization', lazy='dynamic', cascade='all, delete-orphan')
+    departments = db.relationship('Department', backref='organization', lazy='dynamic', cascade='all, delete-orphan')
 
     def core_details_complete(self) -> bool:
         return bool(

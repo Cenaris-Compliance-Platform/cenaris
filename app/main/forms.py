@@ -140,6 +140,40 @@ class InviteMemberForm(FlaskForm):
         default='User',
     )
 
+    department_id = SelectField(
+        'Department',
+        choices=[('', 'No department')],
+        validators=[Optional()],
+        render_kw={'class': 'form-select'},
+        default='',
+    )
+
+    new_department_name = StringField(
+        'New Department',
+        validators=[Optional(), Length(max=80)],
+        render_kw={
+            'class': 'form-control',
+            'placeholder': 'Create new department (optional)',
+            'autocomplete': 'off',
+        },
+    )
+
+    new_department_color = SelectField(
+        'Color',
+        choices=[
+            ('primary', 'Blue'),
+            ('secondary', 'Gray'),
+            ('success', 'Green'),
+            ('info', 'Teal'),
+            ('warning', 'Yellow'),
+            ('danger', 'Red'),
+            ('dark', 'Dark'),
+        ],
+        validators=[Optional()],
+        render_kw={'class': 'form-select'},
+        default='primary',
+    )
+
     submit = SubmitField(
         'Invite',
         render_kw={'class': 'btn btn-primary'},
@@ -169,3 +203,59 @@ class PendingInviteRevokeForm(FlaskForm):
         'Revoke',
         render_kw={'class': 'btn btn-sm btn-outline-danger'},
     )
+
+
+class CreateDepartmentForm(FlaskForm):
+    name = StringField(
+        'Department name',
+        validators=[DataRequired(), Length(max=80)],
+        render_kw={
+            'class': 'form-control',
+            'placeholder': 'e.g., Finance',
+            'autocomplete': 'off',
+        },
+    )
+
+    color = SelectField(
+        'Color',
+        choices=[
+            ('primary', 'Blue'),
+            ('secondary', 'Gray'),
+            ('success', 'Green'),
+            ('info', 'Teal'),
+            ('warning', 'Yellow'),
+            ('danger', 'Red'),
+            ('dark', 'Dark'),
+        ],
+        validators=[DataRequired()],
+        default='primary',
+        render_kw={'class': 'form-select'},
+    )
+
+
+class EditDepartmentForm(FlaskForm):
+    name = StringField(
+        'Department name',
+        validators=[DataRequired(), Length(max=80)],
+        render_kw={'class': 'form-control', 'autocomplete': 'off'},
+    )
+
+    color = SelectField(
+        'Color',
+        choices=[
+            ('primary', 'Blue'),
+            ('secondary', 'Gray'),
+            ('success', 'Green'),
+            ('info', 'Teal'),
+            ('warning', 'Yellow'),
+            ('danger', 'Red'),
+            ('dark', 'Dark'),
+        ],
+        validators=[DataRequired()],
+        render_kw={'class': 'form-select'},
+    )
+
+
+class DeleteDepartmentForm(FlaskForm):
+    """CSRF-protected delete form."""
+    pass

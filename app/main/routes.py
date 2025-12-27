@@ -115,6 +115,7 @@ def org_admin_dashboard():
         return maybe
 
     from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm
+    from app.models import Department
 
     org_id = _active_org_id()
     organization = Organization.query.get(org_id)
@@ -135,6 +136,15 @@ def org_admin_dashboard():
     document_count = Document.query.filter_by(organization_id=int(org_id), is_active=True).count()
 
     invite_form = InviteMemberForm()
+    departments = (
+        Department.query
+        .filter_by(organization_id=int(org_id))
+        .order_by(Department.name.asc())
+        .all()
+    )
+    invite_form.department_id.choices = [('', 'No department')] + [
+        (str(d.id), d.name) for d in departments
+    ]
     member_action_form = MembershipActionForm()
     pending_invite_resend_form = PendingInviteResendForm()
     pending_invite_revoke_form = PendingInviteRevokeForm()
@@ -151,6 +161,7 @@ def org_admin_dashboard():
         member_action_form=member_action_form,
         pending_invite_resend_form=pending_invite_resend_form,
         pending_invite_revoke_form=pending_invite_revoke_form,
+        departments=departments,
     )
 
 
@@ -164,6 +175,8 @@ def org_admin_invite_member():
 
     from app.main.forms import InviteMemberForm
     from datetime import datetime, timezone
+    from sqlalchemy import func
+    from app.models import Department
 
     org_id = _active_org_id()
     organization = Organization.query.get(int(org_id))
@@ -171,6 +184,14 @@ def org_admin_invite_member():
         abort(404)
 
     form = InviteMemberForm()
+    # Populate department choices (so WTForms validates select value).
+    departments = (
+        Department.query
+        .filter_by(organization_id=int(org_id))
+        .order_by(Department.name.asc())
+        .all()
+    )
+    form.department_id.choices = [('', 'No department')] + [(str(d.id), d.name) for d in departments]
     if not form.validate_on_submit():
         flash('Please correct the invite form errors and try again.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
@@ -179,6 +200,37 @@ def org_admin_invite_member():
     role = (form.role.data or 'User').strip()
     if role not in {'User', 'Admin'}:
         role = 'User'
+
+    # Department: either select existing OR create new.
+    department = None
+    new_dept_name = (form.new_department_name.data or '').strip()
+    new_dept_color = (form.new_department_color.data or 'primary').strip() or 'primary'
+    allowed_colors = {'primary', 'secondary', 'success', 'info', 'warning', 'danger', 'dark'}
+    if new_dept_color not in allowed_colors:
+        new_dept_color = 'primary'
+
+    if new_dept_name:
+        # Try to find existing (case-insensitive) department in this org.
+        department = (
+            Department.query
+            .filter(Department.organization_id == int(org_id))
+            .filter(func.lower(Department.name) == func.lower(new_dept_name))
+            .first()
+        )
+        if not department:
+            department = Department(
+                organization_id=int(org_id),
+                name=new_dept_name,
+                color=new_dept_color,
+            )
+            db.session.add(department)
+            db.session.flush()
+    else:
+        dept_id_raw = (form.department_id.data or '').strip()
+        if dept_id_raw.isdigit():
+            department = Department.query.get(int(dept_id_raw))
+            if department and int(department.organization_id) != int(org_id):
+                department = None
 
     # Check if user already has an active membership in this org
     user = User.query.filter_by(email=email).first()
@@ -218,12 +270,14 @@ def org_admin_invite_member():
         if membership:
             membership.is_active = True
             membership.role = role
+            membership.department_id = int(department.id) if department else None
         else:
             membership = OrganizationMembership(
                 organization_id=int(org_id),
                 user_id=int(user.id),
                 role=role,
                 is_active=True,
+                department_id=(int(department.id) if department else None),
             )
             db.session.add(membership)
 
@@ -270,6 +324,162 @@ def org_admin_invite_member():
         else:
             flash('User added to the organization.', 'success')
     return redirect(url_for('main.org_admin_dashboard'))
+
+
+@bp.route('/org/admin/departments/create', methods=['POST'])
+@login_required
+def org_admin_create_department():
+    """Create a department for the active organization (AJAX helper)."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import CreateDepartmentForm
+    from app.models import Department
+    from sqlalchemy import func
+
+    org_id = _active_org_id()
+    if not org_id:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    form = CreateDepartmentForm()
+    if not form.validate_on_submit():
+        # Keep response simple for UI.
+        msg = 'Invalid department details.'
+        if form.name.errors:
+            msg = form.name.errors[0]
+        elif form.color.errors:
+            msg = form.color.errors[0]
+        return jsonify({'success': False, 'error': msg}), 400
+
+    name = (form.name.data or '').strip()
+    color = (form.color.data or 'primary').strip() or 'primary'
+    allowed_colors = {'primary', 'secondary', 'success', 'info', 'warning', 'danger', 'dark'}
+    if color not in allowed_colors:
+        color = 'primary'
+
+    # Case-insensitive de-dupe by name within org.
+    existing = (
+        Department.query
+        .filter(Department.organization_id == int(org_id))
+        .filter(func.lower(Department.name) == func.lower(name))
+        .first()
+    )
+    if existing:
+        return jsonify({
+            'success': True,
+            'created': False,
+            'department': {'id': int(existing.id), 'name': existing.name, 'color': existing.color},
+        })
+
+    try:
+        dept = Department(organization_id=int(org_id), name=name, color=color)
+        db.session.add(dept)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'created': True,
+            'department': {'id': int(dept.id), 'name': dept.name, 'color': dept.color},
+        })
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed creating department')
+        return jsonify({'success': False, 'error': 'Failed to create department.'}), 500
+
+
+@bp.route('/org/admin/departments/<int:dept_id>/edit', methods=['POST'])
+@login_required
+def org_admin_edit_department(dept_id):
+    """Edit a department (AJAX helper)."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import EditDepartmentForm
+    from app.models import Department
+    from sqlalchemy import func
+
+    org_id = _active_org_id()
+    if not org_id:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    dept = Department.query.filter_by(id=dept_id, organization_id=int(org_id)).first()
+    if not dept:
+        return jsonify({'success': False, 'error': 'Department not found'}), 404
+
+    form = EditDepartmentForm()
+    if not form.validate_on_submit():
+        msg = 'Invalid department details.'
+        if form.name.errors:
+            msg = form.name.errors[0]
+        elif form.color.errors:
+            msg = form.color.errors[0]
+        return jsonify({'success': False, 'error': msg}), 400
+
+    name = (form.name.data or '').strip()
+    color = (form.color.data or 'primary').strip() or 'primary'
+    allowed_colors = {'primary', 'secondary', 'success', 'info', 'warning', 'danger', 'dark'}
+    if color not in allowed_colors:
+        color = 'primary'
+
+    # Check for name conflict (case-insensitive, excluding current dept).
+    conflict = (
+        Department.query
+        .filter(Department.organization_id == int(org_id))
+        .filter(Department.id != dept_id)
+        .filter(func.lower(Department.name) == func.lower(name))
+        .first()
+    )
+    if conflict:
+        return jsonify({'success': False, 'error': 'A department with this name already exists'}), 400
+
+    try:
+        dept.name = name
+        dept.color = color
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'department': {'id': int(dept.id), 'name': dept.name, 'color': dept.color},
+        })
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed editing department')
+        return jsonify({'success': False, 'error': 'Failed to edit department.'}), 500
+
+
+@bp.route('/org/admin/departments/<int:dept_id>/delete', methods=['POST'])
+@login_required
+def org_admin_delete_department(dept_id):
+    """Delete a department (AJAX helper). Members assigned to this department will have it set to NULL."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import DeleteDepartmentForm
+    from app.models import Department, OrganizationMembership
+
+    org_id = _active_org_id()
+    if not org_id:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    form = DeleteDepartmentForm()
+    if not form.validate_on_submit():
+        return jsonify({'success': False, 'error': 'Invalid request'}), 400
+
+    dept = Department.query.filter_by(id=dept_id, organization_id=int(org_id)).first()
+    if not dept:
+        return jsonify({'success': False, 'error': 'Department not found'}), 404
+
+    try:
+        # Unassign members from this department.
+        OrganizationMembership.query.filter_by(department_id=dept_id).update({'department_id': None})
+        db.session.delete(dept)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed deleting department')
+        return jsonify({'success': False, 'error': 'Failed to delete department.'}), 500
 
 
 @bp.route('/org/admin/invite/resend', methods=['POST'])
