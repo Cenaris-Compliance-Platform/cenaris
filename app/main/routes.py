@@ -9,6 +9,9 @@ from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
 
 
+_RESEND_ORG_INVITE_COOLDOWN_SECONDS = 60 * 5
+
+
 def _active_org_id() -> int | None:
     org_id = getattr(current_user, 'organization_id', None)
     return int(org_id) if org_id else None
@@ -70,6 +73,12 @@ def _send_invite_email(user: User, reset_url: str, organization: Organization) -
     mail.send(msg)
 
 
+def _is_pending_org_invite(membership: OrganizationMembership, user: User) -> bool:
+    # In this app, org "invites" create an inactive-password user and an org membership.
+    # We treat any membership for a user with no password as a "pending invite".
+    return bool(membership and membership.is_active and user and not bool(user.password_hash))
+
+
 @bp.route('/org/switch', methods=['POST'])
 @login_required
 def switch_organization():
@@ -89,7 +98,9 @@ def switch_organization():
         flash('You do not have access to that organization.', 'error')
         return redirect(url_for('main.dashboard'))
 
-    current_user.organization_id = org_id
+    # Query the actual user object from the database to ensure changes persist
+    user = User.query.get(int(current_user.id))
+    user.organization_id = org_id
     db.session.commit()
     flash('Organization switched.', 'success')
     return redirect(request.referrer or url_for('main.dashboard'))
@@ -103,7 +114,7 @@ def org_admin_dashboard():
     if maybe is not None:
         return maybe
 
-    from app.main.forms import InviteMemberForm, MembershipActionForm
+    from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm
 
     org_id = _active_org_id()
     organization = Organization.query.get(org_id)
@@ -118,21 +129,28 @@ def org_admin_dashboard():
         .all()
     )
 
+    pending_invites = [m for m in members if _is_pending_org_invite(m, m.user)]
+
     user_count = sum(1 for m in members if bool(m.is_active))
     document_count = Document.query.filter_by(organization_id=int(org_id), is_active=True).count()
 
     invite_form = InviteMemberForm()
     member_action_form = MembershipActionForm()
+    pending_invite_resend_form = PendingInviteResendForm()
+    pending_invite_revoke_form = PendingInviteRevokeForm()
 
     return render_template(
         'main/org_admin_dashboard.html',
         title='Org Admin Dashboard',
         organization=organization,
         members=members,
+        pending_invites=pending_invites,
         user_count=user_count,
         document_count=document_count,
         invite_form=invite_form,
         member_action_form=member_action_form,
+        pending_invite_resend_form=pending_invite_resend_form,
+        pending_invite_revoke_form=pending_invite_revoke_form,
     )
 
 
@@ -162,7 +180,21 @@ def org_admin_invite_member():
     if role not in {'User', 'Admin'}:
         role = 'User'
 
+    # Check if user already has an active membership in this org
     user = User.query.filter_by(email=email).first()
+    if user:
+        existing_membership = (
+            OrganizationMembership.query
+            .filter_by(organization_id=int(org_id), user_id=int(user.id))
+            .first()
+        )
+        if existing_membership and existing_membership.is_active:
+            if not bool(user.password_hash):
+                flash(f'An invitation has already been sent to {email}. You can resend it from the pending invites section below.', 'warning')
+            else:
+                flash(f'{email} is already a member of this organization.', 'warning')
+            return redirect(url_for('main.org_admin_dashboard'))
+
     created_user = False
     try:
         if not user:
@@ -195,6 +227,15 @@ def org_admin_invite_member():
             )
             db.session.add(membership)
 
+        # Track invites only for "pending" invited users (no password set yet).
+        if not bool(user.password_hash):
+            now = datetime.now(timezone.utc)
+            membership.invited_at = membership.invited_at or now
+            membership.invited_by_user_id = int(getattr(current_user, 'id', 0) or 0) or None
+            membership.invite_last_sent_at = now
+            membership.invite_send_count = int(membership.invite_send_count or 0) + 1
+            membership.invite_revoked_at = None
+
         # Only set a default active org for the user if they don't have one.
         if not getattr(user, 'organization_id', None):
             user.organization_id = int(org_id)
@@ -206,7 +247,88 @@ def org_admin_invite_member():
         current_app.logger.exception('Failed inviting member')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    # Send invite email with password-set link (works for both existing + new users).
+    # Send invite email with password-set link (only meaningful for "pending" invited users).
+    email_sent = False
+    if not bool(user.password_hash):
+        try:
+            token = _password_reset_token(user)
+            reset_url = url_for('auth.reset_password', token=token, _external=True)
+            _send_invite_email(user, reset_url, organization)
+            email_sent = True
+        except Exception as e:
+            current_app.logger.exception('Failed to send invite email')
+            flash(f'User invited but email could not be sent. Error: {str(e)}. Please configure email settings.', 'warning')
+
+    if created_user:
+        if email_sent:
+            flash(f'Invitation sent to {email}! They will receive an email to set their password and join.', 'success')
+        else:
+            flash(f'User created but email not configured. Share this invite link manually with {email}.', 'warning')
+    else:
+        if email_sent:
+            flash(f'User re-invited to the organization. Invitation email sent to {email}.', 'success')
+        else:
+            flash('User added to the organization.', 'success')
+    return redirect(url_for('main.org_admin_dashboard'))
+
+
+@bp.route('/org/admin/invite/resend', methods=['POST'])
+@login_required
+def org_admin_resend_invite():
+    """Resend an invite email to a pending invited user (cooldown enforced)."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import PendingInviteResendForm
+    from datetime import datetime, timezone
+
+    org_id = _active_org_id()
+    organization = Organization.query.get(int(org_id))
+    if not organization:
+        abort(404)
+
+    form = PendingInviteResendForm()
+    if not form.validate_on_submit():
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership_id_raw = (form.membership_id.data or '').strip()
+    if not membership_id_raw.isdigit():
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership = OrganizationMembership.query.get(int(membership_id_raw))
+    if not membership or int(membership.organization_id) != int(org_id):
+        flash('Invite not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    user = User.query.get(int(membership.user_id)) if membership else None
+    if not _is_pending_org_invite(membership, user):
+        flash('That invite is no longer pending.', 'info')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    now = datetime.now(timezone.utc)
+    last_sent = membership.invite_last_sent_at
+    if last_sent:
+        # SQLite can return naive datetimes; normalize to UTC-aware for arithmetic.
+        if getattr(last_sent, 'tzinfo', None) is None:
+            last_sent = last_sent.replace(tzinfo=timezone.utc)
+        wait_seconds = _RESEND_ORG_INVITE_COOLDOWN_SECONDS - int((now - last_sent).total_seconds())
+        if wait_seconds > 0:
+            flash(f'Please wait {wait_seconds} seconds before resending this invite.', 'warning')
+            return redirect(url_for('main.org_admin_dashboard'))
+
+    try:
+        membership.invite_last_sent_at = now
+        membership.invite_send_count = int(membership.invite_send_count or 0) + 1
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed updating invite tracking')
+        flash('Failed to resend invite. Please try again.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
     try:
         token = _password_reset_token(user)
         reset_url = url_for('auth.reset_password', token=token, _external=True)
@@ -214,17 +336,61 @@ def org_admin_invite_member():
     except Exception:
         current_app.logger.exception('Failed to send invite email')
 
-    if created_user:
-        flash('User created and added to the organization. Invite email sent (or logged if mail not configured).', 'success')
-    else:
-        flash('User added to the organization. Invite email sent (or logged if mail not configured).', 'success')
+    flash('Invite resent (or logged if mail not configured).', 'success')
     return redirect(url_for('main.org_admin_dashboard'))
 
 
-@bp.route('/org/admin/members/disable', methods=['POST'])
+@bp.route('/org/admin/invite/revoke', methods=['POST'])
 @login_required
-def org_admin_disable_member():
-    """Disable a user's membership in the active organization."""
+def org_admin_revoke_invite():
+    """Revoke a pending invite by disabling the membership."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import PendingInviteRevokeForm
+    from datetime import datetime, timezone
+
+    org_id = _active_org_id()
+
+    form = PendingInviteRevokeForm()
+    if not form.validate_on_submit():
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership_id_raw = (form.membership_id.data or '').strip()
+    if not membership_id_raw.isdigit():
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership = OrganizationMembership.query.get(int(membership_id_raw))
+    if not membership or int(membership.organization_id) != int(org_id):
+        flash('Invite not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    user = User.query.get(int(membership.user_id)) if membership else None
+    if not _is_pending_org_invite(membership, user):
+        flash('That invite is no longer pending.', 'info')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    try:
+        membership.is_active = False
+        membership.invite_revoked_at = datetime.now(timezone.utc)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed revoking invite')
+        flash('Failed to revoke invite. Please try again.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    flash('Invite revoked.', 'success')
+    return redirect(url_for('main.org_admin_dashboard'))
+
+
+@bp.route('/org/admin/members/remove', methods=['POST'])
+@login_required
+def org_admin_remove_member():
+    """Remove a user's membership from the active organization."""
     maybe = _require_org_admin()
     if maybe is not None:
         return maybe
@@ -249,10 +415,10 @@ def org_admin_disable_member():
         return redirect(url_for('main.org_admin_dashboard'))
 
     if int(membership.user_id) == int(current_user.id):
-        flash('You cannot disable your own access.', 'error')
+        flash('You cannot remove your own access.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    # Guard: do not disable the last active admin.
+    # Guard: do not remove the last active admin.
     is_admin = (membership.role or '').strip().lower() == 'admin'
     if is_admin and membership.is_active:
         active_admins = (
@@ -262,17 +428,17 @@ def org_admin_disable_member():
             .count()
         )
         if active_admins <= 1:
-            flash('You cannot disable the last admin for this organization.', 'error')
+            flash('You cannot remove the last admin for this organization.', 'error')
             return redirect(url_for('main.org_admin_dashboard'))
 
     try:
         membership.is_active = False
         db.session.commit()
-        flash('Member disabled.', 'success')
+        flash('Member removed from the organization.', 'success')
     except Exception:
         db.session.rollback()
-        flash('Failed to disable member. Please try again.', 'error')
-        current_app.logger.exception('Failed disabling member')
+        flash('Failed to remove member. Please try again.', 'error')
+        current_app.logger.exception('Failed removing member')
 
     return redirect(url_for('main.org_admin_dashboard'))
 
@@ -984,12 +1150,7 @@ def audit_export():
                          title='Audit Export',
                          export_stats=export_stats)
 
-@bp.route('/user-roles')
-@login_required
-def user_roles():
-    """User roles management route."""
-    return render_template('main/user_roles.html',
-                         title='User Roles')
+# User roles route removed - functionality moved to Org Admin Dashboard
 
 @bp.route('/debug-adls')
 @login_required

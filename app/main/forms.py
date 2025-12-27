@@ -150,6 +150,22 @@ class MembershipActionForm(FlaskForm):
     membership_id = HiddenField(validators=[DataRequired()])
 
     submit = SubmitField(
-        'Disable',
+        'Remove',
+        render_kw={'class': 'btn btn-sm btn-outline-danger'},
+    )
+
+class PendingInviteResendForm(FlaskForm):
+    membership_id = HiddenField(validators=[DataRequired()])
+
+    submit = SubmitField(
+        'Resend invite',
+        render_kw={'class': 'btn btn-sm btn-outline-primary'},
+    )
+
+class PendingInviteRevokeForm(FlaskForm):
+    membership_id = HiddenField(validators=[DataRequired()])
+
+    submit = SubmitField(
+        'Revoke',
         render_kw={'class': 'btn btn-sm btn-outline-danger'},
     )

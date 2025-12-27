@@ -13,6 +13,14 @@ class OrganizationMembership(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
+    # Invite tracking (org membership invites)
+    invited_at = db.Column(db.DateTime, nullable=True)
+    invited_by_user_id = db.Column(db.Integer, nullable=True)
+    invite_last_sent_at = db.Column(db.DateTime, nullable=True)
+    invite_send_count = db.Column(db.Integer, default=0, nullable=False)
+    invite_accepted_at = db.Column(db.DateTime, nullable=True)
+    invite_revoked_at = db.Column(db.DateTime, nullable=True)
+
     __table_args__ = (
         db.UniqueConstraint('organization_id', 'user_id', name='uq_org_membership_org_user'),
     )
@@ -89,12 +97,19 @@ class User(UserMixin, db.Model):
     email_verified = db.Column(db.Boolean, default=False, nullable=False)
     welcome_email_sent_at = db.Column(db.DateTime, nullable=True)
     terms_accepted_at = db.Column(db.DateTime, nullable=True)
+    password_changed_at = db.Column(db.DateTime, nullable=True)
     avatar_blob_name = db.Column(db.String(255))
     avatar_content_type = db.Column(db.String(100))
     role = db.Column(db.String(20), default='User')
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+
+    # Security: login tracking / lockout
+    last_login_at = db.Column(db.DateTime, nullable=True)
+    last_failed_login_at = db.Column(db.DateTime, nullable=True)
+    failed_login_count = db.Column(db.Integer, default=0, nullable=False)
+    locked_until = db.Column(db.DateTime, nullable=True)
 
     memberships = db.relationship('OrganizationMembership', backref='user', lazy='dynamic', cascade='all, delete-orphan')
 
@@ -121,6 +136,7 @@ class User(UserMixin, db.Model):
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+        self.password_changed_at = datetime.now(timezone.utc)
 
     def check_password(self, password):
         if not self.password_hash:
@@ -139,3 +155,40 @@ class Document(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+
+
+class LoginEvent(db.Model):
+    __tablename__ = 'login_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    provider = db.Column(db.String(20), nullable=False, default='password')
+    success = db.Column(db.Boolean, nullable=False, default=False)
+    reason = db.Column(db.String(80), nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    user = db.relationship('User', lazy='joined')
+
+    __table_args__ = (
+        db.Index('ix_login_events_user_id_created_at', 'user_id', 'created_at'),
+        db.Index('ix_login_events_ip_created_at', 'ip_address', 'created_at'),
+    )
+
+
+class SuspiciousIP(db.Model):
+    __tablename__ = 'suspicious_ips'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(45), nullable=False, unique=True)
+    window_started_at = db.Column(db.DateTime, nullable=True)
+    failure_count = db.Column(db.Integer, default=0, nullable=False)
+    blocked_until = db.Column(db.DateTime, nullable=True)
+    last_seen_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_suspicious_ips_blocked_until', 'blocked_until'),
+    )

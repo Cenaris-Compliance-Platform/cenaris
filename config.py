@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -60,6 +61,19 @@ class Config:
     # Security Configuration
     WTF_CSRF_ENABLED = True
     WTF_CSRF_TIME_LIMIT = None
+
+    # Session cookies
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=12)
+
+    # Remember-me cookies (Flask-Login)
+    REMEMBER_COOKIE_DURATION = timedelta(days=14)
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = 'Lax'
+
+    # Rate limiting (Flask-Limiter)
+    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI') or 'memory://'
     
     @staticmethod
     def init_app(app):
@@ -79,6 +93,10 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     """Production configuration."""
     DEBUG = False
+
+    # Assume HTTPS in production; secure cookies.
+    SESSION_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SECURE = True
 
     # In production, default to requiring email verification unless explicitly disabled.
     REQUIRE_EMAIL_VERIFICATION = (os.environ.get('REQUIRE_EMAIL_VERIFICATION') or 'true').strip().lower() in {'1', 'true', 'yes', 'on'}
@@ -107,6 +125,9 @@ class TestingConfig(DevelopmentConfig):
     WTF_CSRF_CHECK_DEFAULT = False
     DATABASE_URL = _normalize_database_url(os.environ.get('TEST_DATABASE_URL')) or 'sqlite:///test.db'
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    # Disable secure cookies in testing so they work with test client
+    SESSION_COOKIE_SECURE = False
+    REMEMBER_COOKIE_SECURE = False
 
 config = {
     'development': DevelopmentConfig,

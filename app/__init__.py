@@ -10,6 +10,9 @@ import click
 from authlib.integrations.flask_client import OAuth
 from flask_mail import Mail
 
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
 login_manager = LoginManager()
 
 # Database (Milestone 1)
@@ -19,6 +22,13 @@ migrate = Migrate()
 # OAuth + Mail
 oauth = OAuth()
 mail = Mail()
+
+# Rate limiting
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri=os.environ.get('RATELIMIT_STORAGE_URI') or 'memory://',
+)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -80,6 +90,9 @@ def create_app(config_name=None):
     oauth.init_app(app)
     mail.init_app(app)
 
+    # Initialize rate limiter
+    limiter.init_app(app)
+
     # Register OAuth providers (only if configured)
     google_id = app.config.get('GOOGLE_CLIENT_ID')
     google_secret = app.config.get('GOOGLE_CLIENT_SECRET')
@@ -112,12 +125,71 @@ def create_app(config_name=None):
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Please sign in to access this page.'
     login_manager.login_message_category = 'info'
-    # Flask-Login's FlaskLoginClient (used in tests) only seeds _user_id/_fresh.
-    # With 'strong' protection, Flask-Login may invalidate those sessions.
-    login_manager.session_protection = 'basic' if app.config.get('TESTING') else 'strong'
+    # Disable session protection in testing to allow test client requests to work
+    # Without this, Flask-Login's session protection can invalidate sessions between requests
+    login_manager.session_protection = None if app.config.get('TESTING') else 'strong'
     login_manager.refresh_view = 'auth.login'
     login_manager.needs_refresh_message = 'Please re-authenticate to access this page.'
     login_manager.needs_refresh_message_category = 'info'
+
+    @app.before_request
+    def _force_logout_on_password_change():
+        try:
+            from flask_login import current_user, logout_user
+            from flask import session, url_for, flash
+            from datetime import datetime, timezone, timedelta
+            from app.models import User
+            import sys
+
+            if not getattr(current_user, 'is_authenticated', False):
+                return None
+
+            # Query fresh user from DB to get latest password_changed_at
+            # (current_user proxy may have stale data)
+            from app import db
+            user = db.session.get(User, int(current_user.id))
+            if user:
+                # Force refresh from DB to get latest values
+                db.session.refresh(user)
+            if not user:
+                return None
+
+            pwd_changed_at = getattr(user, 'password_changed_at', None)
+            if not pwd_changed_at:
+                return None
+
+            if getattr(pwd_changed_at, 'tzinfo', None) is None:
+                pwd_changed_at = pwd_changed_at.replace(tzinfo=timezone.utc)
+
+            auth_ts = session.get('auth_time')
+            if auth_ts is None:
+                # Best-effort: seed from last_login_at so older sessions can still be invalidated.
+                last_login_at = getattr(user, 'last_login_at', None)
+                if last_login_at:
+                    try:
+                        session['auth_time'] = int(last_login_at.replace(tzinfo=timezone.utc).timestamp())
+                        auth_ts = session.get('auth_time')
+                    except Exception:
+                        auth_ts = None
+
+            if auth_ts is None:
+                return None
+
+            auth_time = datetime.fromtimestamp(int(auth_ts), tz=timezone.utc)
+            
+            # Add 2-second tolerance to avoid false positives from timestamp precision
+            if pwd_changed_at > auth_time + timedelta(seconds=2):
+                logout_user()
+                try:
+                    session.clear()
+                except Exception:
+                    pass
+                flash('Your password was changed. Please sign in again.', 'info')
+                return redirect(url_for('auth.login'))
+        except Exception:
+            return None
+
+        return None
     
     # Register blueprints
     from app.auth import bp as auth_bp

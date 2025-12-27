@@ -103,6 +103,63 @@
       </form>
     </div>
 
+    {% if pending_invites and pending_invites|length > 0 %}
+    <div class="card-body pt-0">
+      <div class="alert alert-info mb-3">
+        <strong>Pending invitations</strong> are users who have been added but haven’t set a password yet.
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Invited</th>
+              <th>Last sent</th>
+              <th>Sends</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in pending_invites %}
+            <tr>
+              <td>{{ m.user.email }}</td>
+              <td>{{ m.role }}</td>
+              <td>
+                {% if m.invited_at %}
+                  {{ m.invited_at|datetime_format('%b %d, %Y') }}
+                {% else %}
+                  <span class="text-body-secondary">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if m.invite_last_sent_at %}
+                  {{ m.invite_last_sent_at|datetime_format('%b %d, %Y %I:%M %p') }}
+                {% else %}
+                  <span class="text-body-secondary">—</span>
+                {% endif %}
+              </td>
+              <td>{{ m.invite_send_count or 0 }}</td>
+              <td class="text-end">
+                <form method="post" action="{{ url_for('main.org_admin_resend_invite') }}" class="d-inline">
+                  {{ pending_invite_resend_form.csrf_token }}
+                  {{ pending_invite_resend_form.membership_id(value=m.id) }}
+                  {{ pending_invite_resend_form.submit() }}
+                </form>
+                <form method="post" action="{{ url_for('main.org_admin_revoke_invite') }}" class="d-inline">
+                  {{ pending_invite_revoke_form.csrf_token }}
+                  {{ pending_invite_revoke_form.membership_id(value=m.id) }}
+                  {{ pending_invite_revoke_form.submit() }}
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-hover mb-0">
@@ -128,7 +185,7 @@
               </td>
               <td class="text-end px-3">
                 {% if m.is_active and m.user.id != current_user.id %}
-                <form method="post" action="{{ url_for('main.org_admin_disable_member') }}" class="d-inline">
+                <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Are you sure you want to remove this member from the organization?');">
                   {{ member_action_form.csrf_token }}
                   {{ member_action_form.membership_id(value=m.id) }}
                   {{ member_action_form.submit() }}

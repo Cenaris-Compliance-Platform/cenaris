@@ -6,14 +6,22 @@ import requests
 from flask_mail import Message
 from app.auth import bp
 from app.auth.forms import LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-from app.models import User, Organization, OrganizationMembership
-from app import db, oauth, mail
+from app.models import User, Organization, OrganizationMembership, LoginEvent, SuspiciousIP
+from app import db, oauth, mail, limiter
 
 
 _RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS = 60
 _RESET_PASSWORD_REQUEST_COOLDOWN_SECONDS = 60
+
+_LOGIN_LOCKOUT_THRESHOLD = 5
+_LOGIN_LOCKOUT_SECONDS = 60 * 15
+_FAILED_LOGIN_WINDOW_SECONDS = 60 * 30
+
+_SUSPICIOUS_IP_WINDOW_SECONDS = 60 * 10
+_SUSPICIOUS_IP_FAILURE_THRESHOLD = 20
+_SUSPICIOUS_IP_BLOCK_SECONDS = 60 * 30
 
 
 def _now_ts() -> int:
@@ -131,7 +139,6 @@ def _verify_turnstile() -> bool:
     token = (request.form.get('cf-turnstile-response') or '').strip()
     if not token:
         return False
-
     secret = current_app.config.get('TURNSTILE_SECRET_KEY')
     try:
         resp = requests.post(
@@ -148,6 +155,102 @@ def _verify_turnstile() -> bool:
     except Exception:
         current_app.logger.exception('Turnstile verification failed')
         return False
+
+
+def _client_ip() -> str | None:
+    # Honor proxy headers when present (common in Render/NGINX), but only take the first hop.
+    xff = (request.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
+    if xff:
+        return xff
+    return request.remote_addr
+
+
+def _log_login_event(
+    *,
+    email: str | None,
+    user: User | None,
+    provider: str,
+    success: bool,
+    reason: str | None = None,
+) -> None:
+    try:
+        evt = LoginEvent(
+            user_id=int(user.id) if user else None,
+            email=(email or (user.email if user else None) or None),
+            provider=(provider or 'password')[:20],
+            success=bool(success),
+            reason=(reason or None)[:80] if (reason or '').strip() else None,
+            ip_address=(_client_ip() or None),
+            user_agent=((request.user_agent.string or '')[:255] or None),
+        )
+        db.session.add(evt)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to log login event')
+
+
+def _ip_block_status(now: datetime) -> tuple[bool, datetime | None]:
+    ip = _client_ip()
+    if not ip:
+        return False, None
+    rec = SuspiciousIP.query.filter_by(ip_address=ip).first()
+    if rec and rec.blocked_until:
+        blocked_until = rec.blocked_until
+        # SQLite often returns naive datetimes; normalize to UTC-aware.
+        if getattr(blocked_until, 'tzinfo', None) is None:
+            blocked_until = blocked_until.replace(tzinfo=timezone.utc)
+        if blocked_until > now:
+            return True, blocked_until
+    return False, None
+
+
+def _register_ip_failure(now: datetime) -> None:
+    ip = _client_ip()
+    if not ip:
+        return
+
+    try:
+        rec = SuspiciousIP.query.filter_by(ip_address=ip).first()
+        if not rec:
+            rec = SuspiciousIP(ip_address=ip)
+            db.session.add(rec)
+
+        rec.last_seen_at = now
+
+        window_started_at = rec.window_started_at
+        if window_started_at and getattr(window_started_at, 'tzinfo', None) is None:
+            window_started_at = window_started_at.replace(tzinfo=timezone.utc)
+
+        if not window_started_at or int((now - window_started_at).total_seconds()) > _SUSPICIOUS_IP_WINDOW_SECONDS:
+            rec.window_started_at = now
+            rec.failure_count = 0
+
+        rec.failure_count = int(rec.failure_count or 0) + 1
+        if int(rec.failure_count or 0) >= _SUSPICIOUS_IP_FAILURE_THRESHOLD:
+            rec.blocked_until = now.replace(microsecond=0) + timedelta(seconds=_SUSPICIOUS_IP_BLOCK_SECONDS)
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to update suspicious IP tracking')
+
+
+def _clear_ip_failures_on_success(now: datetime) -> None:
+    ip = _client_ip()
+    if not ip:
+        return
+    try:
+        rec = SuspiciousIP.query.filter_by(ip_address=ip).first()
+        if not rec:
+            return
+        rec.last_seen_at = now
+        rec.window_started_at = now
+        rec.failure_count = 0
+        rec.blocked_until = None
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _send_password_reset_email(user: User, reset_url: str) -> None:
@@ -168,6 +271,8 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
     mail.send(msg)
 
 @bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute')
+@limiter.limit('100 per hour')
 def login():
     """User login route."""
     if current_user.is_authenticated:
@@ -179,13 +284,56 @@ def login():
         email = form.email.data.lower().strip()
         password = form.password.data
 
+        now = datetime.now(timezone.utc)
+
+        # Suspicious IP detection (DB-backed, survives restarts)
+        is_blocked, blocked_until = _ip_block_status(now)
+        if is_blocked:
+            _log_login_event(email=email, user=None, provider='password', success=False, reason='ip_blocked')
+            flash('Login temporarily unavailable. Please try again later.', 'error')
+            return render_template('auth/login.html', form=form, title='Sign In')
+
         user = User.query.filter_by(email=email).first()
+
+        # Account lockout (only enforced for known users, but response is generic).
+        if user and user.locked_until:
+            locked_until = user.locked_until
+            if getattr(locked_until, 'tzinfo', None) is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            if locked_until > now:
+                _log_login_event(email=email, user=user, provider='password', success=False, reason='locked')
+                flash('Login temporarily unavailable. Please try again later.', 'error')
+                return render_template('auth/login.html', form=form, title='Sign In')
         
         if user and user.check_password(password) and user.is_active:
             if _email_verification_required() and not getattr(user, 'email_verified', False):
+                _log_login_event(email=email, user=user, provider='password', success=False, reason='email_not_verified')
                 flash('Please verify your email before signing in. You can request a new verification link below.', 'warning')
                 return redirect(url_for('auth.verify_email_request', email=email))
+
+            # Successful login resets lockout counters.
+            try:
+                user.failed_login_count = 0
+                user.last_failed_login_at = None
+                user.locked_until = None
+                user.last_login_at = now
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+            # Regenerate session to reduce session fixation risk.
+            try:
+                session.clear()
+            except Exception:
+                pass
+
             login_user(user, remember=form.remember_me.data)
+            try:
+                session['auth_time'] = int(now.timestamp())
+            except Exception:
+                pass
+            _clear_ip_failures_on_success(now)
+            _log_login_event(email=email, user=user, provider='password', success=True)
             flash('Welcome back! You have been successfully signed in.', 'success')
             
             # Redirect to next page or dashboard
@@ -194,6 +342,27 @@ def login():
                 return redirect(next_page)
             return _after_login_redirect()
         else:
+            _log_login_event(email=email, user=user, provider='password', success=False, reason='invalid_credentials')
+            _register_ip_failure(now)
+
+            # Update lockout counters only for existing active users.
+            if user and user.is_active:
+                try:
+                    if user.last_failed_login_at:
+                        last_failed_login_at = user.last_failed_login_at
+                        if getattr(last_failed_login_at, 'tzinfo', None) is None:
+                            last_failed_login_at = last_failed_login_at.replace(tzinfo=timezone.utc)
+                        age = int((now - last_failed_login_at).total_seconds())
+                        if age > _FAILED_LOGIN_WINDOW_SECONDS:
+                            user.failed_login_count = 0
+                    user.failed_login_count = int(user.failed_login_count or 0) + 1
+                    user.last_failed_login_at = now
+                    if int(user.failed_login_count or 0) >= _LOGIN_LOCKOUT_THRESHOLD:
+                        user.locked_until = now.replace(microsecond=0) + timedelta(seconds=_LOGIN_LOCKOUT_SECONDS)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
             flash('Invalid email address or password. Please try again.', 'error')
     
     return render_template('auth/login.html', form=form, title='Sign In')
@@ -349,8 +518,26 @@ def reset_password(token):
 
     form = ResetPasswordForm()
     if form.validate_on_submit():
+        had_password = bool(user.password_hash)
         user.set_password(form.password.data)
         try:
+            # If this was the user's first password set (common for org invites),
+            # mark any pending invites as accepted.
+            if not had_password:
+                try:
+                    now = datetime.now(timezone.utc)
+                    pending_memberships = (
+                        OrganizationMembership.query
+                        .filter_by(user_id=int(user.id), is_active=True)
+                        .filter(OrganizationMembership.invited_at.isnot(None))
+                        .filter(OrganizationMembership.invite_accepted_at.is_(None))
+                        .all()
+                    )
+                    for m in pending_memberships:
+                        m.invite_accepted_at = now
+                except Exception:
+                    current_app.logger.exception('Failed to mark invite accepted')
+
             db.session.commit()
             try:
                 session.pop('pending_reset_email', None)
@@ -377,6 +564,8 @@ def oauth_login(provider):
         return redirect(url_for('auth.login'))
 
     redirect_uri = url_for('auth.oauth_callback', provider=provider, _external=True)
+    current_app.logger.info(f'[OAUTH DEBUG] Provider: {provider}, Redirect URI: {redirect_uri}')
+    print(f'[OAUTH DEBUG] Redirect URI being sent to {provider}: {redirect_uri}')
     return client.authorize_redirect(redirect_uri)
 
 
@@ -431,7 +620,18 @@ def oauth_callback(provider):
         flash('This account is disabled. Please contact support.', 'error')
         return redirect(url_for('auth.login'))
 
+    # Regenerate session to reduce session fixation risk.
+    try:
+        session.clear()
+    except Exception:
+        pass
+
     login_user(user)
+    try:
+        session['auth_time'] = int(datetime.now(timezone.utc).timestamp())
+    except Exception:
+        pass
+    _log_login_event(email=email, user=user, provider=(provider or 'oauth'), success=True)
     flash('Signed in successfully.', 'success')
     return _after_login_redirect()
 

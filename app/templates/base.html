@@ -349,14 +349,6 @@
                 <i class="bi bi-download me-1"></i>Audit Export
               </a>
             </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.user_roles' %}active{% endif %}"
-                href="{{ url_for('main.user_roles') }}"
-              >
-                <i class="bi bi-people me-1"></i>User Roles
-              </a>
-            </li>
             {% endif %}
           </ul>
 
@@ -384,6 +376,9 @@
                 <span class="navbar-user-label text-truncate d-inline-block align-middle">
                   {{ _org_name.strip() if _org_name.strip() else current_user.email }}
                 </span>
+                {% if is_org_admin_active %}
+                <span class="badge bg-primary ms-2">Admin</span>
+                {% endif %}
               </a>
               <ul class="dropdown-menu">
                 <li>
