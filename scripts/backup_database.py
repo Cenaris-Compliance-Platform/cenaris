@@ -20,6 +20,7 @@ import subprocess
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs, unquote
 from dotenv import load_dotenv
 
 # Add parent directory to path to import app modules
@@ -35,6 +36,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# The Azure SDK can be very verbose (HTTP request/response logging).
+# Default it to WARNING so backup runs are readable.
+logging.getLogger('azure').setLevel(logging.WARNING)
+logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.WARNING)
+
 
 def get_database_url():
     """Get the database URL from environment."""
@@ -44,36 +50,34 @@ def get_database_url():
     return db_url
 
 
-def parse_postgres_url(url):
-    """Parse PostgreSQL connection URL into components."""
-    # Format: postgresql://user:password@host:port/database?params
+def parse_postgres_url(url: str) -> dict:
+    """Parse PostgreSQL connection URL into components.
+
+    Uses urllib parsing so URL-encoded passwords like `%40` become `@`.
+    Also extracts sslmode so pg_dump uses TLS for Azure.
+    """
     if not url.startswith(('postgresql://', 'postgres://')):
         raise ValueError(f"Not a PostgreSQL URL: {url}")
-    
-    # Remove protocol
-    url = url.replace('postgresql://', '').replace('postgres://', '')
-    
-    # Split user:pass@host
-    if '@' not in url:
+
+    parsed = urlparse(url)
+    if not parsed.hostname or not parsed.path:
         raise ValueError("Invalid PostgreSQL URL format")
-    
-    auth, rest = url.split('@', 1)
-    username, password = auth.split(':', 1) if ':' in auth else (auth, '')
-    
-    # Split host:port/database
-    host_port, db_and_params = rest.split('/', 1)
-    host = host_port.split(':')[0]
-    port = host_port.split(':')[1] if ':' in host_port else '5432'
-    
-    # Extract database name (before ? or end)
-    database = db_and_params.split('?')[0]
-    
+
+    username = unquote(parsed.username or '')
+    password = unquote(parsed.password or '')
+    database = (parsed.path or '').lstrip('/')
+    port = str(parsed.port or 5432)
+
+    qs = parse_qs(parsed.query or '')
+    sslmode = (qs.get('sslmode', [None])[0] or '').strip() or None
+
     return {
-        'host': host,
+        'host': parsed.hostname,
         'port': port,
         'username': username,
         'password': password,
-        'database': database
+        'database': database,
+        'sslmode': sslmode,
     }
 
 
@@ -82,7 +86,9 @@ def backup_postgresql(db_config, backup_path):
     logger.info(f"Creating PostgreSQL backup: {backup_path}")
     
     env = os.environ.copy()
-    env['PGPASSWORD'] = db_config['password']
+    env['PGPASSWORD'] = db_config.get('password', '')
+    # Azure Database for PostgreSQL requires TLS; mirror `?sslmode=require`.
+    env['PGSSLMODE'] = (db_config.get('sslmode') or env.get('PGSSLMODE') or 'require')
     
     cmd = [
         'pg_dump',
