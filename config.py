@@ -29,6 +29,15 @@ class Config:
     # SQLAlchemy (Milestone 1)
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Database Connection Pooling (Production)
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 10,           # Number of connections to keep in the pool
+        'max_overflow': 20,        # Max connections beyond pool_size
+        'pool_recycle': 3600,      # Recycle connections after 1 hour
+        'pool_pre_ping': True,     # Verify connections before using them
+        'pool_timeout': 30,        # Timeout for getting a connection from pool
+    }
 
     # OAuth (Google / Microsoft)
     GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')

@@ -284,11 +284,86 @@
           margin: 1rem 0;
         }
       }
+
+      /* Cookie Consent Banner */
+      .cookie-consent {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: var(--bs-body-bg);
+        border-top: 2px solid var(--bs-primary);
+        box-shadow: 0 -0.5rem 1.5rem rgba(0, 0, 0, 0.15);
+        z-index: 1050;
+        padding: 1.25rem 0;
+        animation: slideUp 0.4s ease-out;
+      }
+
+      @keyframes slideUp {
+        from {
+          transform: translateY(100%);
+        }
+        to {
+          transform: translateY(0);
+        }
+      }
+
+      .cookie-consent h6 {
+        color: var(--bs-body-color);
+        font-size: 0.95rem;
+      }
+
+      .cookie-consent p {
+        color: var(--bs-secondary-color);
+        line-height: 1.5;
+      }
+
+      .cookie-consent a {
+        color: var(--bs-primary);
+      }
+
+      .cookie-consent a:hover {
+        color: var(--primary-dark);
+      }
+
+      [data-bs-theme="dark"] .cookie-consent {
+        background-color: var(--bs-tertiary-bg);
+        border-top-color: var(--bs-primary);
+      }
     </style>
 
     {% block extra_css %}{% endblock %}
   </head>
   <body>
+    <!-- Cookie Consent Banner -->
+    <div id="cookieConsent" class="cookie-consent" style="display: none;">
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-lg-8 col-md-7 mb-3 mb-md-0">
+            <div class="d-flex align-items-start">
+              <i class="bi bi-cookie fs-4 me-3 text-primary"></i>
+              <div>
+                <h6 class="mb-1 fw-semibold">We use cookies</h6>
+                <p class="mb-0 small">
+                  We use essential cookies to make our site work. With your consent, we may also use non-essential cookies to improve user experience and analyze website traffic. By clicking "Accept All", you agree to our website's cookie use as described in our Cookie Policy and Privacy Policy.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4 col-md-5">
+            <div class="d-flex gap-2 justify-content-md-end">
+              <button class="btn btn-sm btn-outline-secondary" id="cookieDecline">
+                <i class="bi bi-x-lg me-1"></i>Decline
+              </button>
+              <button class="btn btn-sm btn-primary" id="cookieAccept">
+                <i class="bi bi-check-lg me-1"></i>Accept All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg" data-bs-theme="{{ _theme }}">
       <div class="container">
@@ -594,6 +669,37 @@
             field.focus();
           }
         }
+      });
+
+      // Cookie Consent Banner Logic
+      document.addEventListener("DOMContentLoaded", function () {
+        const cookieConsent = document.getElementById("cookieConsent");
+        const cookieAccept = document.getElementById("cookieAccept");
+        const cookieDecline = document.getElementById("cookieDecline");
+
+        // Check if user has already made a choice
+        const cookieChoice = localStorage.getItem("cookieConsent");
+
+        if (!cookieChoice) {
+          // Show banner if no choice made yet
+          cookieConsent.style.display = "block";
+        }
+
+        // Accept cookies
+        cookieAccept.addEventListener("click", function () {
+          localStorage.setItem("cookieConsent", "accepted");
+          cookieConsent.style.display = "none";
+          // Optional: Enable analytics or other non-essential cookies here
+          console.log("Cookies accepted");
+        });
+
+        // Decline cookies
+        cookieDecline.addEventListener("click", function () {
+          localStorage.setItem("cookieConsent", "declined");
+          cookieConsent.style.display = "none";
+          // Optional: Disable non-essential cookies here
+          console.log("Cookies declined");
+        });
       });
     </script>
 

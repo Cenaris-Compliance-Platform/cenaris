@@ -250,7 +250,7 @@ def logo():
         from app.services.azure_storage_service import azure_storage_service
 
         data = logo_file.read()
-        if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type):
+        if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type, organization_id=int(org_id)):
             flash('Logo upload failed. Check Azure Storage configuration.', 'error')
             return render_template('onboarding/logo.html', title='Upload Logo', form=form, organization=organization)
 
