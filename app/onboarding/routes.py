@@ -89,7 +89,28 @@ def organization():
 
     org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
-        abort(401)
+        # New users signing in via OAuth may not have an org yet.
+        # Create a placeholder org and attach it so onboarding can continue.
+        try:
+            org = Organization(
+                name='',
+                contact_email=(getattr(current_user, 'email', '') or '').strip().lower() or None,
+            )
+            db.session.add(org)
+            db.session.flush()  # assign org.id without requiring a separate transaction
+
+            user = User.query.get(int(current_user.id))
+            if not user:
+                db.session.rollback()
+                abort(401)
+            user.organization_id = int(org.id)
+            db.session.commit()
+            org_id = int(org.id)
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Failed creating organization during onboarding')
+            flash('Unable to start onboarding. Please try again.', 'error')
+            return redirect(url_for('main.index'))
 
     organization = Organization.query.get(int(org_id))
     if not organization:
@@ -159,7 +180,7 @@ def billing():
 
     org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
-        abort(401)
+        return redirect(url_for('onboarding.organization'))
 
     organization = Organization.query.get(int(org_id))
     if not organization:

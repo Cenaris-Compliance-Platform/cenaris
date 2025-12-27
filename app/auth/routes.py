@@ -564,8 +564,8 @@ def oauth_login(provider):
         return redirect(url_for('auth.login'))
 
     redirect_uri = url_for('auth.oauth_callback', provider=provider, _external=True)
-    current_app.logger.info(f'[OAUTH DEBUG] Provider: {provider}, Redirect URI: {redirect_uri}')
-    print(f'[OAUTH DEBUG] Redirect URI being sent to {provider}: {redirect_uri}')
+    if current_app.debug:
+        current_app.logger.info('[OAUTH DEBUG] Provider=%s RedirectURI=%s', provider, redirect_uri)
     return client.authorize_redirect(redirect_uri)
 
 

@@ -25,13 +25,165 @@
               {{ form.hidden_tag() }}
 
               <div class="mb-4">
+                <style>
+                  .theme-choice {
+                    cursor: pointer;
+                    border: 2px solid var(--bs-border-color);
+                    border-radius: 1.2rem;
+                    background: var(--bs-body-bg);
+                    transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+                  }
+
+                  .theme-choice:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+                  }
+
+                  .theme-choice.is-selected {
+                    border-color: rgba(var(--bs-primary-rgb), 0.75);
+                    box-shadow: 0 0 0 0.3rem rgba(var(--bs-primary-rgb), 0.15), 0 4px 16px rgba(var(--bs-primary-rgb), 0.2);
+                  }
+
+                  .theme-preview {
+                    height: 140px;
+                    border-radius: 0.95rem;
+                    border: 1px solid rgba(0, 0, 0, 0.08);
+                    overflow: hidden;
+                    position: relative;
+                    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
+                  }
+
+                  .theme-preview .bar {
+                    height: 24px;
+                    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.22) 0%, rgba(var(--bs-primary-rgb), 0.14) 100%);
+                    display: flex;
+                    align-items: center;
+                    padding: 0 0.6rem;
+                    gap: 0.35rem;
+                  }
+
+                  .theme-preview .bar-dot {
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 50%;
+                    background: rgba(var(--bs-primary-rgb), 0.4);
+                  }
+
+                  .theme-preview .content {
+                    padding: 0.85rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                  }
+
+                  .theme-preview .card-box {
+                    background: rgba(var(--bs-primary-rgb), 0.08);
+                    border-radius: 0.5rem;
+                    padding: 0.5rem;
+                    border: 1px solid rgba(var(--bs-primary-rgb), 0.12);
+                  }
+
+                  .theme-preview .pill {
+                    height: 9px;
+                    width: 65%;
+                    border-radius: 999px;
+                    background: rgba(var(--bs-primary-rgb), 0.2);
+                    margin-bottom: 0.35rem;
+                  }
+
+                  .theme-preview .pill-short {
+                    width: 40%;
+                    opacity: 0.7;
+                  }
+
+                  .theme-preview.light {
+                    background: linear-gradient(135deg, #fafbfc 0%, #f4f5f7 100%);
+                  }
+
+                  .theme-preview.dark {
+                    background: linear-gradient(135deg, #1a1d24 0%, #0f1117 100%);
+                    color: #fff;
+                    border-color: rgba(255, 255, 255, 0.1);
+                  }
+
+                  .theme-preview.dark .bar {
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.08) 100%);
+                  }
+
+                  .theme-preview.dark .bar-dot {
+                    background: rgba(255, 255, 255, 0.3);
+                  }
+
+                  .theme-preview.dark .card-box {
+                    background: rgba(255, 255, 255, 0.06);
+                    border-color: rgba(255, 255, 255, 0.1);
+                  }
+
+                  .theme-preview.dark .pill {
+                    background: rgba(255, 255, 255, 0.16);
+                  }
+                </style>
+
                 <label class="form-label">Theme</label>
-                <div class="d-flex gap-4">
+
+                <div class="row g-3">
+                  <div class="col-12 col-md-6">
+                    <label class="theme-choice p-3 w-100" for="theme-light" data-theme-choice="light">
+                      <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="fw-semibold">Light</div>
+                        <i class="bi bi-sun fs-5"></i>
+                      </div>
+                      <div class="theme-preview light">
+                        <div class="bar">
+                          <div class="bar-dot"></div>
+                          <div class="bar-dot"></div>
+                          <div class="bar-dot"></div>
+                        </div>
+                        <div class="content">
+                          <div class="card-box">
+                            <div class="pill"></div>
+                            <div class="pill pill-short"></div>
+                          </div>
+                          <div class="card-box" style="height: 32px;"></div>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div class="col-12 col-md-6">
+                    <label class="theme-choice p-3 w-100" for="theme-dark" data-theme-choice="dark">
+                      <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="fw-semibold">Dark</div>
+                        <i class="bi bi-moon-stars fs-5"></i>
+                      </div>
+                      <div class="theme-preview dark">
+                        <div class="bar">
+                          <div class="bar-dot"></div>
+                          <div class="bar-dot"></div>
+                          <div class="bar-dot"></div>
+                        </div>
+                        <div class="content">
+                          <div class="card-box">
+                            <div class="pill"></div>
+                            <div class="pill pill-short"></div>
+                          </div>
+                          <div class="card-box" style="height: 32px;"></div>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- keep real radios for WTForms submission -->
+                <div class="d-none">
                   {% for subfield in form.theme %}
-                    <div class="form-check">
-                      {{ subfield(class="form-check-input", id=subfield.id) }}
-                      <label class="form-check-label" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
-                    </div>
+                    {% if subfield.data == 'light' %}
+                      {{ subfield(id='theme-light') }}
+                    {% elif subfield.data == 'dark' %}
+                      {{ subfield(id='theme-dark') }}
+                    {% else %}
+                      {{ subfield() }}
+                    {% endif %}
                   {% endfor %}
                 </div>
               </div>
@@ -61,15 +213,29 @@
     const form = document.getElementById('theme-form');
     if (!form) return;
 
+    const setSelectedCard = (theme) => {
+      const cards = document.querySelectorAll('[data-theme-choice]');
+      cards.forEach((c) => c.classList.toggle('is-selected', c.getAttribute('data-theme-choice') === theme));
+    };
+
+    const applyTheme = (theme) => {
+      setSelectedCard(theme);
+      document.documentElement.setAttribute('data-bs-theme', theme);
+    };
+
     const radios = form.querySelectorAll('input[type="radio"]');
     radios.forEach((r) => {
       r.addEventListener('change', () => {
         const theme = r.value;
-        document.documentElement.setAttribute('data-bs-theme', theme);
-        // Auto-submit after a short delay so the user sees the change.
-        window.setTimeout(() => form.submit(), 250);
+        applyTheme(theme);
+        // Auto-submit after a short delay so the user sees the change
+        window.setTimeout(() => form.submit(), 350);
       });
     });
+
+    // Initialize selected state from current theme / checked radio
+    const checked = form.querySelector('input[type="radio"]:checked');
+    setSelectedCard(checked ? checked.value : (document.documentElement.getAttribute('data-bs-theme') || 'light'));
   })();
 </script>
 {% endblock %}

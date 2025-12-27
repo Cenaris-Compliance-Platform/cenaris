@@ -199,7 +199,7 @@ GOOGLE_CLIENT_SECRET=...
 Add an authorized redirect URI:
 
 ```text
-https://YOUR_DOMAIN/oauth/google/callback
+https://YOUR_DOMAIN/auth/oauth/google/callback
 ```
 
 ### 8.2 Microsoft OAuth
@@ -217,7 +217,7 @@ MICROSOFT_TENANT=common
 Add a redirect URI:
 
 ```text
-https://YOUR_DOMAIN/oauth/microsoft/callback
+https://YOUR_DOMAIN/auth/oauth/microsoft/callback
 ```
 
 ---

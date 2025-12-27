@@ -33,7 +33,7 @@ class OnboardingOrganizationForm(FlaskForm):
             ('trust_partnership', 'Trust / partnership'),
         ],
         validators=[DataRequired()],
-        render_kw={'class': 'form-select form-select-lg'},
+        render_kw={'class': 'form-select minimal-select'},
     )
 
     industry = SelectField(
@@ -48,7 +48,7 @@ class OnboardingOrganizationForm(FlaskForm):
             ('other', 'Other'),
         ],
         validators=[DataRequired()],
-        render_kw={'class': 'form-select form-select-lg'},
+        render_kw={'class': 'form-select minimal-select'},
     )
 
     address = StringField(
