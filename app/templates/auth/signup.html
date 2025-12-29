@@ -12,7 +12,12 @@
                         <!-- Header -->
                         <div class="text-center mb-4">
                             <div class="mb-3">
-                                <i class="bi bi-person-plus-fill text-primary" style="font-size: 3rem;"></i>
+                                                                <img
+                                                                    src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+                                                                    alt="Cenaris"
+                                                                    class="img-fluid"
+                                                                    style="max-height: 72px;"
+                                                                />
                             </div>
                             <h1 class="h3 mb-2 fw-bold">Create Account</h1>
                             <p class="text-body-secondary">Join our secure compliance management platform</p>
@@ -210,7 +215,11 @@
                                 <div class="form-check">
                                     {{ form.accept_terms() }}
                                     <label class="form-check-label" for="{{ form.accept_terms.id }}">
-                                        I agree to the Terms of Service and Privacy Policy
+                                        I agree to the
+                                        <a href="{{ url_for('main.terms') }}" target="_blank" rel="noopener">Terms and Conditions</a>,
+                                        <a href="{{ url_for('main.privacy') }}" target="_blank" rel="noopener">Privacy Policy</a>,
+                                        and
+                                        <a href="{{ url_for('main.disclaimer') }}" target="_blank" rel="noopener">Disclaimer</a>
                                     </label>
                                 </div>
                                 {% if form.accept_terms.errors %}

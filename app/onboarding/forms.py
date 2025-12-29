@@ -93,6 +93,12 @@ class OnboardingOrganizationForm(FlaskForm):
         render_kw={'class': 'form-check-input'},
     )
 
+    accept_terms = BooleanField(
+        'I agree to the Terms and Conditions, Privacy Policy, and Disclaimer',
+        validators=[DataRequired(message='You must accept the Terms, Privacy Policy, and Disclaimer to continue.')],
+        render_kw={'class': 'form-check-input'},
+    )
+
     submit = SubmitField('Continue', render_kw={'class': 'btn btn-primary btn-lg w-100'})
 
 

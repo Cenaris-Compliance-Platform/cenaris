@@ -118,7 +118,7 @@ class RegisterForm(FlaskForm):
         Regexp(r'.*\d.*', message='Password must contain at least one number.'),
     ], render_kw={
         'class': 'form-control form-control-lg',
-        'placeholder': 'Create a password (min. 8 chars, letter + number)',
+        'placeholder': 'Min. 8 characters, letter + number',
         'autocomplete': 'new-password'
     })
     
@@ -135,8 +135,8 @@ class RegisterForm(FlaskForm):
         'class': 'btn btn-primary btn-lg w-100'
     })
 
-    accept_terms = BooleanField('I agree to the Terms of Service and Privacy Policy', validators=[
-        DataRequired(message='You must accept the terms and privacy policy to continue.')
+    accept_terms = BooleanField('I agree to the Terms and Conditions, Privacy Policy, and Disclaimer', validators=[
+        DataRequired(message='You must accept the Terms, Privacy Policy, and Disclaimer to continue.')
     ], render_kw={'class': 'form-check-input'})
     
     def validate_email(self, field):

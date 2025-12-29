@@ -7,12 +7,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Professional compliance document management system for secure document storage and management."
+      content="Cenaris is a decision-support compliance platform for managing evidence, policies, and reporting."
     />
-    <meta name="author" content="Compliance Management System" />
+    <meta name="author" content="Cenaris" />
 
     <title>
-      {% if title %}{{ title }} - {% endif %}Compliance Document Management
+      {% if title %}{{ title }} - {% endif %}Cenaris
     </title>
 
     <!-- Bootstrap 5 CSS -->
@@ -345,7 +345,7 @@
               <div>
                 <h6 class="mb-1 fw-semibold">We use cookies</h6>
                 <p class="mb-0 small">
-                  We use essential cookies to make our site work. With your consent, we may also use non-essential cookies to improve user experience and analyze website traffic. By clicking "Accept All", you agree to our website's cookie use as described in our Cookie Policy and Privacy Policy.
+                  We use essential cookies to make our site work. With your consent, we may also use non-essential cookies to improve user experience and analyze website traffic. By clicking "Accept All", you agree to our website's cookie use as described in our <a href="{{ url_for('main.privacy') }}" class="link-primary">Privacy Policy</a>.
                 </p>
               </div>
             </div>
@@ -367,9 +367,13 @@
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg" data-bs-theme="{{ _theme }}">
       <div class="container">
-        <a class="navbar-brand" href="{{ url_for('main.index') }}" title="Cenaris Compliance Management">
-          <i class="bi bi-shield-check me-2"></i>
-          CCM
+        <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.index') }}" title="Cenaris">
+          <img
+            src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+            alt="Cenaris"
+            style="height: 40px; width: auto;"
+          />
+          <span class="visually-hidden">Cenaris</span>
         </a>
 
         <button
@@ -593,11 +597,21 @@
         <div class="row">
           <div class="col-md-6">
             <p class="mb-0">
-              &copy; {{ current_year }} CCM. All rights reserved.
+              &copy; {{ current_year }} Cenaris. All rights reserved.
+            </p>
+            <p class="mb-0 small text-body-secondary">
+              Cenaris is a decision-support platform only. Cenaris does not provide auditing, certification, legal, or compliance advice, and does not guarantee compliance, registration, or audit outcomes. Users remain responsible for governance, regulatory compliance, and independent professional advice.
             </p>
           </div>
           <div class="col-md-6 text-md-end">
-            <p class="mb-0">Secure • Professional • Compliant</p>
+            <p class="mb-1">Secure • Professional • Compliant</p>
+            <p class="mb-0 small">
+              <a href="{{ url_for('main.terms') }}" class="link-secondary">Terms</a>
+              <span class="text-body-secondary">&middot;</span>
+              <a href="{{ url_for('main.privacy') }}" class="link-secondary">Privacy</a>
+              <span class="text-body-secondary">&middot;</span>
+              <a href="{{ url_for('main.disclaimer') }}" class="link-secondary">Disclaimer</a>
+            </p>
           </div>
         </div>
       </div>

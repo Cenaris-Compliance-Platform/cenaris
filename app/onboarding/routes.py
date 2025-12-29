@@ -8,10 +8,11 @@ from flask_mail import Message
 from app.onboarding import bp
 from app.onboarding.forms import OnboardingOrganizationForm, OnboardingBillingForm, OnboardingLogoForm, OnboardingThemeForm
 from app import db, mail
-from app.models import Organization, User
+from app.models import Organization, User, OrganizationMembership
 
 
 def _require_verified():
+    # Block onboarding until the account's email is verified.
     if getattr(current_user, 'email_verified', False):
         return None
     flash('Please verify your email to continue.', 'warning')
@@ -89,21 +90,30 @@ def organization():
 
     org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
-        # New users signing in via OAuth may not have an org yet.
-        # Create a placeholder org and attach it so onboarding can continue.
+        # Fallback: Create a placeholder org and membership if somehow missing
+        # (This should rarely happen now that OAuth creates orgs properly)
         try:
             org = Organization(
                 name='',
                 contact_email=(getattr(current_user, 'email', '') or '').strip().lower() or None,
             )
             db.session.add(org)
-            db.session.flush()  # assign org.id without requiring a separate transaction
+            db.session.flush()
 
             user = User.query.get(int(current_user.id))
             if not user:
                 db.session.rollback()
                 abort(401)
             user.organization_id = int(org.id)
+            
+            # Create the membership record
+            membership = OrganizationMembership(
+                organization_id=org.id,
+                user_id=user.id,
+                role='Admin',
+                is_active=True,
+            )
+            db.session.add(membership)
             db.session.commit()
             org_id = int(org.id)
         except Exception:
@@ -144,6 +154,9 @@ def organization():
         form.responsibility_ack.data = bool(getattr(organization, 'declarations_accepted_at', None))
         form.authority_to_upload_ack.data = bool(getattr(organization, 'declarations_accepted_at', None))
         form.data_processing_ack.data = bool(getattr(organization, 'data_processing_ack_at', None))
+        
+        # Pre-check terms acceptance if user already accepted (e.g., via signup form)
+        form.accept_terms.data = bool(getattr(current_user, 'terms_accepted_at', None))
 
     if form.validate_on_submit():
         try:
@@ -162,6 +175,12 @@ def organization():
             organization.declarations_accepted_by_user_id = int(current_user.id)
             organization.data_processing_ack_at = now
             organization.data_processing_ack_by_user_id = int(current_user.id)
+            
+            # Record terms acceptance if not already done (for OAuth users)
+            if not getattr(current_user, 'terms_accepted_at', None):
+                user = User.query.get(int(current_user.id))
+                user.terms_accepted_at = now
+            
             db.session.commit()
             return redirect(url_for('onboarding.billing'))
         except Exception:
@@ -185,6 +204,11 @@ def billing():
     organization = Organization.query.get(int(org_id))
     if not organization:
         abort(404)
+    
+    # Ensure organization details are complete before proceeding to billing
+    if not organization.core_details_complete():
+        flash('Please complete your organization details first.', 'info')
+        return redirect(url_for('onboarding.organization'))
 
     form = OnboardingBillingForm()
 
@@ -224,8 +248,9 @@ def logo():
     if not organization:
         return redirect(url_for('onboarding.organization'))
 
-    # Ensure core + billing details exist before allowing logo step.
-    if not organization.onboarding_complete():
+    # Ensure core organization details are complete before logo upload
+    if not organization.core_details_complete():
+        flash('Please complete your organization details first.', 'info')
         return redirect(url_for('onboarding.organization'))
 
     form = OnboardingLogoForm()
@@ -277,6 +302,15 @@ def theme():
     org_id = getattr(current_user, 'organization_id', None)
     if not org_id:
         return redirect(url_for('onboarding.organization'))
+    
+    organization = Organization.query.get(int(org_id))
+    if not organization:
+        return redirect(url_for('onboarding.organization'))
+    
+    # Ensure onboarding steps are complete before allowing theme selection
+    if not organization.onboarding_complete():
+        flash('Please complete your organization setup first.', 'info')
+        return redirect(url_for('onboarding.organization'))
 
     form = OnboardingThemeForm()
 
@@ -301,5 +335,10 @@ def theme():
         flash('Setup complete. Welcome!', 'success')
         _maybe_send_welcome_email(int(current_user.id))
         return response
+    
+    # Log validation errors for debugging
+    if request.method == 'POST' and form.errors:
+        current_app.logger.warning(f"Theme form validation failed: {form.errors}")
+        flash('Please select a theme to continue.', 'error')
 
     return render_template('onboarding/theme.html', title='Choose Theme', form=form)

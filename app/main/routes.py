@@ -12,6 +12,21 @@ from itsdangerous import URLSafeTimedSerializer
 _RESEND_ORG_INVITE_COOLDOWN_SECONDS = 60 * 5
 
 
+@bp.route('/terms')
+def terms():
+    return render_template('legal/terms.html', title='Terms and Conditions')
+
+
+@bp.route('/privacy')
+def privacy():
+    return render_template('legal/privacy.html', title='Privacy Policy')
+
+
+@bp.route('/disclaimer')
+def disclaimer():
+    return render_template('legal/disclaimer.html', title='Disclaimer')
+
+
 def _active_org_id() -> int | None:
     org_id = getattr(current_user, 'organization_id', None)
     return int(org_id) if org_id else None
@@ -753,8 +768,18 @@ def dashboard():
     )
     total_documents = Document.query.filter_by(organization_id=org_id, is_active=True).count()
     
-    # Get real ADLS data
-    ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
+    # Get real ADLS data (skip external calls during tests)
+    if current_app.config.get('TESTING'):
+        ml_summary = {
+            'avg_compliancy_rate': 0,
+            'total_files': 0,
+            'total_complete': 0,
+            'total_needs_review': 0,
+            'total_missing': 0,
+            'file_summaries': [],
+        }
+    else:
+        ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
     
     return render_template('main/dashboard.html', 
                          title='Dashboard',
@@ -802,25 +827,36 @@ def evidence_repository():
                          documents=documents)
 
 @bp.route('/document/<int:doc_id>/download')
-@login_required
 def download_document(doc_id):
     """Download a document."""
-    maybe = _require_active_org()
-    if maybe is not None:
-        return maybe
-
     from flask import send_file, abort
     from app.services.azure_storage_service import azure_storage_service
     import io
+
+    # For document downloads, do not leak existence via redirects.
+    # Return 404 for any unauthenticated/unauthorized access.
+    if not getattr(current_user, 'is_authenticated', False):
+        abort(404)
+
+    org_id = _active_org_id()
+    if not org_id:
+        abort(404)
+
+    membership = (
+        OrganizationMembership.query
+        .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+        .first()
+    )
+    if not membership:
+        abort(404)
     
     # Get document from database
     document = Document.query.get(doc_id)
     
-    # Check if document exists and belongs to user
-    org_id = _active_org_id()
-    if not document:
+    # Check if document exists and belongs to active org
+    if not document or not getattr(document, 'is_active', True):
         abort(404)
-    if document.organization_id != org_id:
+    if int(document.organization_id) != int(org_id):
         abort(404)
     
     try:

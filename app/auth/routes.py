@@ -39,8 +39,23 @@ def _get_pending_reset_email() -> str:
 
 
 def _after_login_redirect():
-    # If the user has org memberships but no active org selected, select one.
-    if not getattr(current_user, 'organization_id', None):
+    # Always verify the user has an active membership for their current org.
+    # If organization_id is set but there's no active membership, fix it.
+    org_id = getattr(current_user, 'organization_id', None)
+    
+    if org_id:
+        # Verify this org_id has an active membership
+        membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+            .first()
+        )
+        if not membership:
+            # Current org_id is invalid, clear it and find a valid one
+            org_id = None
+    
+    # If no valid org_id, find the first active membership
+    if not org_id:
         membership = (
             OrganizationMembership.query
             .filter_by(user_id=int(current_user.id), is_active=True)
@@ -53,9 +68,9 @@ def _after_login_redirect():
                 db.session.commit()
             except Exception:
                 db.session.rollback()
+            org_id = current_user.organization_id
 
-    # If onboarding not complete, force the wizard.
-    org_id = getattr(current_user, 'organization_id', None)
+    # If still no org, redirect to onboarding
     if not org_id:
         return redirect(url_for('onboarding.organization'))
 
@@ -276,7 +291,7 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
 def login():
     """User login route."""
     if current_user.is_authenticated:
-        return redirect(url_for('main.dashboard'))
+        return _after_login_redirect()
     
     form = LoginForm()
     
@@ -424,6 +439,10 @@ def signup():
             )
             db.session.add(membership)
             db.session.commit()
+            
+            # Refresh the user object to ensure all relationships are loaded
+            db.session.refresh(user)
+            db.session.refresh(organization)
 
             if _email_verification_required():
                 token = _email_verify_token(user)
@@ -607,18 +626,115 @@ def oauth_callback(provider):
 
     user = User.query.filter_by(email=email).first()
     if not user:
-        user = User(email=email, full_name=full_name, role='User', organization_id=None, email_verified=True)
-        db.session.add(user)
+        # For OAuth sign-ups, create a placeholder organization + membership,
+        # then require email verification (same as password signup).
         try:
+            name_parts = (full_name or '').split() if full_name else []
+            first_name = name_parts[0] if len(name_parts) > 0 else ''
+            last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+
+            email_domain = email.split('@')[-1] if '@' in email else ''
+            org_base = (email_domain.split('.')[0] if email_domain else 'My').strip() or 'My'
+            org_name = f"{org_base.title()} Organization"
+
+            organization = Organization(
+                name=org_name,
+                contact_email=email,
+            )
+            db.session.add(organization)
+            db.session.flush()
+
+            user = User(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                full_name=full_name,
+                role='Admin',
+                organization_id=organization.id,
+                email_verified=False,
+                terms_accepted_at=None,
+            )
+            db.session.add(user)
+            db.session.flush()
+
+            membership = OrganizationMembership(
+                organization_id=organization.id,
+                user_id=user.id,
+                role='Admin',
+                is_active=True,
+            )
+            db.session.add(membership)
             db.session.commit()
+
+            db.session.refresh(user)
+            db.session.refresh(organization)
         except Exception:
             db.session.rollback()
             flash('Failed to create your account. Please try again.', 'error')
             return redirect(url_for('auth.login'))
+    else:
+        # Legacy safety: ensure an OAuth user has an org + active membership.
+        try:
+            needs_org = not getattr(user, 'organization_id', None)
+            has_active_membership = bool(
+                OrganizationMembership.query.filter_by(user_id=int(user.id), is_active=True).first()
+            )
+
+            if needs_org or not has_active_membership:
+                organization = None
+                if getattr(user, 'organization_id', None):
+                    organization = Organization.query.get(int(user.organization_id))
+
+                if not organization:
+                    email_domain = email.split('@')[-1] if '@' in email else ''
+                    org_base = (email_domain.split('.')[0] if email_domain else 'My').strip() or 'My'
+                    organization = Organization(
+                        name=f"{org_base.title()} Organization",
+                        contact_email=email,
+                    )
+                    db.session.add(organization)
+                    db.session.flush()
+                    user.organization_id = int(organization.id)
+
+                if not has_active_membership:
+                    membership = OrganizationMembership(
+                        organization_id=int(organization.id),
+                        user_id=int(user.id),
+                        role=(user.role or 'Admin'),
+                        is_active=True,
+                    )
+                    db.session.add(membership)
+
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     if not user.is_active:
         flash('This account is disabled. Please contact support.', 'error')
         return redirect(url_for('auth.login'))
+
+    if _email_verification_required() and not getattr(user, 'email_verified', False):
+        # Avoid re-sending repeatedly within the cooldown.
+        last_sent_at = int(session.get('verify_email_last_sent_at') or 0)
+        should_send = (_now_ts() - last_sent_at) >= _RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS
+
+        if should_send:
+            token = _email_verify_token(user)
+            verify_url = url_for('auth.verify_email', token=token, _external=True)
+            try:
+                _send_email_verification_email(user, verify_url)
+            except Exception:
+                current_app.logger.exception('Failed to send verification email')
+
+            session['pending_verification_email'] = user.email
+            session['verify_email_last_sent_at'] = _now_ts()
+
+        if not _mail_configured():
+            flash('Email is required to continue. MAIL is not configured; check the server logs for the verification link.', 'warning')
+
+        _log_login_event(email=email, user=user, provider=(provider or 'oauth'), success=False, reason='email_not_verified')
+        flash('Please verify your email to continue.', 'warning')
+        return redirect(url_for('auth.verify_email_request', email=email))
 
     # Regenerate session to reduce session fixation risk.
     try:

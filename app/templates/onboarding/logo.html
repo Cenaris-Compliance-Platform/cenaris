@@ -9,16 +9,24 @@
       <div class="col-lg-6">
         <div class="card fade-in">
           <div class="card-body p-5">
+            <div class="text-center mb-3">
+              <img
+                src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+                alt="Cenaris"
+                class="img-fluid"
+                style="max-height: 64px;"
+              />
+            </div>
             <div class="mb-4">
               <div class="d-flex justify-content-between align-items-center">
-                <h1 class="h3 fw-bold mb-0">Add your logo</h1>
-                <span class="badge bg-primary">Step 2 of 3</span>
+                <h1 class="h3 fw-bold mb-0">Upload your logo</h1>
+                <span class="badge bg-primary">Step 3 of 4</span>
               </div>
-              <p class="text-body-secondary mb-0">Upload a logo, or skip for now.</p>
+              <p class="text-body-secondary mb-0">Customize your workspace with your organization's branding</p>
             </div>
 
             <div class="progress mb-4" style="height: 6px;">
-              <div class="progress-bar" style="width: 66%"></div>
+              <div class="progress-bar" style="width: 75%"></div>
             </div>
 
             {% if organization and organization.logo_blob_name %}

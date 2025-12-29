@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-10 col-xl-9">
+      <h1 class="h3 fw-bold mb-1">Cenaris – Terms and Conditions of Use</h1>
+      <p class="text-body-secondary mb-4">Last updated: 29/12/2025 · Effective for: Organisational users only (not for individual consumers)</p>
+
+      <h2 class="h5 fw-semibold">1. Acceptance of Terms</h2>
+      <p>By accessing or using the Cenaris platform ("Platform"), you agree to be bound by these Terms and Conditions. If you do not agree, you must not use the Platform.</p>
+
+      <h2 class="h5 fw-semibold">2. Nature of the Service</h2>
+      <p>Cenaris is a software-as-a-service (SaaS) platform that provides decision-support tools for organisations managing compliance with selected frameworks, including NDIS and aged care standards.</p>
+      <p class="mb-2">Cenaris does not:</p>
+      <ul>
+        <li>conduct audits or assessments,</li>
+        <li>certify compliance or issue accreditations,</li>
+        <li>provide legal, clinical, governance, or regulatory advice,</li>
+        <li>act as or represent any regulatory authority.</li>
+      </ul>
+
+      <h2 class="h5 fw-semibold">3. Trial Access and Subscriptions</h2>
+      <p>A time-limited "sandbox" trial is available without charge, subject to these Terms. Following the trial period, access requires a paid subscription under a 12-month contract term unless otherwise agreed in writing.</p>
+      <p class="mb-2"><strong>Fees and Renewal:</strong></p>
+      <ul>
+        <li>Fees are billed annually in advance (unless agreed otherwise).</li>
+        <li>Contracts automatically renew for successive 12-month periods unless cancelled at least 30 days before the end of the current term.</li>
+      </ul>
+      <p class="mb-2"><strong>Cancellation and Termination:</strong></p>
+      <ul>
+        <li>No refunds are issued for early termination of a fixed-term subscription.</li>
+        <li>Either party may terminate for breach or legal/regulatory necessity.</li>
+      </ul>
+
+      <h2 class="h5 fw-semibold">4. Privacy and Data</h2>
+      <p>Cenaris complies with the Australian Privacy Act 1988 (Cth) and the Australian Privacy Principles (APPs).</p>
+      <p class="mb-2">You acknowledge and agree that:</p>
+      <ul>
+        <li>You must have all necessary rights, consents, and lawful basis to upload and share personal and sensitive information on the Platform.</li>
+        <li>You remain the controller of all uploaded data.</li>
+        <li>All data is stored and processed in Australia (Sydney-based infrastructure).</li>
+      </ul>
+      <p>Please review our <a href="{{ url_for('main.privacy') }}">Privacy Policy</a> for more detail on data handling and security practices.</p>
+
+      <h2 class="h5 fw-semibold">5. Use Restrictions and Responsibilities</h2>
+      <p class="mb-2">You must not:</p>
+      <ul>
+        <li>use the Platform for any unlawful or unauthorised purpose,</li>
+        <li>upload malicious, defamatory, or infringing content,</li>
+        <li>reverse-engineer or interfere with the functionality or security of the Platform.</li>
+      </ul>
+      <p class="mb-2">You are responsible for:</p>
+      <ul>
+        <li>all data and documents you upload,</li>
+        <li>ensuring the accuracy, legality, and appropriateness of your data,</li>
+        <li>maintaining organisational governance and risk processes,</li>
+        <li>obtaining independent legal or professional advice where needed,</li>
+        <li>complying with all applicable Australian laws and standards.</li>
+      </ul>
+
+      <h2 class="h5 fw-semibold">6. Output Disclaimer and Limitation</h2>
+      <p class="mb-2">All Platform outputs (e.g., gap analyses, summaries, reports) are automatically generated and provided for informational purposes only. They:</p>
+      <ul>
+        <li>are indicative only,</li>
+        <li>may not identify all risks or compliance issues,</li>
+        <li>must not be treated as audit or legal findings.</li>
+      </ul>
+      <p>You remain solely responsible for decisions, actions, and interpretations based on Platform outputs.</p>
+
+      <h2 class="h5 fw-semibold">7. Data Ownership and Licence</h2>
+      <p>You retain all rights to documents and data you upload.</p>
+      <p>By using the Platform, you grant Cenaris a non-exclusive, royalty-free, limited licence to use, process, store, and analyse your data solely for the purpose of delivering the services. Cenaris does not access data for any other purpose without consent.</p>
+
+      <h2 class="h5 fw-semibold">8. Availability and Support</h2>
+      <p>Cenaris aims to provide continuous access but does not guarantee uninterrupted availability. Downtime may occur due to maintenance, updates, outages, or force majeure events.</p>
+
+      <h2 class="h5 fw-semibold">9. Security</h2>
+      <p>We implement appropriate technical and organisational measures to safeguard data. However, no system is completely secure.</p>
+      <p class="mb-2">You are responsible for:</p>
+      <ul>
+        <li>keeping your login credentials confidential,</li>
+        <li>monitoring account activity,</li>
+        <li>notifying us immediately of any suspected unauthorised use.</li>
+      </ul>
+
+      <h2 class="h5 fw-semibold">10. Third-Party Services</h2>
+      <p>Cenaris may use third-party service providers (e.g. hosting, analytics) within Australia. We are not liable for any disruption caused by third-party platforms beyond our control.</p>
+
+      <h2 class="h5 fw-semibold">11. Warranties and Disclaimers</h2>
+      <p class="mb-2">To the maximum extent permitted by law:</p>
+      <ul>
+        <li>Cenaris provides the Platform "as is" and "as available", without warranties of any kind,</li>
+        <li>No guarantee is made that the Platform is free from errors or suitable for your purposes.</li>
+      </ul>
+      <p>Nothing in these Terms excludes any rights that cannot be excluded under Australian Consumer Law.</p>
+
+      <h2 class="h5 fw-semibold">12. Limitation of Liability</h2>
+      <p class="mb-2">To the fullest extent permitted by law:</p>
+      <ul>
+        <li>Cenaris disclaims all liability for indirect, incidental, or consequential loss,</li>
+        <li>Total liability is limited to the total fees paid by you in the 12 months prior to the claim,</li>
+        <li>Cenaris is not liable for regulatory, reputational, or business consequences arising from use of the Platform.</li>
+      </ul>
+
+      <h2 class="h5 fw-semibold">13. Indemnity</h2>
+      <p class="mb-2">You agree to indemnify and hold harmless Cenaris from any claims, damages, losses, or legal costs arising from:</p>
+      <ul>
+        <li>your use of the Platform,</li>
+        <li>your data or content uploaded,</li>
+        <li>your breach of these Terms or applicable law.</li>
+      </ul>
+
+      <h2 class="h5 fw-semibold">14. Force Majeure</h2>
+      <p>Cenaris is not liable for failure to perform due to circumstances beyond its reasonable control, including but not limited to natural disasters, cyberattacks, government orders, or infrastructure failures.</p>
+
+      <h2 class="h5 fw-semibold">15. Termination</h2>
+      <p class="mb-2">We may suspend or terminate access immediately if:</p>
+      <ul>
+        <li>you breach these Terms,</li>
+        <li>your use compromises security or legality,</li>
+        <li>required by law or regulator.</li>
+      </ul>
+      <p>You may terminate your use at the end of your contract term, subject to the cancellation notice requirements in Section 3.</p>
+
+      <h2 class="h5 fw-semibold">16. Governing Law</h2>
+      <p>These Terms are governed by the laws of Victoria, Australia. You submit to the exclusive jurisdiction of Victorian courts for any dispute arising under these Terms.</p>
+
+      <p class="mt-4 text-body-secondary small">Related documents: <a href="{{ url_for('main.privacy') }}">Privacy Policy</a> · <a href="{{ url_for('main.disclaimer') }}">Disclaimer</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}
