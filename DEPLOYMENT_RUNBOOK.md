@@ -89,7 +89,8 @@ Minimum:
 
 If using Azure Storage:
 - `AZURE_STORAGE_CONNECTION_STRING=...`
-- `AZURE_CONTAINER_NAME=user-uploads` (or your container)
+- `AZURE_CONTAINER_NAME=user-uploads` (documents/PDFs)
+- `AZURE_LOGOS_CONTAINER_NAME=logos` (org logos/branding)
 
 If enabling Turnstile:
 - `TURNSTILE_SITE_KEY=...`

@@ -929,7 +929,7 @@ def evidence_repository():
 def download_document(doc_id):
     """Download a document."""
     from flask import send_file, abort
-    from app.services.azure_storage_service import azure_storage_service
+    from app.services.azure_storage import AzureBlobStorageService
     import io
 
     # For document downloads, do not leak existence via redirects.
@@ -959,8 +959,16 @@ def download_document(doc_id):
         abort(404)
     
     try:
-        # Download from Azure Blob Storage
-        blob_data = azure_storage_service.download_blob(document.blob_name)
+        storage_service = AzureBlobStorageService()
+        result = storage_service.download_file(document.blob_name)
+        if not result.get('success'):
+            if result.get('error_code') == 'FILE_NOT_FOUND':
+                abort(404)
+            abort(500)
+
+        blob_data = result.get('data')
+        if not blob_data:
+            abort(404)
         
         # Create file-like object
         file_stream = io.BytesIO(blob_data)
@@ -986,7 +994,7 @@ def delete_document(doc_id):
         return maybe
 
     from flask import flash, redirect
-    from app.services.azure_storage_service import azure_storage_service
+    from app.services.azure_storage import AzureBlobStorageService
     
     # Get document from database
     document = Document.query.get(doc_id)
@@ -1001,8 +1009,10 @@ def delete_document(doc_id):
         return redirect(url_for('main.evidence_repository'))
     
     try:
-        # Delete from Azure Blob Storage
-        azure_storage_service.delete_blob(document.blob_name)
+        storage_service = AzureBlobStorageService()
+        delete_result = storage_service.delete_file(document.blob_name)
+        if not delete_result.get('success'):
+            raise Exception(delete_result.get('error') or 'Delete failed')
         
         # Soft delete from database
         document.is_active = False
@@ -1390,14 +1400,18 @@ def profile():
 def profile_avatar():
     """Serve the current user's avatar image."""
     from flask import abort, send_file
+    from app.services.azure_storage import AzureBlobStorageService
     import io
 
     if not getattr(current_user, 'avatar_blob_name', None):
         abort(404)
 
-    from app.services.azure_storage_service import azure_storage_service
-    # Don't pass org_id for avatars (user-specific, not org-specific)
-    blob_data = azure_storage_service.download_blob(current_user.avatar_blob_name, organization_id=None)
+    storage_service = AzureBlobStorageService()
+    result = storage_service.download_file(current_user.avatar_blob_name)
+    if not result.get('success'):
+        abort(404)
+
+    blob_data = result.get('data')
     if not blob_data:
         abort(404)
 

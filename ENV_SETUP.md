@@ -6,7 +6,7 @@ If you want production working fast, do the steps in this order:
 
 1) `SECRET_KEY`
 2) Azure PostgreSQL → `DATABASE_URL`
-3) Azure Storage → `AZURE_STORAGE_CONNECTION_STRING` + `AZURE_CONTAINER_NAME`
+3) Azure Storage → `AZURE_STORAGE_CONNECTION_STRING` + `AZURE_CONTAINER_NAME` + `AZURE_LOGOS_CONTAINER_NAME`
 4) SMTP email (optional but recommended)
 5) Email verification + CAPTCHA (recommended)
 6) OAuth (optional)
@@ -21,7 +21,8 @@ Set these in your hosting provider:
 - `SECRET_KEY=...`
 - `DATABASE_URL=postgresql://...`
 - `AZURE_STORAGE_CONNECTION_STRING=...`
-- `AZURE_CONTAINER_NAME=compliance-documents`
+- `AZURE_CONTAINER_NAME=user-uploads`
+- `AZURE_LOGOS_CONTAINER_NAME=logos`
 
 Recommended security:
 
@@ -90,14 +91,15 @@ Azure Portal → Storage accounts → Create
 
 (If you need ADLS Gen2 features, enable **Hierarchical namespace**.)
 
-### 4.2 Create a container
+### 4.2 Create containers
 
 Azure Portal → Storage account → Data storage → Containers → Create
 
-Use a single container name everywhere, for example:
+This app uses separate containers by default:
 
 ```text
-AZURE_CONTAINER_NAME=compliance-documents
+AZURE_CONTAINER_NAME=user-uploads
+AZURE_LOGOS_CONTAINER_NAME=logos
 ```
 
 ### 4.3 Get the connection string

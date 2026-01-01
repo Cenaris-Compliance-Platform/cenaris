@@ -9,7 +9,8 @@ This script prints NO secrets.
 
 Usage (PowerShell):
     $Env:AZURE_STORAGE_CONNECTION_STRING = "..."
-    $Env:AZURE_CONTAINER_NAME = "compliance-documents"
+    $Env:AZURE_CONTAINER_NAME = "user-uploads"  # documents/PDFs
+    $Env:AZURE_LOGOS_CONTAINER_NAME = "logos"   # org logos/branding
     $Env:AZURE_ML_CONTAINER = "results"
     python ./check_storage_connection.py --create
 """
@@ -90,7 +91,9 @@ def _ensure_container_or_filesystem(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Check Azure Storage connection and required containers")
+    parser = argparse.ArgumentParser(
+        description="Check Azure Storage connection and required containers (documents, logos, ML results)"
+    )
     parser.add_argument("--create", action="store_true", help="Create required containers if missing")
     parser.add_argument("--documents-container", default=_env("AZURE_CONTAINER_NAME", "compliance-documents"))
     parser.add_argument("--logos-container", default=_env("AZURE_LOGOS_CONTAINER_NAME"))

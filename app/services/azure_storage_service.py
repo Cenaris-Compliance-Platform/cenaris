@@ -18,12 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 class AzureStorageService:
-    """Service to interact with Azure Blob Storage for document management."""
+    """Service to interact with Azure Blob Storage for org assets (logos, branding, etc.).
+
+    Uses AZURE_LOGOS_CONTAINER_NAME exclusively.
+    """
     
     def __init__(self):
         """Initialize the Azure Blob Storage service."""
         self.account_name = os.getenv('AZURE_STORAGE_ACCOUNT_NAME', 'cenarisprodsa')
-        self.container_name = os.getenv('AZURE_CONTAINER_NAME', 'user-uploads')
+        self.logos_container_name = os.getenv('AZURE_LOGOS_CONTAINER_NAME') or 'logos'
         
         # Initialize client
         self.blob_service_client = None
@@ -81,10 +84,10 @@ class AzureStorageService:
             else:
                 full_blob_name = blob_name
             
-            # Get blob client
+            # Upload org assets to the logos container
             blob_client = self.blob_service_client.get_blob_client(
-                container=self.container_name,
-                blob=full_blob_name
+                container=self.logos_container_name,
+                blob=full_blob_name,
             )
             
             # Upload with content type
@@ -99,7 +102,7 @@ class AzureStorageService:
                 content_settings=content_settings
             )
             
-            logger.info(f"Successfully uploaded blob: {full_blob_name}")
+            logger.info(f"Successfully uploaded blob: {self.logos_container_name}/{full_blob_name}")
             return True
             
         except Exception as e:
@@ -126,22 +129,21 @@ class AzureStorageService:
             if organization_id and not blob_name.startswith('org_'):
                 blob_name = self._get_org_folder(organization_id) + blob_name
             
-            # Get blob client
             blob_client = self.blob_service_client.get_blob_client(
-                container=self.container_name,
-                blob=blob_name
+                container=self.logos_container_name,
+                blob=blob_name,
             )
-            
-            # Download blob
+
             download_stream = blob_client.download_blob()
             data = download_stream.readall()
-            
-            logger.info(f"Successfully downloaded blob: {blob_name}")
+
+            logger.info(f"Successfully downloaded blob: {self.logos_container_name}/{blob_name}")
             return data
-            
+
         except ResourceNotFoundError:
-            logger.error(f"Blob not found: {blob_name}")
+            logger.error(f"Blob not found: {self.logos_container_name}/{blob_name}")
             return None
+            
         except Exception as e:
             logger.error(f"Error downloading blob {blob_name}: {e}")
             return None
@@ -166,21 +168,20 @@ class AzureStorageService:
             if organization_id and not blob_name.startswith('org_'):
                 blob_name = self._get_org_folder(organization_id) + blob_name
             
-            # Get blob client
             blob_client = self.blob_service_client.get_blob_client(
-                container=self.container_name,
-                blob=blob_name
+                container=self.logos_container_name,
+                blob=blob_name,
             )
-            
-            # Delete blob
+
             blob_client.delete_blob()
-            
-            logger.info(f"Successfully deleted blob: {blob_name}")
+
+            logger.info(f"Successfully deleted blob: {self.logos_container_name}/{blob_name}")
             return True
-            
+
         except ResourceNotFoundError:
-            logger.warning(f"Blob not found (already deleted?): {blob_name}")
+            logger.warning(f"Blob not found (already deleted?): {self.logos_container_name}/{blob_name}")
             return True  # Consider it successful if already gone
+            
         except Exception as e:
             logger.error(f"Error deleting blob {blob_name}: {e}")
             return False
@@ -205,10 +206,10 @@ class AzureStorageService:
                 blob_name = self._get_org_folder(organization_id) + blob_name
             
             blob_client = self.blob_service_client.get_blob_client(
-                container=self.container_name,
-                blob=blob_name
+                container=self.logos_container_name,
+                blob=blob_name,
             )
-            
+
             return blob_client.exists()
             
         except Exception as e:
