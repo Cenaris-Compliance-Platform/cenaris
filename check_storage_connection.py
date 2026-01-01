@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+    #!/usr/bin/env python3
 """Quick Azure Storage connectivity + container check.
 
 - Uses AZURE_STORAGE_CONNECTION_STRING from environment.

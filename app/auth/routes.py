@@ -290,7 +290,14 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
 @limiter.limit('100 per hour')
 def login():
     """User login route."""
+    # If user is already logged in, check if they want to switch accounts
     if current_user.is_authenticated:
+        # If 'force_logout' param is present, logout first to allow account switching
+        if request.args.get('force_logout') == '1':
+            logout_user()
+            session.clear()
+            flash('You have been logged out. Please sign in with a different account.', 'info')
+            return redirect(url_for('auth.login'))
         return _after_login_redirect()
     
     form = LoginForm()
@@ -345,6 +352,8 @@ def login():
             login_user(user, remember=form.remember_me.data)
             try:
                 session['auth_time'] = int(now.timestamp())
+                session['session_version'] = getattr(user, 'session_version', 1)
+                session['last_activity_time'] = now.timestamp()
             except Exception:
                 pass
             _clear_ip_failures_on_success(now)
@@ -385,7 +394,14 @@ def login():
 @bp.route('/signup', methods=['GET', 'POST'])
 def signup():
     """User registration route (generic), followed by onboarding wizard."""
+    # If user is already logged in, check if they want to switch accounts
     if current_user.is_authenticated:
+        # If 'force_logout' param is present, logout first to allow account switching
+        if request.args.get('force_logout') == '1':
+            logout_user()
+            session.clear()
+            flash('You have been logged out. Please create a new account.', 'info')
+            return redirect(url_for('auth.signup'))
         return _after_login_redirect()
     
     form = RegisterForm()
@@ -574,7 +590,14 @@ def reset_password(token):
 
 @bp.route('/oauth/<provider>')
 def oauth_login(provider):
+    # If user is already logged in, check if they want to switch accounts
     if current_user.is_authenticated:
+        # If 'force_logout' param is present, logout first to allow OAuth account switching
+        if request.args.get('force_logout') == '1':
+            logout_user()
+            session.clear()
+            flash('You have been logged out. Please sign in with a different account.', 'info')
+            return redirect(url_for('auth.oauth_authorize', provider=provider))
         return _after_login_redirect()
 
     client = oauth.create_client(provider)
@@ -623,6 +646,7 @@ def oauth_callback(provider):
         return redirect(url_for('auth.login'))
 
     full_name = (userinfo.get('name') if isinstance(userinfo, dict) else None) or None
+    picture_url = (userinfo.get('picture') if isinstance(userinfo, dict) else None) or None
 
     user = User.query.filter_by(email=email).first()
     if not user:
@@ -651,7 +675,7 @@ def oauth_callback(provider):
                 full_name=full_name,
                 role='Admin',
                 organization_id=organization.id,
-                email_verified=False,
+                email_verified=True,
                 terms_accepted_at=None,
             )
             db.session.add(user)
@@ -743,8 +767,43 @@ def oauth_callback(provider):
         pass
 
     login_user(user)
+    # Treat a successful OAuth sign-in as an accepted invite for any invited memberships.
+    # Also update last_login_at so the user is not misclassified as "pending" elsewhere.
     try:
-        session['auth_time'] = int(datetime.now(timezone.utc).timestamp())
+        now = datetime.now(timezone.utc)
+        user.last_login_at = now
+        user.failed_login_count = 0
+        user.last_failed_login_at = None
+        user.locked_until = None
+
+        pending_memberships = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(user.id), is_active=True)
+            .filter(OrganizationMembership.invited_at.isnot(None))
+            .filter(OrganizationMembership.invite_accepted_at.is_(None))
+            .filter(OrganizationMembership.invite_revoked_at.is_(None))
+            .all()
+        )
+        for m in pending_memberships:
+            m.invite_accepted_at = now
+
+        db.session.commit()
+        try:
+            _clear_ip_failures_on_success(now)
+        except Exception:
+            pass
+    except Exception:
+        db.session.rollback()
+    try:
+        now_ts = datetime.now(timezone.utc).timestamp()
+        session['auth_time'] = int(now_ts)
+        session['session_version'] = getattr(user, 'session_version', 1)
+        session['last_activity_time'] = now_ts
+        # Store OAuth profile picture URL (Google provides `picture`).
+        # This is only used for display on the profile page (not as a branding/logo).
+        if picture_url and isinstance(picture_url, str):
+            session['oauth_profile_picture_url'] = picture_url
+            session['oauth_provider'] = provider
     except Exception:
         pass
     _log_login_event(email=email, user=user, provider=(provider or 'oauth'), success=True)
@@ -842,5 +901,30 @@ def logout():
     """User logout route."""
     if current_user.is_authenticated:
         logout_user()
+        session.clear()
         flash('You have been successfully signed out.', 'info')
     return redirect(url_for('main.index'))
+
+
+@bp.route('/logout-all-devices', methods=['POST'])
+@limiter.limit('5 per minute')
+def logout_all_devices():
+    """Logout from all devices by incrementing session_version."""
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login'))
+    
+    try:
+        # Increment session version - invalidates all other sessions
+        current_user.session_version = int(getattr(current_user, 'session_version', 1)) + 1
+        db.session.commit()
+        
+        # Logout current session
+        logout_user()
+        session.clear()
+        
+        flash('You have been logged out from all devices. Please sign in again.', 'success')
+    except Exception:
+        db.session.rollback()
+        flash('Failed to logout from all devices. Please try again.', 'error')
+    
+    return redirect(url_for('auth.login'))

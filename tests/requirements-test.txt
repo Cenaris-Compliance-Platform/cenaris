@@ -1,0 +1,9 @@
+# Testing Dependencies
+pytest==7.4.3
+selenium==4.15.2
+webdriver-manager==4.0.1
+Faker==20.1.0
+Pillow==10.1.0
+requests==2.31.0
+pytest-html==4.1.1
+pytest-xdist==3.5.0

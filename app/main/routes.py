@@ -90,8 +90,71 @@ def _send_invite_email(user: User, reset_url: str, organization: Organization) -
 
 def _is_pending_org_invite(membership: OrganizationMembership, user: User) -> bool:
     # In this app, org "invites" create an inactive-password user and an org membership.
-    # We treat any membership for a user with no password as a "pending invite".
-    return bool(membership and membership.is_active and user and not bool(user.password_hash))
+    # A "pending invite" is specifically a membership that was invited (invited_at set),
+    # has not been accepted yet, and the user still has no password set.
+    # OAuth users may not have a password_hash, so we must not treat them as pending unless
+    # the membership is actually invite-tracked.
+    return bool(
+        membership
+        and membership.is_active
+        and user
+        and membership.invited_at is not None
+        and membership.invite_accepted_at is None
+        and membership.invite_revoked_at is None
+        and not bool(user.password_hash)
+    )
+
+
+def _update_organization_logo(organization: Organization, logo_file) -> tuple[bool, str]:
+    """
+    Unified logo upload handler for both onboarding and settings.
+    Deletes old logo before uploading new one to prevent orphaned files.
+    
+    Args:
+        organization: Organization object to update
+        logo_file: FileStorage object from form
+        
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    import uuid
+    from app.services.azure_storage_service import azure_storage_service
+    
+    if not logo_file or not getattr(logo_file, 'filename', ''):
+        return False, 'No logo file selected'
+    
+    # Validate file extension
+    ext = (logo_file.filename.rsplit('.', 1)[-1] or '').lower()
+    safe_ext = ext if ext in {'png', 'jpg', 'jpeg', 'webp'} else 'png'
+    
+    # Generate new blob name
+    unique = uuid.uuid4().hex
+    new_blob_name = f"organizations/{organization.id}/branding/logo_{unique}.{safe_ext}"
+    content_type = getattr(logo_file, 'mimetype', None)
+    
+    # Delete old logo if exists (prevents orphaned files)
+    if organization.logo_blob_name:
+        try:
+            old_blob = organization.logo_blob_name
+            # Remove org prefix if it's already in the blob name
+            if old_blob.startswith('org_'):
+                old_blob = old_blob[len(f'org_{organization.id}/'):]
+            azure_storage_service.delete_blob(old_blob, organization_id=int(organization.id))
+            current_app.logger.info(f'Deleted old logo: {organization.logo_blob_name}')
+        except Exception as e:
+            current_app.logger.warning(f'Could not delete old logo {organization.logo_blob_name}: {e}')
+            # Continue anyway - old logo deletion failure shouldn't block new upload
+    
+    # Upload new logo
+    data = logo_file.read()
+    if not azure_storage_service.upload_blob(new_blob_name, data, content_type=content_type, organization_id=int(organization.id)):
+        return False, 'Logo upload failed. Check Azure Storage configuration.'
+    
+    # Update organization record
+    organization.logo_blob_name = new_blob_name
+    organization.logo_content_type = content_type
+    
+    return True, 'Logo uploaded successfully'
 
 
 @bp.route('/org/switch', methods=['POST'])
@@ -147,6 +210,20 @@ def org_admin_dashboard():
 
     pending_invites = [m for m in members if _is_pending_org_invite(m, m.user)]
 
+    # Used to determine whether the current user (if admin) can remove their own membership.
+    active_admin_count = sum(
+        1
+        for m in members
+        if bool(m.is_active) and ((m.role or '').strip().lower() == 'admin')
+    )
+    current_membership = next((m for m in members if int(m.user_id) == int(current_user.id)), None)
+    current_is_active_admin = bool(
+        current_membership
+        and current_membership.is_active
+        and ((current_membership.role or '').strip().lower() == 'admin')
+    )
+    can_current_user_leave_org = (not current_is_active_admin) or (active_admin_count > 1)
+
     user_count = sum(1 for m in members if bool(m.is_active))
     document_count = Document.query.filter_by(organization_id=int(org_id), is_active=True).count()
 
@@ -166,10 +243,12 @@ def org_admin_dashboard():
 
     return render_template(
         'main/org_admin_dashboard.html',
-        title='Org Admin Dashboard',
+        title='Team Management',
         organization=organization,
         members=members,
         pending_invites=pending_invites,
+        active_admin_count=active_admin_count,
+        can_current_user_leave_org=can_current_user_leave_org,
         user_count=user_count,
         document_count=document_count,
         invite_form=invite_form,
@@ -593,6 +672,11 @@ def org_admin_revoke_invite():
         flash('Invite not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
+    # Guard: never allow an admin to revoke themselves via the invite flow.
+    if int(membership.user_id) == int(current_user.id):
+        flash('You cannot revoke your own access.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
     user = User.query.get(int(membership.user_id)) if membership else None
     if not _is_pending_org_invite(membership, user):
         flash('That invite is no longer pending.', 'info')
@@ -639,10 +723,6 @@ def org_admin_remove_member():
         flash('Membership not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    if int(membership.user_id) == int(current_user.id):
-        flash('You cannot remove your own access.', 'error')
-        return redirect(url_for('main.org_admin_dashboard'))
-
     # Guard: do not remove the last active admin.
     is_admin = (membership.role or '').strip().lower() == 'admin'
     if is_admin and membership.is_active:
@@ -653,8 +733,21 @@ def org_admin_remove_member():
             .count()
         )
         if active_admins <= 1:
-            flash('You cannot remove the last admin for this organization.', 'error')
+            flash('Cannot remove the last admin. Promote another member to admin first.', 'error')
             return redirect(url_for('main.org_admin_dashboard'))
+
+    # Allow self-removal only when there is another active admin (if the user is an admin).
+    if int(membership.user_id) == int(current_user.id):
+        if is_admin and membership.is_active:
+            active_admins = (
+                OrganizationMembership.query
+                .filter_by(organization_id=int(org_id), is_active=True)
+                .filter(OrganizationMembership.role.ilike('admin'))
+                .count()
+            )
+            if active_admins <= 1:
+                flash('You are the only admin. Promote another admin before leaving the organization.', 'error')
+                return redirect(url_for('main.org_admin_dashboard'))
 
     try:
         membership.is_active = False
@@ -747,7 +840,13 @@ def get_mock_ml_summary():
 @bp.route('/')
 def index():
     """Home page route."""
+    # If user is logged in and explicitly wants to switch accounts, show option
     if current_user.is_authenticated:
+        # Check if user wants to see login/signup options (for account switching)
+        if request.args.get('switch_account') == '1':
+            flash('You are currently logged in. To switch accounts, please logout first.', 'info')
+            # Don't auto-redirect, show home page with logout option
+            return render_template('main/index.html', title='Home', show_logout=True)
         return redirect(url_for('main.dashboard'))
     return render_template('main/index.html', title='Home')
 
@@ -979,7 +1078,6 @@ def ai_evidence():
 def organization_settings():
     from flask import abort, flash, make_response, request
     from app.main.forms import OrganizationBillingForm, OrganizationProfileSettingsForm
-    import uuid
 
     maybe = _require_org_admin()
     if maybe is not None:
@@ -1008,16 +1106,9 @@ def organization_settings():
 
                 logo_file = profile_form.logo.data
                 if logo_file and getattr(logo_file, 'filename', ''):
-                    ext = (logo_file.filename.rsplit('.', 1)[-1] or '').lower()
-                    safe_ext = ext if ext in {'png', 'jpg', 'jpeg', 'webp'} else 'png'
-                    unique = uuid.uuid4().hex
-                    blob_name = f"organizations/{organization.id}/branding/logo_{unique}.{safe_ext}"
-                    content_type = getattr(logo_file, 'mimetype', None)
-
-                    from app.services.azure_storage_service import azure_storage_service
-                    data = logo_file.read()
-                    if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type):
-                        flash('Logo upload failed. Check Azure Storage configuration.', 'error')
+                    success, message = _update_organization_logo(organization, logo_file)
+                    if not success:
+                        flash(message, 'error')
                         return render_template(
                             'main/organization_settings.html',
                             title='Organization Settings',
@@ -1025,9 +1116,6 @@ def organization_settings():
                             billing_form=billing_form,
                             organization=organization,
                         )
-
-                    organization.logo_blob_name = blob_name
-                    organization.logo_content_type = content_type
 
                 try:
                     db.session.commit()
@@ -1054,7 +1142,7 @@ def organization_settings():
 
     return render_template(
         'main/organization_settings.html',
-        title='Organization Settings',
+        title='Organization Profile',
         profile_form=profile_form,
         billing_form=billing_form,
         organization=organization,
@@ -1075,7 +1163,8 @@ def organization_logo():
         abort(404)
 
     from app.services.azure_storage_service import azure_storage_service
-    blob_data = azure_storage_service.download_blob(organization.logo_blob_name)
+    # Pass org_id to ensure correct path (org_X/ prefix)
+    blob_data = azure_storage_service.download_blob(organization.logo_blob_name, organization_id=int(org_id))
     if not blob_data:
         abort(404)
 
@@ -1086,6 +1175,41 @@ def organization_logo():
         mimetype=organization.logo_content_type or 'application/octet-stream',
         as_attachment=False,
         download_name='logo'
+    )
+
+@bp.route('/organization/<int:org_id>/logo')
+@login_required
+def organization_logo_by_id(org_id):
+    """Serve logo for any organization the user is a member of."""
+    from flask import abort, send_file
+    import io
+
+    # Check user has access to this org
+    membership = (
+        OrganizationMembership.query
+        .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+        .first()
+    )
+    if not membership:
+        abort(404)
+
+    organization = Organization.query.get(int(org_id))
+    if not organization or not organization.logo_blob_name:
+        abort(404)
+
+    from app.services.azure_storage_service import azure_storage_service
+    # Pass org_id to ensure correct path (org_X/ prefix)
+    blob_data = azure_storage_service.download_blob(organization.logo_blob_name, organization_id=int(org_id))
+    if not blob_data:
+        abort(404)
+
+    file_stream = io.BytesIO(blob_data)
+    file_stream.seek(0)
+    return send_file(
+        file_stream,
+        mimetype=organization.logo_content_type or 'application/octet-stream',
+        as_attachment=False,
+        download_name=f'{organization.name}_logo'
     )
 
 @bp.route('/ai-evidence/<int:entry_id>')
@@ -1253,32 +1377,12 @@ def help():
 @login_required
 def profile():
     """User profile route."""
-    from flask import flash
-    from app.main.forms import UserAvatarForm
+    if request.method == 'POST':
+        # User avatars are intentionally disabled; org logo is the single branding image.
+        flash('Profile photos are disabled. Use the organization logo instead.', 'info')
+        return redirect(url_for('main.profile'))
 
-    form = UserAvatarForm()
-    if form.validate_on_submit():
-        avatar_file = form.avatar.data
-        if avatar_file and getattr(avatar_file, 'filename', ''):
-            from uuid import uuid4
-            ext = (avatar_file.filename.rsplit('.', 1)[-1] or '').lower()
-            safe_ext = ext if ext in {'png', 'jpg', 'jpeg', 'webp'} else 'png'
-            unique = uuid4().hex
-            blob_name = f"users/{current_user.id}/avatar_{unique}.{safe_ext}"
-            content_type = getattr(avatar_file, 'mimetype', None)
-            data = avatar_file.read()
-
-            from app.services.azure_storage_service import azure_storage_service
-            if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type):
-                flash('Profile photo upload failed. Check Azure Storage configuration.', 'error')
-            else:
-                current_user.avatar_blob_name = blob_name
-                current_user.avatar_content_type = content_type
-                db.session.commit()
-                flash('Profile photo updated.', 'success')
-                return redirect(url_for('main.profile'))
-
-    return render_template('main/profile.html', title='My Profile', form=form)
+    return render_template('main/profile.html', title='My Profile')
 
 
 @bp.route('/profile/avatar')
@@ -1292,7 +1396,8 @@ def profile_avatar():
         abort(404)
 
     from app.services.azure_storage_service import azure_storage_service
-    blob_data = azure_storage_service.download_blob(current_user.avatar_blob_name)
+    # Don't pass org_id for avatars (user-specific, not org-specific)
+    blob_data = azure_storage_service.download_blob(current_user.avatar_blob_name, organization_id=None)
     if not blob_data:
         abort(404)
 

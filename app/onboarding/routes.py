@@ -261,33 +261,37 @@ def logo():
     if form.validate_on_submit():
         logo_file = form.logo.data
         if not logo_file or not getattr(logo_file, 'filename', ''):
+            flash('No logo file selected. You can skip this step or upload a logo.', 'info')
             return redirect(url_for('onboarding.theme'))
 
-        ext = (logo_file.filename.rsplit('.', 1)[-1] or '').lower()
-        safe_ext = ext if ext in {'png', 'jpg', 'jpeg', 'webp'} else 'png'
-
-        import uuid
-
-        unique = uuid.uuid4().hex
-        blob_name = f"organizations/{organization.id}/branding/logo_{unique}.{safe_ext}"
-        content_type = getattr(logo_file, 'mimetype', None)
-
-        from app.services.azure_storage_service import azure_storage_service
-
-        data = logo_file.read()
-        if not azure_storage_service.upload_blob(blob_name, data, content_type=content_type, organization_id=int(org_id)):
-            flash('Logo upload failed. Check Azure Storage configuration.', 'error')
+        # Use unified logo upload function from main routes
+        from app.main.routes import _update_organization_logo
+        success, message = _update_organization_logo(organization, logo_file)
+        
+        if not success:
+            flash(message, 'error')
             return render_template('onboarding/logo.html', title='Upload Logo', form=form, organization=organization)
-
-        organization.logo_blob_name = blob_name
-        organization.logo_content_type = content_type
 
         try:
             db.session.commit()
+            # Refresh the organization object to ensure logo is in session
+            db.session.refresh(organization)
+            flash(message, 'success')
             return redirect(url_for('onboarding.theme'))
-        except Exception:
+        except Exception as e:
             db.session.rollback()
+            # Log the actual error for debugging
+            import logging
+            logging.error(f"Failed to save logo during onboarding: {e}")
             flash('Failed to save logo. Please try again.', 'error')
+            return render_template('onboarding/logo.html', title='Upload Logo', form=form, organization=organization)
+    elif request.method == 'POST':
+        # Form validation failed - show errors
+        if form.logo.errors:
+            for error in form.logo.errors:
+                flash(f'Logo upload error: {error}', 'error')
+        else:
+            flash('Please check the form and try again.', 'error')
 
     return render_template('onboarding/logo.html', title='Upload Logo', form=form, organization=organization)
 

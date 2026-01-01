@@ -6,11 +6,13 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h1 class="h2 fw-bold mb-1">Organization Settings</h1>
-          <p class="text-body-secondary mb-0">Update your organization details and branding</p>
+          <h1 class="h2 fw-bold mb-1"><i class="bi bi-building me-2"></i>Organization Profile</h1>
+          <p class="text-body-secondary mb-0">Manage your organization details, logo, and billing information</p>
         </div>
         <div class="d-none d-md-block">
-          <i class="bi bi-building text-primary" style="font-size: 2.5rem"></i>
+          <a href="{{ url_for('main.org_admin_dashboard') }}" class="btn btn-outline-primary">
+            <i class="bi bi-people me-2"></i>Team Management
+          </a>
         </div>
       </div>
     </div>

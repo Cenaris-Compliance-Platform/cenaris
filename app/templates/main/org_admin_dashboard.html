@@ -4,12 +4,12 @@
 <div class="container py-4">
   <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
     <div>
-      <h1 class="h3 fw-bold mb-1">Org Admin Dashboard</h1>
-      <p class="text-body-secondary mb-0">Overview for {{ organization.name }}</p>
+      <h1 class="h3 fw-bold mb-1"><i class="bi bi-people me-2"></i>Team Management</h1>
+      <p class="text-body-secondary mb-0">Manage users and permissions for {{ organization.name }}</p>
     </div>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-primary" href="{{ url_for('main.organization_settings') }}">
-        <i class="bi bi-gear me-2"></i>Organization Settings
+        <i class="bi bi-building me-2"></i>Organization Profile
       </a>
     </div>
   </div>
@@ -110,11 +110,11 @@
                 <span class="text-body-secondary">{{ member_count }} {% if member_count == 1 %}member{% else %}members{% endif %}</span>
               </td>
               <td class="text-end">
-                <div class="dropdown">
+                <div class="dropdown" style="position: static;">
                   <button class="btn btn-sm btn-link text-body-secondary p-0" type="button" data-bs-toggle="dropdown" aria-label="Department actions">
                     <i class="bi bi-three-dots-vertical"></i>
                   </button>
-                  <ul class="dropdown-menu dropdown-menu-end">
+                  <ul class="dropdown-menu dropdown-menu-end" style="position: absolute;">
                     <li>
                       <a class="dropdown-item dept-edit-link" href="#" data-dept-id="{{ dept.id }}" data-dept-name="{{ dept.name }}" data-dept-color="{{ dept.color }}">
                         <i class="bi bi-pencil me-2"></i>Edit
@@ -438,6 +438,10 @@
               return;
             }
 
+            const originalText = saveBtn.textContent;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+
             const fd = new FormData();
             fd.append('csrf_token', csrfToken);
             fd.append('name', name);
@@ -451,27 +455,56 @@
               .then((r) => r.json().then((j) => ({ ok: r.ok, json: j })))
               .then(({ ok, json }) => {
                 if (!ok || !json?.success) {
-                  if (hiddenName) hiddenName.value = name;
-                  if (hiddenColor) hiddenColor.value = color;
-                  if (deptSelect) deptSelect.value = '';
+                  alert(json?.error || 'Failed to create department');
                   return;
                 }
 
                 const dept = json.department;
                 if (dept?.id) {
-                  // Reload page to show new department in the list
-                  window.location.reload();
+                  // Add to dropdown immediately (no reload!)
+                  if (deptSelect) {
+                    const opt = document.createElement('option');
+                    opt.value = dept.id;
+                    opt.textContent = dept.name;
+                    deptSelect.appendChild(opt);
+                    deptSelect.value = dept.id;
+                  }
+
+                  // Add to departments table dynamically
+                  const tbody = document.querySelector('.card-body table tbody');
+                  if (tbody && json.created) {
+                    const colorClass = dept.color || 'primary';
+                    const newRow = document.createElement('tr');
+                    newRow.setAttribute('data-dept-id', dept.id);
+                    newRow.innerHTML = `
+                      <td><span class="d-inline-block rounded-circle bg-${colorClass}" style="width: 18px; height: 18px;"></span></td>
+                      <td>${dept.name}</td>
+                      <td><span class="text-body-secondary">0 members</span></td>
+                      <td class="text-end">
+                        <div class="dropdown" style="position: static;">
+                          <button class="btn btn-sm btn-link text-body-secondary p-0" type="button" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
+                          <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item dept-edit-link" href="#" data-dept-id="${dept.id}" data-dept-name="${dept.name}" data-dept-color="${dept.color}"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger dept-delete-link" href="#" data-dept-id="${dept.id}" data-dept-name="${dept.name}"><i class="bi bi-trash me-2"></i>Delete</a></li>
+                          </ul>
+                        </div>
+                      </td>
+                    `;
+                    tbody.appendChild(newRow);
+                  }
                 }
 
                 if (hiddenName) hiddenName.value = '';
                 if (hiddenColor) hiddenColor.value = 'primary';
               })
-              .catch(() => {
-                if (hiddenName) hiddenName.value = name;
-                if (hiddenColor) hiddenColor.value = color;
-                if (deptSelect) deptSelect.value = '';
+              .catch((err) => {
+                console.error('Department creation error:', err);
+                alert('Network error. Please try again.');
               })
               .finally(() => {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save';
                 const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
                 modal.hide();
               });
@@ -580,64 +613,8 @@
       })();
     </script>
 
-    {% if pending_invites and pending_invites|length > 0 %}
-    <div class="card-body pt-0">
-      <div class="alert alert-info mb-3">
-        <strong>Pending invitations</strong> are users who have been added but haven’t set a password yet.
-      </div>
-      <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Invited</th>
-              <th>Last sent</th>
-              <th>Sends</th>
-              <th class="text-end">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for m in pending_invites %}
-            <tr>
-              <td>{{ m.user.email }}</td>
-              <td>{{ m.role }}</td>
-              <td>
-                {% if m.invited_at %}
-                  {{ m.invited_at|datetime_format('%b %d, %Y') }}
-                {% else %}
-                  <span class="text-body-secondary">—</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if m.invite_last_sent_at %}
-                  {{ m.invite_last_sent_at|datetime_format('%b %d, %Y %I:%M %p') }}
-                {% else %}
-                  <span class="text-body-secondary">—</span>
-                {% endif %}
-              </td>
-              <td>{{ m.invite_send_count or 0 }}</td>
-              <td class="text-end">
-                <form method="post" action="{{ url_for('main.org_admin_resend_invite') }}" class="d-inline">
-                  {{ pending_invite_resend_form.csrf_token }}
-                  {{ pending_invite_resend_form.membership_id(value=m.id) }}
-                  {{ pending_invite_resend_form.submit() }}
-                </form>
-                <form method="post" action="{{ url_for('main.org_admin_revoke_invite') }}" class="d-inline">
-                  {{ pending_invite_revoke_form.csrf_token }}
-                  {{ pending_invite_revoke_form.membership_id(value=m.id) }}
-                  {{ pending_invite_revoke_form.submit() }}
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    {% endif %}
-
     <div class="card-body p-0">
+      {% set _pending_ids = pending_invites|map(attribute='id')|list %}
       <div class="table-responsive">
         <table class="table table-hover mb-0">
           <thead>
@@ -645,14 +622,19 @@
               <th class="px-3">Email</th>
               <th>Role</th>
               <th>Department</th>
-              <th>Active</th>
+              <th>Status</th>
               <th class="text-end px-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for m in members %}
             <tr>
-              <td class="px-3">{{ m.user.email }}</td>
+              <td class="px-3">
+                {{ m.user.email }}
+                {% if m.user.full_name %}
+                <div class="text-body-secondary small">{{ m.user.full_name }}</div>
+                {% endif %}
+              </td>
               <td>{{ m.role }}</td>
               <td>
                 {% if m.department %}
@@ -662,22 +644,80 @@
                 {% endif %}
               </td>
               <td>
-                {% if m.is_active %}
-                <span class="badge bg-success">Yes</span>
+                {% if m.id in _pending_ids %}
+                  <span class="badge bg-warning text-dark">
+                    <i class="bi bi-hourglass-split me-1"></i>Pending invite
+                  </span>
+                {% elif m.invite_revoked_at %}
+                  <span class="badge bg-danger">
+                    <i class="bi bi-x-circle me-1"></i>Revoked
+                  </span>
+                {% elif m.is_active %}
+                  <span class="badge bg-success">
+                    <i class="bi bi-check-circle me-1"></i>Active
+                  </span>
                 {% else %}
-                <span class="badge bg-secondary">No</span>
+                  <span class="badge bg-secondary">Inactive</span>
                 {% endif %}
               </td>
               <td class="text-end px-3">
-                {% if m.is_active and m.user.id != current_user.id %}
-                <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Are you sure you want to remove this member from the organization?');">
-                  {{ member_action_form.csrf_token }}
-                  {{ member_action_form.membership_id(value=m.id) }}
-                  {{ member_action_form.submit() }}
-                </form>
-                {% else %}
-                <span class="text-body-secondary small">—</span>
-                {% endif %}
+                <div class="dropdown" style="position: static;">
+                  <button class="btn btn-sm btn-link text-body-secondary p-0" type="button" data-bs-toggle="dropdown" aria-label="Actions">
+                    <i class="bi bi-three-dots-vertical"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end" style="position: absolute;">
+                    {% if m.id in _pending_ids %}
+                      <li>
+                        <form method="post" action="{{ url_for('main.org_admin_resend_invite') }}" class="d-inline">
+                          {{ pending_invite_resend_form.csrf_token }}
+                          {{ pending_invite_resend_form.membership_id(value=m.id) }}
+                          <button type="submit" class="dropdown-item">
+                            <i class="bi bi-envelope me-2"></i>Resend invite
+                          </button>
+                        </form>
+                      </li>
+                      <li>
+                        <form method="post" action="{{ url_for('main.org_admin_revoke_invite') }}" class="d-inline" onsubmit="return confirm('Revoke this invite?');">
+                          {{ pending_invite_revoke_form.csrf_token }}
+                          {{ pending_invite_revoke_form.membership_id(value=m.id) }}
+                          <button type="submit" class="dropdown-item text-danger">
+                            <i class="bi bi-x-circle me-2"></i>Revoke invite
+                          </button>
+                        </form>
+                      </li>
+                    {% elif m.is_active and (m.user.id != current_user.id) %}
+                      <li>
+                        <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Remove this member from the organization?');">
+                          {{ member_action_form.csrf_token }}
+                          {{ member_action_form.membership_id(value=m.id) }}
+                          <button type="submit" class="dropdown-item text-danger">
+                            <i class="bi bi-person-dash me-2"></i>Remove member
+                          </button>
+                        </form>
+                      </li>
+                    {% elif m.is_active and (m.user.id == current_user.id) %}
+                      {% if can_current_user_leave_org %}
+                        <li>
+                          <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Leave this organization? You will lose access to its data.');">
+                            {{ member_action_form.csrf_token }}
+                            {{ member_action_form.membership_id(value=m.id) }}
+                            <button type="submit" class="dropdown-item text-danger">
+                              <i class="bi bi-box-arrow-right me-2"></i>Leave organization
+                            </button>
+                          </form>
+                        </li>
+                      {% else %}
+                        <li>
+                          <span class="dropdown-item text-body-secondary disabled">
+                            You are the only admin
+                          </span>
+                        </li>
+                      {% endif %}
+                    {% else %}
+                      <li><span class="dropdown-item text-body-secondary disabled">No actions available</span></li>
+                    {% endif %}
+                  </ul>
+                </div>
               </td>
             </tr>
             {% endfor %}

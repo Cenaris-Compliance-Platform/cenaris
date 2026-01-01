@@ -130,9 +130,11 @@ class User(UserMixin, db.Model):
 
     # Security: login tracking / lockout
     last_login_at = db.Column(db.DateTime, nullable=True)
+    password_changed_at = db.Column(db.DateTime, nullable=True)
     last_failed_login_at = db.Column(db.DateTime, nullable=True)
     failed_login_count = db.Column(db.Integer, default=0, nullable=False)
     locked_until = db.Column(db.DateTime, nullable=True)
+    session_version = db.Column(db.Integer, default=1, nullable=False)  # For logout-all-devices
 
     memberships = db.relationship('OrganizationMembership', backref='user', lazy='dynamic', cascade='all, delete-orphan')
 

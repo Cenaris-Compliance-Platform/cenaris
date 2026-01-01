@@ -133,17 +133,50 @@ def create_app(config_name=None):
     login_manager.needs_refresh_message_category = 'info'
 
     @app.before_request
-    def _force_logout_on_password_change():
+    def _check_session_security():
+        """Check session inactivity timeout, version, and password changes."""
         try:
             from flask_login import current_user, logout_user
             from flask import session, url_for, flash
             from datetime import datetime, timezone, timedelta
             from app.models import User
-            import sys
+            import time
 
             if not getattr(current_user, 'is_authenticated', False):
                 return None
+            
+            # 1. Check session inactivity timeout (30 minutes)
+            last_activity = session.get('last_activity_time')
+            now_ts = time.time()
+            
+            if last_activity:
+                inactive_seconds = now_ts - last_activity
+                if inactive_seconds > 1800:  # 30 minutes
+                    logout_user()
+                    try:
+                        session.clear()
+                    except Exception:
+                        pass
+                    flash('Your session expired due to inactivity. Please sign in again.', 'info')
+                    return redirect(url_for('auth.login'))
+            
+            # Update last activity timestamp
+            session['last_activity_time'] = now_ts
+            
+            # 2. Check session version (for logout-all-devices)
+            user_session_version = session.get('session_version')
+            if user_session_version is not None:
+                db_session_version = getattr(current_user, 'session_version', 1)
+                if user_session_version != db_session_version:
+                    logout_user()
+                    try:
+                        session.clear()
+                    except Exception:
+                        pass
+                    flash('You have been logged out from all devices. Please sign in again.', 'info')
+                    return redirect(url_for('auth.login'))
 
+            # 3. Check password change timestamp (force logout if changed)
             # Query fresh user from DB to get latest password_changed_at
             # (current_user proxy may have stale data)
             from app import db
@@ -190,6 +223,30 @@ def create_app(config_name=None):
             return None
 
         return None
+    
+    @app.after_request
+    def add_security_headers(response):
+        """Add security headers to all responses."""
+        # Prevent MIME type sniffing
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        
+        # Prevent clickjacking
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        
+        # Enable XSS protection in browsers
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        
+        # Enforce HTTPS (only in production)
+        if not app.debug:
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        
+        # Referrer policy
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        
+        # Permissions policy (disable dangerous features)
+        response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+        
+        return response
     
     # Register blueprints
     from app.auth import bp as auth_bp
@@ -250,7 +307,7 @@ def create_app(config_name=None):
             if not getattr(current_user, 'is_authenticated', False):
                 return {}
 
-            from app.models import Organization, OrganizationMembership
+            from app.models import Organization, OrganizationMembership, Department
 
             orgs = (
                 Organization.query
@@ -260,17 +317,41 @@ def create_app(config_name=None):
                 .all()
             )
 
+            # Build org data with logo info for switcher
+            org_data = []
+            for org in orgs:
+                org_data.append({
+                    'id': org.id,
+                    'name': org.name,
+                    'has_logo': bool(org.logo_blob_name),
+                })
+
             active_org_id = getattr(current_user, 'organization_id', None)
             is_org_admin_active = False
+            user_departments = []
+            
             if active_org_id:
                 try:
+                    # Refresh organization data to show logo updates immediately
+                    from app import db
+                    db.session.expire_all()
                     is_org_admin_active = bool(current_user.is_org_admin(int(active_org_id)))
+                    # Load departments for admins to populate invite modal
+                    if is_org_admin_active:
+                        user_departments = (
+                            Department.query
+                            .filter_by(organization_id=int(active_org_id))
+                            .order_by(Department.name.asc())
+                            .all()
+                        )
                 except Exception:
                     is_org_admin_active = False
 
             return {
                 'user_organizations': orgs,
+                'user_organizations_with_logos': org_data,
                 'is_org_admin_active': is_org_admin_active,
+                'user_departments': user_departments,
             }
         except Exception:
             return {}

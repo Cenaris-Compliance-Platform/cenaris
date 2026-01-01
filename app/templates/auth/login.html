@@ -21,6 +21,16 @@
                             </div>
                             <h1 class="h3 mb-2 fw-bold">Welcome Back</h1>
                             <p class="text-body-secondary">Sign in to your compliance management account</p>
+                            
+                            {% if current_user.is_authenticated %}
+                            <div class="alert alert-info mt-3 d-flex align-items-center" role="alert">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <div class="text-start flex-grow-1">
+                                    <small>You are already signed in as <strong>{{ current_user.email }}</strong>. 
+                                    <a href="{{ url_for('auth.login', force_logout=1) }}" class="alert-link">Click here</a> to sign in with a different account.</small>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                         
                         <!-- Login Form -->
@@ -29,10 +39,10 @@
 
                             <!-- SSO Buttons -->
                             <div class="d-grid gap-2 mb-4">
-                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google') }}">
+                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='google') }}">
                                     <i class="bi bi-google me-2"></i>Continue with Google
                                 </a>
-                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft') }}">
+                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='microsoft') }}">
                                     <i class="bi bi-microsoft me-2"></i>Continue with Microsoft
                                 </a>
                             </div>

@@ -59,13 +59,13 @@ class AzureStorageService:
     
     def upload_blob(self, blob_name: str, data: bytes, content_type: str = None, organization_id: int = None) -> bool:
         """
-        Upload a blob to Azure Storage in organization-specific folder.
+        Upload a blob to Azure Storage.
         
         Args:
             blob_name: Name of the blob (without organization prefix)
             data: Binary data to upload
             content_type: MIME type of the content
-            organization_id: Organization ID for folder isolation (required)
+            organization_id: Organization ID for folder isolation (optional; required for org assets)
             
         Returns:
             True if successful, False otherwise
@@ -75,12 +75,11 @@ class AzureStorageService:
                 logger.error("Blob service client not initialized")
                 return False
             
-            if organization_id is None:
-                logger.error("organization_id is required for upload")
-                return False
-            
-            # Prepend organization folder to blob name
-            full_blob_name = self._get_org_folder(organization_id) + blob_name
+            # Prepend organization folder to blob name if org_id provided
+            if organization_id is not None:
+                full_blob_name = self._get_org_folder(organization_id) + blob_name
+            else:
+                full_blob_name = blob_name
             
             # Get blob client
             blob_client = self.blob_service_client.get_blob_client(

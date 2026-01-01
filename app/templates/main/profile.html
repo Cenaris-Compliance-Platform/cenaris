@@ -7,7 +7,7 @@
       <div class="d-flex justify-content-between align-items-center">
         <div>
           <h1 class="h2 fw-bold mb-1">My Profile</h1>
-          <p class="text-body-secondary mb-0">Update your profile photo</p>
+          <p class="text-body-secondary mb-0">View your account details</p>
         </div>
         <div class="d-none d-md-block">
           <i class="bi bi-person-circle text-primary" style="font-size: 2.5rem"></i>
@@ -21,27 +21,33 @@
       <div class="card">
         <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
-            <i class="bi bi-image me-2 text-primary"></i>Profile Photo
+            <i class="bi bi-person-badge me-2 text-primary"></i>Account
           </h5>
         </div>
         <div class="card-body">
           <div class="d-flex align-items-center gap-3 mb-4">
-            {% if current_user.avatar_blob_name %}
-            <img
-              src="{{ url_for('main.profile_avatar') }}"
-              alt="Profile photo"
-              class="rounded-circle"
-              style="width: 72px; height: 72px; object-fit: cover; border: 1px solid var(--bs-border-color);"
-            />
-            {% else %}
-            <div
-              class="rounded-circle d-inline-flex align-items-center justify-content-center"
-              style="width: 72px; height: 72px; border: 1px solid var(--bs-border-color); background: var(--bs-tertiary-bg);"
-              aria-label="No profile photo"
-            >
-              <i class="bi bi-person" style="font-size: 2rem"></i>
+            <div id="profilePhotoContainer">
+              {% set _oauth_photo = session.get('oauth_profile_picture_url') %}
+              {% if _oauth_photo %}
+              <img
+                id="profilePhotoImg"
+                src="{{ _oauth_photo }}"
+                alt="Profile photo"
+                class="rounded-circle"
+                style="width: 72px; height: 72px; object-fit: cover; border: 1px solid var(--bs-border-color);"
+                referrerpolicy="no-referrer"
+              />
+              {% else %}
+              <div
+                id="profilePhotoPlaceholder"
+                class="rounded-circle d-inline-flex align-items-center justify-content-center"
+                style="width: 72px; height: 72px; border: 1px solid var(--bs-border-color); background: var(--bs-tertiary-bg);"
+                aria-label="No profile photo"
+              >
+                <i class="bi bi-person" style="font-size: 2rem"></i>
+              </div>
+              {% endif %}
             </div>
-            {% endif %}
 
             <div class="flex-grow-1">
               <div class="fw-semibold">{{ current_user.email }}</div>
@@ -51,20 +57,37 @@
             </div>
           </div>
 
-          <form method="post" enctype="multipart/form-data">
-            {{ form.hidden_tag() }}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="1" id="toggleProfilePhoto" checked>
+            <label class="form-check-label" for="toggleProfilePhoto">
+              Show my Google profile photo on this page
+            </label>
+            <div class="form-text">This photo is only shown on My Profile and is pulled from your Google sign-in.</div>
+          </div>
 
-            <div class="mb-3">
-              {{ form.avatar.label(class_="form-label") }}
-              {{ form.avatar() }}
-              {% for error in form.avatar.errors %}
-              <div class="text-danger small mt-1">{{ error }}</div>
-              {% endfor %}
-              <div class="form-text">PNG, JPG, or WEBP</div>
-            </div>
+          <script>
+            (function () {
+              const key = 'cenaris_show_profile_photo';
+              const checkbox = document.getElementById('toggleProfilePhoto');
+              const img = document.getElementById('profilePhotoImg');
+              const placeholder = document.getElementById('profilePhotoPlaceholder');
 
-            {{ form.submit() }}
-          </form>
+              if (!checkbox) return;
+
+              const stored = window.localStorage.getItem(key);
+              if (stored === '0') checkbox.checked = false;
+
+              const apply = () => {
+                const show = checkbox.checked;
+                if (img) img.style.display = show ? '' : 'none';
+                if (placeholder) placeholder.style.display = show ? '' : 'none';
+                window.localStorage.setItem(key, show ? '1' : '0');
+              };
+
+              checkbox.addEventListener('change', apply);
+              apply();
+            })();
+          </script>
         </div>
       </div>
     </div>

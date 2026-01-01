@@ -249,6 +249,69 @@
         color: transparent !important;
       }
 
+      /* Floating add user button */
+      .floating-add-user {
+        position: fixed;
+        bottom: 24px;
+        left: 24px;
+        z-index: 1000;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background-color: var(--bs-primary);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 24px;
+        animation: floatIn 0.5s ease-out;
+      }
+
+      @keyframes floatIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px) scale(0.8);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .floating-add-user:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        background-color: var(--primary-dark);
+      }
+
+      .floating-add-user:active {
+        transform: scale(0.95);
+      }
+
+      [data-bs-theme="dark"] .floating-add-user {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      }
+
+      /* Smooth modal appearance */
+      .modal.show .modal-dialog {
+        animation: modalSlideIn 0.3s ease-out;
+      }
+
+      @keyframes modalSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-50px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
       .btn.loading::after {
         content: "";
         position: absolute;
@@ -368,8 +431,9 @@
     <nav class="navbar navbar-expand-lg" data-bs-theme="{{ _theme }}">
       <div class="container">
         <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.index') }}" title="Cenaris">
+          {% set _brand_logo = 'images/logo_white.png' if _theme == 'dark' else 'images/Logo_NoBackground.png' %}
           <img
-            src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+            src="{{ url_for('static', filename=_brand_logo) }}"
             alt="Cenaris"
             style="height: 40px; width: auto;"
           />
@@ -441,17 +505,18 @@
                 role="button"
                 data-bs-toggle="dropdown"
               >
-                {% if current_user.avatar_blob_name %}
+                {% set _org_name = ((current_user.organization.name if current_user.organization else '') or '') %}
+                {% set _has_org_logo = current_user.organization and current_user.organization.logo_blob_name %}
+                {% if _has_org_logo %}
                 <img
-                  src="{{ url_for('main.profile_avatar') }}"
-                  alt="Profile photo"
-                  class="rounded-circle me-2"
-                  style="width: 24px; height: 24px; object-fit: cover; border: 1px solid var(--bs-border-color);"
+                  src="{{ url_for('main.organization_logo') }}"
+                  alt="{{ _org_name }} logo"
+                  class="rounded me-2"
+                  style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
                 />
                 {% else %}
-                <i class="bi bi-person-circle me-1"></i>
+                <i class="bi bi-building text-body-secondary me-2" style="font-size: 20px;"></i>
                 {% endif %}
-                {% set _org_name = ((current_user.organization.name if current_user.organization else '') or '') %}
                 <span class="navbar-user-label text-truncate d-inline-block align-middle">
                   {{ _org_name.strip() if _org_name.strip() else current_user.email }}
                 </span>
@@ -469,15 +534,25 @@
                 {% if user_organizations and (user_organizations|length) > 1 %}
                 <li><hr class="dropdown-divider" /></li>
                 <li class="px-3 py-1 text-body-secondary small">Switch organization</li>
-                {% for org in user_organizations %}
+                {% for org_info in user_organizations_with_logos %}
                 <li>
                   <form method="POST" action="{{ url_for('main.switch_organization') }}" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                    <input type="hidden" name="organization_id" value="{{ org.id }}" />
-                    <button type="submit" class="dropdown-item d-flex align-items-center justify-content-between">
-                      <span class="text-truncate" style="max-width: 240px;">{{ org.name }}</span>
-                      {% if current_user.organization_id == org.id %}
-                      <i class="bi bi-check2"></i>
+                    <input type="hidden" name="organization_id" value="{{ org_info.id }}" />
+                    <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
+                      {% if org_info.has_logo %}
+                      <img
+                        src="{{ url_for('main.organization_logo_by_id', org_id=org_info.id) }}"
+                        alt="{{ org_info.name }} logo"
+                        class="rounded"
+                        style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
+                      />
+                      {% else %}
+                      <i class="bi bi-building text-body-secondary" style="width: 24px; text-align: center;"></i>
+                      {% endif %}
+                      <span class="text-truncate flex-grow-1" style="max-width: 200px;">{{ org_info.name }}</span>
+                      {% if current_user.organization_id == org_info.id %}
+                      <i class="bi bi-check2 ms-auto"></i>
                       {% endif %}
                     </button>
                   </form>
@@ -489,12 +564,12 @@
                 <li><hr class="dropdown-divider" /></li>
                 <li>
                   <a class="dropdown-item" href="{{ url_for('main.org_admin_dashboard') }}">
-                    <i class="bi bi-speedometer me-2"></i>Org Admin Dashboard
+                    <i class="bi bi-people me-2"></i>Team Management
                   </a>
                 </li>
                 <li>
                   <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
-                    <i class="bi bi-gear me-2"></i>Organization Settings
+                    <i class="bi bi-building me-2"></i>Organization Profile
                   </a>
                 </li>
                 {% endif %}
@@ -592,7 +667,7 @@
     </main>
 
     <!-- Footer -->
-    <footer class="footer mt-auto py-4">
+    <footer class="footer mt-5 py-4" style="border-top: 2px solid var(--bs-border-color); background-color: var(--bs-tertiary-bg);">
       <div class="container">
         <div class="row">
           <div class="col-md-6">
@@ -718,5 +793,92 @@
     </script>
 
     {% block extra_js %}{% endblock %}
+
+    <!-- Floating Add User Button (only for org admins, exclude auth/onboarding pages) -->
+    {% if current_user.is_authenticated and is_org_admin_active and request.endpoint and not request.endpoint.startswith('auth.') and not request.endpoint.startswith('onboarding.') %}
+    <button 
+      class="floating-add-user" 
+      data-bs-toggle="modal" 
+      data-bs-target="#inviteUserModal"
+      title="Invite team member"
+      aria-label="Invite team member"
+    >
+      <i class="bi bi-person-plus-fill"></i>
+    </button>
+
+    <!-- Invite User Modal -->
+    <div class="modal fade" id="inviteUserModal" tabindex="-1" aria-labelledby="inviteUserModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="inviteUserModalLabel">
+              <i class="bi bi-person-plus me-2"></i>Invite Team Member
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="POST" action="{{ url_for('main.org_admin_invite_member') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <div class="modal-body">
+              <div class="mb-3">
+                <label for="inviteEmail" class="form-label">Email Address</label>
+                <input 
+                  type="email" 
+                  class="form-control" 
+                  id="inviteEmail" 
+                  name="email" 
+                  placeholder="colleague@example.com"
+                  required
+                />
+                <div class="form-text">
+                  An invitation email will be sent to this address.
+                </div>
+              </div>
+              
+              <div class="mb-3">
+                <label for="inviteRole" class="form-label">Role</label>
+                <select class="form-select" id="inviteRole" name="role" required>
+                  <option value="User">Member</option>
+                  <option value="Admin">Admin</option>
+                </select>
+                <div class="form-text">
+                  Admins can manage team members and organization settings.
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="inviteDepartment" class="form-label">Department (Optional)</label>
+                <div class="input-group">
+                  <select class="form-select" id="inviteDepartment" name="department_id">
+                    <option value="">No department</option>
+                    {% if user_departments %}
+                      {% for dept in user_departments %}
+                        <option value="{{ dept.id }}">{{ dept.name }}</option>
+                      {% endfor %}
+                    {% endif %}
+                  </select>
+                  <a 
+                    href="{{ url_for('main.org_admin_dashboard') }}" 
+                    class="btn btn-outline-secondary" 
+                    title="Manage departments"
+                  >
+                    <i class="bi bi-gear"></i>
+                  </a>
+                </div>
+                <div class="form-text">
+                  Need to create a department? Click the gear icon to go to Team Management.
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-send me-2"></i>Send Invitation
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </body>
 </html>
