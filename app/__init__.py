@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from config import config
 import os
+import logging
 
 import click
 
@@ -14,6 +15,37 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 login_manager = LoginManager()
+
+logger = logging.getLogger(__name__)
+
+
+def _maybe_enable_system_cert_store() -> None:
+    """Use OS certificate store when available.
+
+    On some Windows networks (corporate proxy / TLS inspection), Requests may fail
+    to reach OAuth providers because the intercepting root CA is only installed
+    in the Windows certificate store. The optional `truststore` package allows
+    Python's ssl module to trust the system store.
+    """
+    if os.name != 'nt':
+        return
+
+    # Make this explicitly opt-in so local dev can toggle depending on network.
+    flag = (os.environ.get('TRUSTSTORE_ENABLE') or '0').strip().lower()
+    if flag not in {'1', 'true', 'yes', 'on'}:
+        return
+
+    try:
+        import truststore  # type: ignore
+
+        truststore.inject_into_ssl()
+        logger.info('Enabled system certificate store via truststore')
+    except Exception:
+        # Optional dependency; ignore if unavailable.
+        return
+
+
+_maybe_enable_system_cert_store()
 
 # Database (Milestone 1)
 db = SQLAlchemy()

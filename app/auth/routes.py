@@ -605,10 +605,44 @@ def oauth_login(provider):
         flash(f'{provider.title()} sign-in is not configured yet.', 'error')
         return redirect(url_for('auth.login'))
 
+    # Work around TLS/proxy issues on some Windows networks by forcing TLS 1.2
+    # for Google endpoints (metadata + token exchange).
+    if (provider or '').lower() == 'google':
+        try:
+            from app.auth.oauth_transport import apply_google_tls12_workaround
+
+            apply_google_tls12_workaround(client)
+        except Exception:
+            pass
+
     redirect_uri = url_for('auth.oauth_callback', provider=provider, _external=True)
     if current_app.debug:
         current_app.logger.info('[OAUTH DEBUG] Provider=%s RedirectURI=%s', provider, redirect_uri)
-    return client.authorize_redirect(redirect_uri)
+    try:
+        return client.authorize_redirect(redirect_uri)
+    except Exception as e:
+        # Most common local failure: TLS inspection / proxy / blocked outbound.
+        try:
+            import requests  # type: ignore
+
+            ssl_error = getattr(requests.exceptions, 'SSLError', None)
+            conn_error = getattr(requests.exceptions, 'ConnectionError', None)
+            if (ssl_error and isinstance(e, ssl_error)) or (conn_error and isinstance(e, conn_error)):
+                current_app.logger.exception('OAuth authorize_redirect failed due to network/SSL error')
+                flash(
+                    'Google sign-in failed due to an SSL/TLS or network error reaching Google. '
+                    'This is usually caused by a proxy/firewall/antivirus HTTPS scanning. '
+                    'Try a different network (mobile hotspot) or disable HTTPS inspection. '
+                    'If needed, set OAUTH_FORCE_TLS12=1 (default) and restart the app.',
+                    'error',
+                )
+                return redirect(url_for('auth.login'))
+        except Exception:
+            pass
+
+        current_app.logger.exception('OAuth authorize_redirect failed')
+        flash('OAuth sign-in failed. Please try again.', 'error')
+        return redirect(url_for('auth.login'))
 
 
 @bp.route('/oauth/<provider>/callback')
@@ -621,7 +655,29 @@ def oauth_callback(provider):
         flash(f'{provider.title()} sign-in is not configured yet.', 'error')
         return redirect(url_for('auth.login'))
 
-    token = client.authorize_access_token()
+    try:
+        token = client.authorize_access_token()
+    except Exception as e:
+        # Most common local failure: TLS interception / proxy / missing certs on Windows.
+        try:
+            import requests  # type: ignore
+
+            if isinstance(e, getattr(requests.exceptions, 'SSLError', Exception)):
+                current_app.logger.exception('OAuth token exchange failed due to SSL/TLS error')
+                flash(
+                    'OAuth sign-in failed due to an SSL/TLS connection error. '
+                    'This is usually a network/proxy or certificate issue. '
+                    'If you are on Windows/corporate network, install `truststore` and restart, '
+                    'or try a different network (e.g., home hotspot).',
+                    'error',
+                )
+                return redirect(url_for('auth.login'))
+        except Exception:
+            pass
+
+        current_app.logger.exception('OAuth token exchange failed')
+        flash('OAuth sign-in failed. Please try again.', 'error')
+        return redirect(url_for('auth.login'))
     userinfo = None
 
     # Prefer ID token claims when present.
