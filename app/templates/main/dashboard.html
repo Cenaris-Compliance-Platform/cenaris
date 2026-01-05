@@ -129,7 +129,7 @@
             </div>
             <h6 class="fw-bold mb-3">Upload Your Compliance Documents</h6>
             <p class="text-body-secondary mb-4">
-              Securely upload PDF and DOCX files to your compliance repository.
+              Securely upload PDF, DOC, and DOCX files to your compliance repository.
               All files are encrypted and stored in Azure Blob Storage.
             </p>
 
@@ -152,7 +152,7 @@
                   class="form-control form-control-lg"
                   id="fileInput"
                   name="file"
-                  accept=".pdf,.docx"
+                  accept=".pdf,.doc,.docx"
                   required
                 />
               </div>
@@ -173,7 +173,7 @@
             <div class="mt-3">
               <small class="text-body-secondary">
                 <i class="bi bi-info-circle me-1"></i>
-                Supported formats: PDF, DOCX • Maximum file size: 16MB
+                Supported formats: PDF, DOC, DOCX • Maximum file size: 16MB
               </small>
             </div>
           </div>
@@ -232,7 +232,7 @@
                   </div>
                   <small class="text-body-secondary">
                     {{ document.uploaded_at | datetime_format('%b %d, %Y at
-                    %I:%M %p') }} • {{ current_user.email.split('@')[0] }}
+                    %I:%M %p') }} • {{ document.uploader.display_name() if document.uploader else 'Unknown' }}
                   </small>
                 </div>
               </div>
@@ -357,61 +357,6 @@
   </div>
   {% endif %}
 
-  <!-- Quick Actions -->
-  <div class="row">
-    <div class="col-12">
-      <div class="card border-0 shadow">
-        <div class="card-header bg-body-tertiary border-bottom">
-          <h5 class="card-title mb-0">
-            <i class="bi bi-lightning me-2 text-primary"></i>Quick Actions
-          </h5>
-        </div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-6 col-lg-3">
-              <a
-                href="{{ url_for('main.evidence_repository') }}"
-                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3"
-              >
-                <i
-                  class="bi bi-folder2-open mb-2"
-                  style="font-size: 1.5rem"
-                ></i>
-                <span>Evidence Repository</span>
-              </a>
-            </div>
-            <div class="col-md-6 col-lg-3">
-              <a
-                href="{{ url_for('main.adls_connection') }}"
-                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
-              >
-                <i class="bi bi-cloud mb-2" style="font-size: 1.5rem"></i>
-                <span>ADLS Connection</span>
-              </a>
-            </div>
-            <div class="col-md-6 col-lg-3">
-              <a
-                href="{{ url_for('main.gap_analysis') }}"
-                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
-              >
-                <i class="bi bi-graph-up mb-2" style="font-size: 1.5rem"></i>
-                <span>Gap Analysis</span>
-              </a>
-            </div>
-            <div class="col-md-6 col-lg-3">
-              <a
-                href="{{ url_for('main.audit_export') }}"
-                class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3 text-decoration-none"
-              >
-                <i class="bi bi-download mb-2" style="font-size: 1.5rem"></i>
-                <span>Audit Export</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %} {% block extra_js %}
 <script>
@@ -422,6 +367,7 @@
       const maxSize = 16 * 1024 * 1024; // 16MB
       const allowedTypes = [
         "application/pdf",
+        "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ];
 
@@ -432,7 +378,7 @@
       }
 
       if (!allowedTypes.includes(file.type)) {
-        alert("Only PDF and DOCX files are allowed");
+        alert("Only PDF, DOC, and DOCX files are allowed");
         this.value = "";
         return;
       }

@@ -4,7 +4,7 @@ from werkzeug.utils import secure_filename
 from app.upload import bp
 from app.services.azure_storage import AzureBlobStorageService
 from app.services.file_validation import FileValidationService
-from app.models import Document, Organization
+from app.models import Document, Organization, OrganizationMembership
 from app import db
 from datetime import datetime, timezone
 import logging
@@ -19,6 +19,15 @@ def upload_file():
         org_id = getattr(current_user, 'organization_id', None)
         if not org_id:
             flash('Please select an organization before uploading.', 'info')
+            return redirect(url_for('onboarding.organization'))
+
+        membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+            .first()
+        )
+        if not membership:
+            flash('You do not have access to that organization.', 'error')
             return redirect(url_for('onboarding.organization'))
 
         organization = Organization.query.get(int(org_id))

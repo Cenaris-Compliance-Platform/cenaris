@@ -49,7 +49,7 @@ class AzureDataLakeService:
             logger.error(f"Failed to initialize Azure Data Lake client: {e}")
             self.service_client = None
     
-    def get_compliance_files(self, user_id: int = None) -> List[Dict]:
+    def get_compliance_files(self, user_id: int = None, organization_id: int = None) -> List[Dict]:
         """Get list of compliance result files from ADLS."""
         try:
             if not self.service_client:
@@ -59,37 +59,52 @@ class AzureDataLakeService:
             # Connect to your actual ADLS
             file_system_client = self.service_client.get_file_system_client(self.container_name)
             
-            # Build path for specific user if provided
-            search_path = self.results_path
+            from datetime import datetime
+            year = datetime.now().year
+            month = datetime.now().month
+
+            # Prefer org-scoped paths when org_id is known; fall back to legacy per-user path.
+            search_paths: list[str] = []
+            if user_id and organization_id:
+                org_id_int = int(organization_id)
+                user_id_int = int(user_id)
+                search_paths.append(f"{self.results_path}/{year}/{month:02d}/org_{org_id_int}/user_{user_id_int}")
+                search_paths.append(f"{self.results_path}/{year}/{month:02d}/organizations/{org_id_int}/user_{user_id_int}")
+
             if user_id:
-                # Search in user-specific path: compliance-results/2025/11/user_X/
-                from datetime import datetime
-                year = datetime.now().year
-                month = datetime.now().month
-                search_path = f"{self.results_path}/{year}/{month:02d}/user_{user_id}"
-            
-            # List files in compliance-results path
-            files = []
-            paths = file_system_client.get_paths(path=search_path)
-            
-            for path in paths:
-                if not path.is_directory and (path.name.endswith('.csv') or path.name.endswith('.json')):
-                    file_name = os.path.basename(path.name)
-                    
-                    # Determine framework from filename
-                    framework = 'Multiple Frameworks'
-                    if 'summary' in file_name.lower():
-                        framework = 'Compliance Summary'
-                    
-                    files.append({
-                        'file_name': file_name,
-                        'file_path': path.name,
-                        'last_modified': path.last_modified,
-                        'file_size': path.content_length or 0,
-                        'framework': framework
-                    })
-            
-            logger.info(f"Found {len(files)} compliance files in ADLS at {search_path}")
+                search_paths.append(f"{self.results_path}/{year}/{month:02d}/user_{int(user_id)}")
+            else:
+                search_paths.append(self.results_path)
+
+            files_by_path: dict[str, Dict] = {}
+            for search_path in search_paths:
+                try:
+                    paths = file_system_client.get_paths(path=search_path)
+                except Exception:
+                    continue
+
+                for path in paths:
+                    if not path.is_directory and (path.name.endswith('.csv') or path.name.endswith('.json')):
+                        file_name = os.path.basename(path.name)
+
+                        framework = 'Multiple Frameworks'
+                        if 'summary' in file_name.lower():
+                            framework = 'Compliance Summary'
+
+                        files_by_path[path.name] = {
+                            'file_name': file_name,
+                            'file_path': path.name,
+                            'last_modified': path.last_modified,
+                            'file_size': path.content_length or 0,
+                            'framework': framework,
+                        }
+
+                # If we found anything in the preferred path, stop early.
+                if files_by_path and (user_id and organization_id):
+                    break
+
+            files = list(files_by_path.values())
+            logger.info(f"Found {len(files)} compliance files in ADLS (searched: {search_paths})")
             return files
             
         except Exception as e:
@@ -264,10 +279,10 @@ class AzureDataLakeService:
             'frameworks': frameworks
         }
     
-    def get_dashboard_summary(self, user_id: int = None) -> Dict:
+    def get_dashboard_summary(self, user_id: int = None, organization_id: int = None) -> Dict:
         """Get overall dashboard summary from ADLS compliance files."""
         try:
-            files = self.get_compliance_files(user_id)
+            files = self.get_compliance_files(user_id, organization_id)
             total_files = len(files)
             
             if total_files == 0:

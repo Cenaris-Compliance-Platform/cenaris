@@ -234,7 +234,7 @@ def org_admin_dashboard():
         .order_by(Department.name.asc())
         .all()
     )
-    invite_form.department_id.choices = [('', 'No department')] + [
+    invite_form.department_id.choices = [('', 'Select department')] + [
         (str(d.id), d.name) for d in departments
     ]
     member_action_form = MembershipActionForm()
@@ -285,9 +285,12 @@ def org_admin_invite_member():
         .order_by(Department.name.asc())
         .all()
     )
-    form.department_id.choices = [('', 'No department')] + [(str(d.id), d.name) for d in departments]
+    form.department_id.choices = [('', 'Select department')] + [(str(d.id), d.name) for d in departments]
     if not form.validate_on_submit():
-        flash('Please correct the invite form errors and try again.', 'error')
+        if getattr(form, 'department_id', None) is not None and getattr(form.department_id, 'errors', None):
+            flash(form.department_id.errors[0], 'error')
+        else:
+            flash('Please correct the invite form errors and try again.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
     email = (form.email.data or '').strip().lower()
@@ -878,7 +881,7 @@ def dashboard():
             'file_summaries': [],
         }
     else:
-        ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
+        ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id, organization_id=org_id)
     
     return render_template('main/dashboard.html', 
                          title='Dashboard',
@@ -1009,10 +1012,13 @@ def delete_document(doc_id):
         return redirect(url_for('main.evidence_repository'))
     
     try:
-        storage_service = AzureBlobStorageService()
-        delete_result = storage_service.delete_file(document.blob_name)
-        if not delete_result.get('success'):
-            raise Exception(delete_result.get('error') or 'Delete failed')
+        if getattr(document, 'blob_name', None):
+            storage_service = AzureBlobStorageService()
+            delete_result = storage_service.delete_file(document.blob_name)
+            if not delete_result.get('success'):
+                raise Exception(delete_result.get('error') or 'Delete failed')
+        else:
+            current_app.logger.warning('Document %s has no blob_name; skipping Azure deletion', document.id)
         
         # Soft delete from database
         document.is_active = False
@@ -1054,8 +1060,11 @@ def document_details(doc_id):
 @login_required
 def ai_evidence():
     """AI Evidence route to display AI-generated evidence entries."""
-    # Get real ADLS data
-    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
+    # Get real ADLS data (org-scoped)
+    summary = azure_data_service.get_dashboard_summary(
+        user_id=current_user.id,
+        organization_id=getattr(current_user, 'organization_id', None),
+    )
     
     # Transform ADLS data into AI evidence entries
     ai_evidence_entries = []

@@ -273,6 +273,8 @@
     }
     
     function confirmDelete(docId, filename) {
+        const csrfToken = "{{ csrf_token() }}";
+        const deleteAction = "{{ url_for('main.delete_document', doc_id=0) }}".replace('/0/', `/${docId}/`);
         // Create Bootstrap modal for confirmation
         const modalHtml = `
             <div class="modal fade" id="deleteModal" tabindex="-1">
@@ -297,7 +299,8 @@
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <form method="POST" action="/document/${docId}/delete" style="display: inline;">
+                            <form method="POST" action="${deleteAction}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="${csrfToken}" />
                                 <button type="submit" class="btn btn-danger">
                                     <i class="bi bi-trash me-1"></i>Delete Document
                                 </button>

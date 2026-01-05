@@ -63,7 +63,12 @@ def test_pending_invites_resend_cooldown_and_revoke(app, client, db_session, see
     # Invite a new user
     resp = client.post(
         "/org/admin/invite",
-        data={"email": "invited@example.com", "role": "User"},
+        data={
+            "email": "invited@example.com",
+            "role": "User",
+            "new_department_name": "General",
+            "new_department_color": "primary",
+        },
         follow_redirects=False,
         environ_base={"REMOTE_ADDR": remote_addr},
     )

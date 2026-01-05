@@ -142,7 +142,7 @@ class InviteMemberForm(FlaskForm):
 
     department_id = SelectField(
         'Department',
-        choices=[('', 'No department')],
+        choices=[('', 'Select department')],
         validators=[Optional()],
         render_kw={'class': 'form-select'},
         default='',
@@ -178,6 +178,19 @@ class InviteMemberForm(FlaskForm):
         'Invite',
         render_kw={'class': 'btn btn-primary'},
     )
+
+    def validate(self, extra_validators=None):
+        ok = super().validate(extra_validators=extra_validators)
+
+        dept_id = (self.department_id.data or '').strip()
+        new_dept = (self.new_department_name.data or '').strip()
+
+        # Require either selecting a department OR providing a new department name.
+        if not dept_id and not new_dept:
+            self.department_id.errors.append('Please select a department (or create one) before inviting.')
+            ok = False
+
+        return ok
 
 
 class MembershipActionForm(FlaskForm):

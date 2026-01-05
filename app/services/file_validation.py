@@ -12,6 +12,7 @@ class FileValidationService:
     # Allowed file extensions and their corresponding MIME types
     ALLOWED_EXTENSIONS = {
         '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
         '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     }
     
@@ -147,6 +148,16 @@ class FileValidationService:
                         'success': False,
                         'error': 'File does not appear to be a valid DOCX document',
                         'error_code': 'INVALID_DOCX'
+                    }
+
+            elif expected_content_type == 'application/msword':
+                # Legacy .doc files are typically OLE Compound File Binary Format.
+                # Check for OLE signature: D0 CF 11 E0 A1 B1 1A E1
+                if not header.startswith(b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1'):
+                    return {
+                        'success': False,
+                        'error': 'File does not appear to be a valid DOC document',
+                        'error_code': 'INVALID_DOC'
                     }
             
             return {

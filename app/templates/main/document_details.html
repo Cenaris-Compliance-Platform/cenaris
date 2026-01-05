@@ -122,7 +122,14 @@
                                 <td class="text-body-secondary">
                                     <i class="bi bi-person me-2"></i>Uploaded By
                                 </td>
-                                <td>User ID: {{ document.uploaded_by }}</td>
+                                <td>
+                                    {% if document.uploader %}
+                                        {{ document.uploader.display_name() }}
+                                        <small class="text-body-secondary">({{ document.uploader.email }})</small>
+                                    {% else %}
+                                        Unknown
+                                    {% endif %}
+                                </td>
                             </tr>
                             <tr>
                                 <td class="text-body-secondary">
@@ -207,6 +214,8 @@
 {% block extra_js %}
 <script>
     function confirmDelete(docId, filename) {
+        const csrfToken = "{{ csrf_token() }}";
+        const deleteAction = "{{ url_for('main.delete_document', doc_id=0) }}".replace('/0/', `/${docId}/`);
         const modalHtml = `
             <div class="modal fade" id="deleteModal" tabindex="-1">
                 <div class="modal-dialog">
@@ -230,7 +239,8 @@
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <form method="POST" action="/document/${docId}/delete" style="display: inline;">
+                            <form method="POST" action="${deleteAction}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="${csrfToken}" />
                                 <button type="submit" class="btn btn-danger">
                                     <i class="bi bi-trash me-1"></i>Delete Document
                                 </button>

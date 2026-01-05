@@ -274,14 +274,13 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
         current_app.logger.warning('MAIL not configured; password reset URL: %s', reset_url)
         return
 
+    from flask import render_template
+
     msg = Message(
         subject='Reset your password',
         recipients=[user.email],
-        body=(
-            'We received a request to reset your password.\n\n'
-            f'Reset link: {reset_url}\n\n'
-            'If you did not request this, you can ignore this email.'
-        ),
+        body=render_template('email/password_reset.txt', user=user, reset_url=reset_url),
+        html=render_template('email/password_reset.html', user=user, reset_url=reset_url),
     )
     mail.send(msg)
 
@@ -762,6 +761,7 @@ def oauth_callback(provider):
 
             if needs_org or not has_active_membership:
                 organization = None
+                created_org = False
                 if getattr(user, 'organization_id', None):
                     organization = Organization.query.get(int(user.organization_id))
 
@@ -775,12 +775,15 @@ def oauth_callback(provider):
                     db.session.add(organization)
                     db.session.flush()
                     user.organization_id = int(organization.id)
+                    created_org = True
 
                 if not has_active_membership:
+                    legacy_role = (getattr(user, 'role', None) or '').strip().lower()
+                    membership_role = 'Admin' if (created_org or legacy_role == 'admin') else 'User'
                     membership = OrganizationMembership(
                         organization_id=int(organization.id),
                         user_id=int(user.id),
-                        role=(user.role or 'Admin'),
+                        role=membership_role,
                         is_active=True,
                     )
                     db.session.add(membership)

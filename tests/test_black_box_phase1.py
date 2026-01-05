@@ -15,13 +15,56 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from faker import Faker
 import requests
 import os
+from urllib.parse import urljoin
 
 fake = Faker()
 
 # Test Configuration
-BASE_URL = os.environ.get('TEST_BASE_URL', 'http://localhost:5000')
+_raw_test_base_url = (os.environ.get('TEST_BASE_URL') or '').strip()
+_port = (os.environ.get('PORT') or '5000').strip()
+BASE_URL = _raw_test_base_url or f'http://localhost:{_port}'
 TIMEOUT = 10
 TEST_FILES_DIR = os.path.join(os.path.dirname(__file__), 'test_files')
+
+
+# This file is a full end-to-end Selenium suite and is intentionally slow.
+# Keep it opt-in so regular `pytest` runs stay fast.
+pytestmark = pytest.mark.blackbox
+
+if os.environ.get('RUN_BLACK_BOX_TESTS', '').strip() != '1':
+    pytest.skip(
+        'Black-box Selenium suite disabled by default. '
+        'Set RUN_BLACK_BOX_TESTS=1 and ensure the app is running at TEST_BASE_URL.',
+        allow_module_level=True,
+    )
+
+
+def _preflight_verify_server_or_fail() -> None:
+    """Fail fast with a clear error if the web app isn't reachable.
+
+    Without this, Selenium ends up on a browser error page and later tests fail
+    with confusing "NoSuchElement" errors.
+    """
+    login_url = urljoin(BASE_URL.rstrip('/') + '/', 'auth/login')
+    try:
+        resp = requests.get(login_url, timeout=8, allow_redirects=True)
+    except Exception as exc:
+        pytest.fail(
+            f'Black-box tests require the app running and reachable at {BASE_URL}. '
+            f'Could not connect to {login_url}: {exc}',
+            pytrace=False,
+        )
+
+    if resp.status_code >= 400:
+        pytest.fail(
+            f'Black-box tests require the app running and reachable at {BASE_URL}. '
+            f'GET {login_url} returned HTTP {resp.status_code}. '
+            'Start the server, or set TEST_BASE_URL to the correct URL.',
+            pytrace=False,
+        )
+
+
+_preflight_verify_server_or_fail()
 
 # Test Data
 TEST_USERS = {

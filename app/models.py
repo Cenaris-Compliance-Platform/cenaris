@@ -152,10 +152,6 @@ class User(UserMixin, db.Model):
         if not org_id:
             return False
 
-        # Legacy fallback: some flows still set `role` directly.
-        if (self.role or '').strip().lower() == 'admin':
-            return True
-
         membership = self.memberships.filter_by(organization_id=org_id, is_active=True).first()
         return bool(membership and (membership.role or '').strip().lower() in {'admin', 'organisation administrator', 'organization administrator'})
 
@@ -180,6 +176,10 @@ class Document(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+
+    uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='joined')
+
+    uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='joined')
 
 
 class LoginEvent(db.Model):
