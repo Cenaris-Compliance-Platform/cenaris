@@ -15,6 +15,9 @@
       {% if title %}{{ title }} - {% endif %}Cenaris
     </title>
 
+    <link rel="icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" sizes="any" />
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" />
+
     <!-- Bootstrap 5 CSS -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
@@ -484,6 +487,7 @@
                 <i class="bi bi-graph-up me-1"></i>Gap Analysis
               </a>
             </li>
+            {% if can_export_audit %}
             <li class="nav-item">
               <a
                 class="nav-link nav-btn {% if request.endpoint == 'main.audit_export' %}active{% endif %}"
@@ -492,6 +496,7 @@
                 <i class="bi bi-download me-1"></i>Audit Export
               </a>
             </li>
+            {% endif %}
             {% endif %}
           </ul>
 
@@ -520,8 +525,8 @@
                 <span class="navbar-user-label text-truncate d-inline-block align-middle">
                   {{ _org_name.strip() if _org_name.strip() else current_user.email }}
                 </span>
-                {% if is_org_admin_active %}
-                <span class="badge bg-primary ms-2">Admin</span>
+                {% if active_role_name %}
+                <span class="badge bg-primary ms-2">{{ active_role_name }}</span>
                 {% endif %}
               </a>
               <ul class="dropdown-menu">
@@ -560,13 +565,19 @@
                 {% endfor %}
                 {% endif %}
 
-                {% if is_org_admin_active %}
+                {% if can_manage_team or can_manage_org %}
                 <li><hr class="dropdown-divider" /></li>
+                {% endif %}
+
+                {% if can_manage_team %}
                 <li>
                   <a class="dropdown-item" href="{{ url_for('main.org_admin_dashboard') }}">
                     <i class="bi bi-people me-2"></i>Team Management
                   </a>
                 </li>
+                {% endif %}
+
+                {% if can_manage_org %}
                 <li>
                   <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
                     <i class="bi bi-building me-2"></i>Organization Profile
@@ -692,6 +703,35 @@
       </div>
     </footer>
 
+    {% if current_user.is_authenticated %}
+      {% set _has_name = ((current_user.full_name or '')|trim) or ((current_user.first_name or '')|trim) or ((current_user.last_name or '')|trim) %}
+      {% if not _has_name %}
+      <div
+        class="modal fade"
+        id="profileNameRequiredModal"
+        tabindex="-1"
+        aria-labelledby="profileNameRequiredModalLabel"
+        aria-hidden="true"
+      >
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="profileNameRequiredModalLabel">Complete your profile</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              Please add your name so your organization can identify you.
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Later</button>
+              <a class="btn btn-primary" href="{{ url_for('main.profile') }}">Add my name</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    {% endif %}
+
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -790,12 +830,29 @@
           console.log("Cookies declined");
         });
       });
+
+      // Prompt for missing profile name (once per browser session)
+      document.addEventListener("DOMContentLoaded", function () {
+        const modalEl = document.getElementById("profileNameRequiredModal");
+        if (!modalEl || typeof bootstrap === 'undefined') return;
+
+        try {
+          const key = "cenaris_name_prompt_shown";
+          if (window.sessionStorage.getItem(key) === '1') return;
+          window.sessionStorage.setItem(key, '1');
+        } catch (e) {
+          // If sessionStorage is unavailable, just show it.
+        }
+
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+      });
     </script>
 
     {% block extra_js %}{% endblock %}
 
     <!-- Floating Add User Button (only for org admins, exclude auth/onboarding pages) -->
-    {% if current_user.is_authenticated and is_org_admin_active and request.endpoint and not request.endpoint.startswith('auth.') and not request.endpoint.startswith('onboarding.') %}
+    {% if current_user.is_authenticated and can_invite_member and request.endpoint and not request.endpoint.startswith('auth.') and not request.endpoint.startswith('onboarding.') %}
     <button 
       class="floating-add-user" 
       data-bs-toggle="modal" 
@@ -837,19 +894,20 @@
               <div class="mb-3">
                 <label for="inviteRole" class="form-label">Role</label>
                 <select class="form-select" id="inviteRole" name="role" required>
-                  <option value="User">Member</option>
-                  <option value="Admin">Admin</option>
+                  {% for r in available_roles %}
+                    <option value="{{ r.id }}">{{ r.name }}</option>
+                  {% endfor %}
                 </select>
                 <div class="form-text">
-                  Admins can manage team members and organization settings.
+                  Choose the user's access level for this organization.
                 </div>
               </div>
 
               <div class="mb-3">
-                <label for="inviteDepartment" class="form-label">Department (Optional)</label>
+                <label for="inviteDepartment" class="form-label">Department</label>
                 <div class="input-group">
-                  <select class="form-select" id="inviteDepartment" name="department_id">
-                    <option value="">No department</option>
+                  <select class="form-select" id="inviteDepartment" name="department_id" required>
+                    <option value="">Select department</option>
                     {% if user_departments %}
                       {% for dept in user_departments %}
                         <option value="{{ dept.id }}">{{ dept.name }}</option>

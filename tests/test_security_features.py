@@ -48,24 +48,37 @@ def test_org_switch_between_multiple_orgs(app, client, db_session, seed_org_user
     with app.app_context():
         from app.models import User
 
-        refreshed = User.query.get(int(user_id))
+        refreshed = db_session.session.get(User, int(user_id))
         assert int(refreshed.organization_id) == int(org2_id)
 
 
 def test_pending_invites_resend_cooldown_and_revoke(app, client, db_session, seed_org_user):
     from app.models import OrganizationMembership, User
 
-    _org_id, _admin_id, _m_id = seed_org_user
+    org_id, _admin_id, _m_id = seed_org_user
     remote_addr = "10.0.0.11"
 
     assert login(client, remote_addr=remote_addr).status_code == 302
+
+    with app.app_context():
+        from app.services.rbac import ensure_rbac_seeded_for_org, BUILTIN_ROLE_KEYS
+        from app.models import RBACRole
+
+        ensure_rbac_seeded_for_org(int(org_id))
+        db_session.session.commit()
+        member_role = (
+            RBACRole.query
+            .filter_by(organization_id=int(org_id), name=BUILTIN_ROLE_KEYS.MEMBER)
+            .first()
+        )
+        member_role_id = str(int(member_role.id)) if member_role else ''
 
     # Invite a new user
     resp = client.post(
         "/org/admin/invite",
         data={
             "email": "invited@example.com",
-            "role": "User",
+            "role": member_role_id,
             "new_department_name": "General",
             "new_department_color": "primary",
         },
@@ -97,7 +110,7 @@ def test_pending_invites_resend_cooldown_and_revoke(app, client, db_session, see
     assert resp2.status_code == 302
 
     with app.app_context():
-        membership = OrganizationMembership.query.get(int(membership_id))
+        membership = db_session.session.get(OrganizationMembership, int(membership_id))
         assert int(membership.invite_send_count or 0) == 1
 
         # Move last_sent back beyond cooldown and resend should increment
@@ -113,7 +126,7 @@ def test_pending_invites_resend_cooldown_and_revoke(app, client, db_session, see
     assert resp3.status_code == 302
 
     with app.app_context():
-        membership = OrganizationMembership.query.get(int(membership_id))
+        membership = db_session.session.get(OrganizationMembership, int(membership_id))
         assert int(membership.invite_send_count or 0) == 2
 
     # Revoke invite
@@ -126,7 +139,7 @@ def test_pending_invites_resend_cooldown_and_revoke(app, client, db_session, see
     assert resp4.status_code == 302
 
     with app.app_context():
-        membership = OrganizationMembership.query.get(int(membership_id))
+        membership = db_session.session.get(OrganizationMembership, int(membership_id))
         assert membership.is_active is False
         assert membership.invite_revoked_at is not None
 
@@ -153,6 +166,53 @@ def test_login_activity_logged(app, client, db_session, seed_org_user):
         evts = LoginEvent.query.order_by(LoginEvent.created_at.desc()).limit(5).all()
         assert any(e.provider == "password" and e.success is False for e in evts)
         assert any(e.provider == "password" and e.success is True for e in evts)
+
+
+def test_cannot_demote_last_admin_role(app, client, db_session, seed_org_user):
+    from app.models import OrganizationMembership
+
+    org_id, _user_id, membership_id = seed_org_user
+    remote_addr = "10.0.0.99"
+
+    assert login(client, remote_addr=remote_addr).status_code == 302
+
+    with app.app_context():
+        from app.services.rbac import ensure_rbac_seeded_for_org, BUILTIN_ROLE_KEYS
+        from app.models import RBACRole
+
+        ensure_rbac_seeded_for_org(int(org_id))
+        db_session.session.commit()
+
+        admin_role = (
+            RBACRole.query
+            .filter_by(organization_id=int(org_id), name=BUILTIN_ROLE_KEYS.ORG_ADMIN)
+            .first()
+        )
+        member_role = (
+            RBACRole.query
+            .filter_by(organization_id=int(org_id), name=BUILTIN_ROLE_KEYS.MEMBER)
+            .first()
+        )
+        assert admin_role is not None
+        assert member_role is not None
+
+        m = db_session.session.get(OrganizationMembership, int(membership_id))
+        assert m is not None
+        original_role_id = int(m.role_id) if m.role_id else None
+
+    # Attempt to demote the only admin to Member.
+    resp = client.post(
+        "/org/admin/members/role",
+        data={"membership_id": str(membership_id), "role_id": str(int(member_role.id))},
+        follow_redirects=False,
+        environ_base={"REMOTE_ADDR": remote_addr},
+    )
+    assert resp.status_code == 302
+
+    with app.app_context():
+        m2 = db_session.session.get(OrganizationMembership, int(membership_id))
+        assert m2 is not None
+        assert int(m2.role_id) == int(original_role_id)
 
 
 def test_rate_limiting_on_login(app, client):

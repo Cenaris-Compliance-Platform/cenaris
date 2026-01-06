@@ -1,5 +1,6 @@
 {% extends "base.html" %} {% block content %}
-<div class="fade-in">
+<div class="fade-in position-relative">
+  <div style="pointer-events: none; user-select: none;">
   <!-- Header -->
   <div class="row mb-4">
     <div class="col-12">
@@ -17,6 +18,7 @@
           <button class="btn btn-outline-secondary" onclick="window.location.reload(true)" title="Refresh data from ADLS">
             <i class="bi bi-arrow-clockwise me-1"></i>Refresh Data
           </button>
+          {% if can_export_audit %}
           <div class="dropdown">
             <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
               <i class="bi bi-file-earmark-pdf me-2"></i>Generate Report
@@ -39,6 +41,7 @@
               </li>
             </ul>
           </div>
+          {% endif %}
           <div class="d-none d-md-block">
             <i class="bi bi-graph-up text-primary" style="font-size: 2.5rem"></i>
           </div>
@@ -470,6 +473,13 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-body bg-opacity-75" style="z-index: 5;">
+    <div class="text-center p-4 rounded-3 border bg-body" style="max-width: 520px;">
+      <div class="h4 fw-bold mb-2">Coming soon</div>
+      <div class="text-body-secondary">Gap Analysis is not implemented yet.</div>
     </div>
   </div>
 </div>

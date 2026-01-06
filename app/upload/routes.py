@@ -21,6 +21,10 @@ def upload_file():
             flash('Please select an organization before uploading.', 'info')
             return redirect(url_for('onboarding.organization'))
 
+        if not current_user.has_permission('documents.upload', org_id=int(org_id)):
+            flash('You do not have permission to upload documents.', 'error')
+            return redirect(url_for('main.dashboard'))
+
         membership = (
             OrganizationMembership.query
             .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
@@ -30,14 +34,15 @@ def upload_file():
             flash('You do not have access to that organization.', 'error')
             return redirect(url_for('onboarding.organization'))
 
-        organization = Organization.query.get(int(org_id))
+        organization = db.session.get(Organization, int(org_id))
         if not organization:
             flash('Organization not found.', 'error')
             return redirect(url_for('onboarding.organization'))
 
+        # Billing can be deferred; do not block document uploads.
+        # (Billing gating is applied for reports/exports elsewhere.)
         if not organization.billing_complete():
-            flash('Please add billing details before uploading documents.', 'warning')
-            return redirect(url_for('onboarding.billing'))
+            flash('Billing details are incomplete. You can still upload documents.', 'warning')
 
         # Check if file is present in request
         if 'file' not in request.files:
@@ -99,11 +104,17 @@ def upload_file():
         
         # Save document metadata to database
         try:
+            # The documents.content_type column may be limited (older schema uses VARCHAR(50)).
+            # DOCX MIME types can exceed that length, so store a safe, truncated value.
+            db_content_type = (validation_result.get('content_type') or '').strip() or None
+            if db_content_type and len(db_content_type) > 50:
+                db_content_type = db_content_type[:50]
+
             document = Document(
                 filename=validation_result['original_filename'],
                 blob_name=file_path,
                 file_size=validation_result['file_size'],
-                content_type=validation_result['content_type'],
+                content_type=db_content_type,
                 uploaded_by=current_user.id,
                 organization_id=int(org_id)
             )
@@ -133,6 +144,10 @@ def upload_file():
 def validate_file_ajax():
     """AJAX endpoint for client-side file validation."""
     try:
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id or not current_user.has_permission('documents.upload', org_id=int(org_id)):
+            return jsonify({'success': False, 'error': 'Not authorized', 'error_code': 'NOT_AUTHORIZED'}), 403
+
         if 'file' not in request.files:
             return jsonify({
                 'success': False,

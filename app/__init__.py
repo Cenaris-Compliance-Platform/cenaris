@@ -66,7 +66,7 @@ limiter = Limiter(
 def load_user(user_id):
     """Load user by ID for Flask-Login."""
     from app.models import User
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 def create_app(config_name=None):
     """Application factory pattern."""
@@ -360,16 +360,46 @@ def create_app(config_name=None):
 
             active_org_id = getattr(current_user, 'organization_id', None)
             is_org_admin_active = False
+            can_invite_member = False
+            can_manage_team = False
+            can_export_audit = False
+            can_manage_org = False
+            can_manage_roles = False
+            active_role_name = None
             user_departments = []
+            available_roles = []
             
             if active_org_id:
                 try:
                     # Refresh organization data to show logo updates immediately
                     from app import db
                     db.session.expire_all()
-                    is_org_admin_active = bool(current_user.is_org_admin(int(active_org_id)))
-                    # Load departments for admins to populate invite modal
-                    if is_org_admin_active:
+                    active_role_name = current_user.active_role_name(int(active_org_id))
+                    can_manage_team = bool(current_user.has_permission('users.manage', org_id=int(active_org_id)))
+                    can_invite_member = bool(current_user.has_permission('users.invite', org_id=int(active_org_id)))
+                    can_export_audit = bool(current_user.has_permission('audits.export', org_id=int(active_org_id)))
+                    can_manage_org = bool(current_user.has_permission('org.manage', org_id=int(active_org_id)))
+                    can_manage_roles = bool(current_user.has_permission('roles.manage', org_id=int(active_org_id)))
+                    is_org_admin_active = can_manage_team
+
+                    # Ensure RBAC roles exist and load role options for invite modal.
+                    try:
+                        from app.services.rbac import ensure_rbac_seeded_for_org
+                        from app.models import RBACRole
+
+                        ensure_rbac_seeded_for_org(int(active_org_id))
+                        db.session.flush()
+                        available_roles = (
+                            RBACRole.query
+                            .filter_by(organization_id=int(active_org_id))
+                            .order_by(RBACRole.name.asc())
+                            .all()
+                        )
+                    except Exception:
+                        available_roles = []
+
+                    # Load departments for invite modal
+                    if can_invite_member:
                         user_departments = (
                             Department.query
                             .filter_by(organization_id=int(active_org_id))
@@ -378,11 +408,25 @@ def create_app(config_name=None):
                         )
                 except Exception:
                     is_org_admin_active = False
+                    can_invite_member = False
+                    can_manage_team = False
+                    can_export_audit = False
+                    can_manage_org = False
+                    can_manage_roles = False
+                    active_role_name = None
+                    available_roles = []
 
             return {
                 'user_organizations': orgs,
                 'user_organizations_with_logos': org_data,
                 'is_org_admin_active': is_org_admin_active,
+                'can_invite_member': can_invite_member,
+                'can_manage_team': can_manage_team,
+                'can_export_audit': can_export_audit,
+                'can_manage_org': can_manage_org,
+                'can_manage_roles': can_manage_roles,
+                'active_role_name': active_role_name,
+                'available_roles': available_roles,
                 'user_departments': user_departments,
             }
         except Exception:
@@ -559,7 +603,7 @@ def create_app(config_name=None):
                     'Use a dev database, or run with --force and set ALLOW_DATA_WIPE=1.'
                 )
 
-        org = Organization.query.get(int(org_id))
+        org = db.session.get(Organization, int(org_id))
         if not org:
             raise click.ClickException(f'Organization not found: {org_id}')
 

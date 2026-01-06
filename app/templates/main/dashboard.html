@@ -365,11 +365,16 @@
     const file = this.files[0];
     if (file) {
       const maxSize = 16 * 1024 * 1024; // 16MB
+      const allowedExtensions = ["pdf", "doc", "docx"];
       const allowedTypes = [
         "application/pdf",
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ];
+      const docxZipTypes = ["application/zip", "application/x-zip-compressed"];
+
+      const nameParts = (file.name || "").split(".");
+      const ext = (nameParts.length > 1 ? nameParts[nameParts.length - 1] : "").toLowerCase();
 
       if (file.size > maxSize) {
         alert("File size must be less than 16MB");
@@ -377,7 +382,18 @@
         return;
       }
 
-      if (!allowedTypes.includes(file.type)) {
+      // Some browsers/OS combos report empty or generic MIME types for Office files.
+      if (!allowedExtensions.includes(ext)) {
+        alert("Only PDF, DOC, and DOCX files are allowed");
+        this.value = "";
+        return;
+      }
+
+      if (file.type && file.type !== "application/octet-stream" && !allowedTypes.includes(file.type)) {
+        // Many browsers report DOCX as a ZIP file type.
+        if (ext === "docx" && docxZipTypes.includes(file.type)) {
+          return;
+        }
         alert("Only PDF, DOC, and DOCX files are allowed");
         this.value = "";
         return;

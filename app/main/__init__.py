@@ -26,7 +26,8 @@ def require_onboarding():
 		return redirect(url_for('onboarding.organization'))
 
 	from app.models import Organization
-	org = Organization.query.get(int(org_id))
+	from app import db
+	org = db.session.get(Organization, int(org_id))
 	if not org or not org.onboarding_complete():
 		return redirect(url_for('onboarding.organization'))
 

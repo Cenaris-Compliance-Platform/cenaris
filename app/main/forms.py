@@ -121,6 +121,33 @@ class UserAvatarForm(FlaskForm):
     )
 
 
+class UserProfileForm(FlaskForm):
+    first_name = StringField(
+        'First Name',
+        validators=[DataRequired(), Length(min=1, max=60)],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'autocomplete': 'given-name',
+            'placeholder': 'First name',
+        },
+    )
+
+    last_name = StringField(
+        'Last Name',
+        validators=[Optional(), Length(max=60)],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'autocomplete': 'family-name',
+            'placeholder': 'Last name (optional)',
+        },
+    )
+
+    submit = SubmitField(
+        'Save',
+        render_kw={'class': 'btn btn-primary btn-lg'},
+    )
+
+
 class InviteMemberForm(FlaskForm):
     email = StringField(
         'Email',
@@ -134,10 +161,11 @@ class InviteMemberForm(FlaskForm):
 
     role = SelectField(
         'Role',
-        choices=[('User', 'User'), ('Admin', 'Admin')],
+        # Populated dynamically per-organization with (role_id, role_name)
+        choices=[],
         validators=[DataRequired()],
         render_kw={'class': 'form-select'},
-        default='User',
+        default='',
     )
 
     department_id = SelectField(
@@ -199,6 +227,22 @@ class MembershipActionForm(FlaskForm):
     submit = SubmitField(
         'Remove',
         render_kw={'class': 'btn btn-sm btn-outline-danger'},
+    )
+
+
+class UpdateMemberRoleForm(FlaskForm):
+    membership_id = HiddenField(validators=[DataRequired()])
+    role_id = SelectField(
+        'Role',
+        choices=[],
+        validators=[DataRequired()],
+        render_kw={'class': 'form-select form-select-sm'},
+        default='',
+    )
+
+    submit = SubmitField(
+        'Update role',
+        render_kw={'class': 'btn btn-sm btn-primary'},
     )
 
 class PendingInviteResendForm(FlaskForm):

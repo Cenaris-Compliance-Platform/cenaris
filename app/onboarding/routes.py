@@ -46,7 +46,7 @@ def _send_welcome_email(user: User, dashboard_url: str) -> bool:
 
 
 def _maybe_send_welcome_email(user_id: int) -> None:
-    user: User | None = User.query.get(int(user_id))
+    user: User | None = db.session.get(User, int(user_id))
     if not user or not getattr(user, 'email', None):
         return
 
@@ -100,7 +100,23 @@ def organization():
             db.session.add(org)
             db.session.flush()
 
-            user = User.query.get(int(current_user.id))
+            # Ensure org-scoped RBAC roles exist.
+            try:
+                from app.services.rbac import ensure_rbac_seeded_for_org, BUILTIN_ROLE_KEYS
+                from app.models import RBACRole
+
+                ensure_rbac_seeded_for_org(int(org.id))
+                db.session.flush()
+                org_admin_role = (
+                    RBACRole.query
+                    .filter_by(organization_id=int(org.id), name=BUILTIN_ROLE_KEYS.ORG_ADMIN)
+                    .first()
+                )
+                org_admin_role_id = int(org_admin_role.id) if org_admin_role else None
+            except Exception:
+                org_admin_role_id = None
+
+            user = db.session.get(User, int(current_user.id))
             if not user:
                 db.session.rollback()
                 abort(401)
@@ -111,6 +127,7 @@ def organization():
                 organization_id=org.id,
                 user_id=user.id,
                 role='Admin',
+                role_id=org_admin_role_id,
                 is_active=True,
             )
             db.session.add(membership)
@@ -122,7 +139,7 @@ def organization():
             flash('Unable to start onboarding. Please try again.', 'error')
             return redirect(url_for('main.index'))
 
-    organization = Organization.query.get(int(org_id))
+    organization = db.session.get(Organization, int(org_id))
     if not organization:
         abort(404)
 
@@ -178,7 +195,7 @@ def organization():
             
             # Record terms acceptance if not already done (for OAuth users)
             if not getattr(current_user, 'terms_accepted_at', None):
-                user = User.query.get(int(current_user.id))
+                user = db.session.get(User, int(current_user.id))
                 user.terms_accepted_at = now
             
             db.session.commit()
@@ -201,7 +218,7 @@ def billing():
     if not org_id:
         return redirect(url_for('onboarding.organization'))
 
-    organization = Organization.query.get(int(org_id))
+    organization = db.session.get(Organization, int(org_id))
     if not organization:
         abort(404)
     
@@ -244,7 +261,7 @@ def logo():
     if not org_id:
         return redirect(url_for('onboarding.organization'))
 
-    organization = Organization.query.get(org_id)
+    organization = db.session.get(Organization, int(org_id))
     if not organization:
         return redirect(url_for('onboarding.organization'))
 
@@ -307,7 +324,7 @@ def theme():
     if not org_id:
         return redirect(url_for('onboarding.organization'))
     
-    organization = Organization.query.get(int(org_id))
+    organization = db.session.get(Organization, int(org_id))
     if not organization:
         return redirect(url_for('onboarding.organization'))
     

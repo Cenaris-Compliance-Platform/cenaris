@@ -3,7 +3,6 @@ Azure Data Lake Storage service for ML results integration.
 Connects to ADLS and processes compliance analysis results.
 """
 
-import pandas as pd
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional

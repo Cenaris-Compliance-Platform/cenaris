@@ -29,33 +29,53 @@ class AzureBlobStorageService:
                 logger.warning("Azure Storage connection string not configured")
                 return
             
-            # Initialize both Blob and Data Lake clients for compatibility
+            # Blob client is required. ADLS Gen2 (DataLake) is optional depending on account capabilities.
             self.blob_service_client = BlobServiceClient.from_connection_string(self.connection_string)
-            self.datalake_service_client = DataLakeServiceClient.from_connection_string(self.connection_string)
+
+            try:
+                self.datalake_service_client = DataLakeServiceClient.from_connection_string(self.connection_string)
+            except Exception as e:
+                self.datalake_service_client = None
+                logger.warning(f"DataLakeServiceClient init failed; continuing with Blob-only mode: {e}")
             
             # Ensure container/file system exists
             self._ensure_container_exists()
             
         except Exception as e:
-            logger.error(f"Failed to initialize Azure Data Lake Storage: {e}")
-            raise
+            logger.error(f"Failed to initialize Azure Storage client: {e}")
+            # Do not raise: callers should see a clean "not configured" failure.
+            self.blob_service_client = None
+            self.datalake_service_client = None
     
     def _ensure_container_exists(self):
         """Ensure the container/file system exists, create if it doesn't."""
         try:
-            # Try to get file system properties (ADLS Gen2)
-            file_system_client = self.datalake_service_client.get_file_system_client(self.container_name)
-            file_system_client.get_file_system_properties()
-            logger.info(f"Using existing ADLS file system: {self.container_name}")
+            # Try ADLS file system if available; otherwise fall back to blob container.
+            if self.datalake_service_client is not None:
+                file_system_client = self.datalake_service_client.get_file_system_client(self.container_name)
+                file_system_client.get_file_system_properties()
+                logger.info(f"Using existing ADLS file system: {self.container_name}")
+                return
+
+            # Blob-only mode
+            container_client = self.blob_service_client.get_container_client(self.container_name)
+            if not container_client.exists():
+                self.blob_service_client.create_container(self.container_name)
+                logger.info(f"Created blob container: {self.container_name}")
+            else:
+                logger.info(f"Using existing blob container: {self.container_name}")
         except ResourceNotFoundError:
             try:
+                if self.datalake_service_client is None:
+                    raise
+
                 # Create file system (ADLS Gen2)
-                file_system_client = self.datalake_service_client.create_file_system(self.container_name)
+                self.datalake_service_client.create_file_system(self.container_name)
                 logger.info(f"Created ADLS file system: {self.container_name}")
             except Exception as e:
                 # Fallback to blob container creation
                 try:
-                    container_client = self.blob_service_client.create_container(self.container_name)
+                    self.blob_service_client.create_container(self.container_name)
                     logger.info(f"Created blob container: {self.container_name}")
                 except Exception as blob_error:
                     logger.error(f"Failed to create container/file system {self.container_name}: {e}, {blob_error}")
@@ -66,9 +86,7 @@ class AzureBlobStorageService:
     
     def is_configured(self):
         """Check if Azure Data Lake Storage is properly configured."""
-        return (self.connection_string is not None and 
-                self.blob_service_client is not None and 
-                self.datalake_service_client is not None)
+        return (self.connection_string is not None and self.blob_service_client is not None)
     
     def generate_blob_name(self, original_filename, user_id, organization_id=None):
         """Generate a unique file path for ADLS Gen2."""
@@ -118,70 +136,69 @@ class AzureBlobStorageService:
             }
         
         try:
-            # Try ADLS Gen2 upload first
+            # Try ADLS Gen2 upload first (if available)
+            if self.datalake_service_client is not None:
+                try:
+                    file_system_client = self.datalake_service_client.get_file_system_client(self.container_name)
+                    file_client = file_system_client.get_file_client(file_path)
+
+                    # Upload file data
+                    file_client.upload_data(
+                        data=file_stream.read(),
+                        overwrite=True,
+                        metadata=metadata,
+                    )
+
+                    file_properties = file_client.get_file_properties()
+
+                    return {
+                        'success': True,
+                        'file_path': file_path,
+                        'size': file_properties.size,
+                        'last_modified': file_properties.last_modified,
+                        'etag': file_properties.etag,
+                        'url': file_client.url,
+                        'storage_type': 'ADLS_Gen2'
+                    }
+                except Exception as adls_error:
+                    logger.warning(f"ADLS Gen2 upload failed, falling back to Blob Storage: {adls_error}")
+
+            # Blob Storage upload
             try:
-                file_system_client = self.datalake_service_client.get_file_system_client(self.container_name)
-                file_client = file_system_client.get_file_client(file_path)
-                
-                # Upload file data
-                file_client.upload_data(
-                    data=file_stream.read(),
-                    overwrite=True,
-                    content_settings={'content_type': content_type} if content_type else None,
-                    metadata=metadata
-                )
-                
-                # Get file properties
-                file_properties = file_client.get_file_properties()
-                
-                return {
-                    'success': True,
-                    'file_path': file_path,
-                    'size': file_properties.size,
-                    'last_modified': file_properties.last_modified,
-                    'etag': file_properties.etag,
-                    'url': file_client.url,
-                    'storage_type': 'ADLS_Gen2'
-                }
-                
-            except Exception as adls_error:
-                logger.warning(f"ADLS Gen2 upload failed, falling back to Blob Storage: {adls_error}")
-                
-                # Fallback to Blob Storage
-                file_stream.seek(0)  # Reset stream position
-                blob_client = self.blob_service_client.get_blob_client(
-                    container=self.container_name,
-                    blob=file_path
-                )
-                
-                # Prepare upload parameters
-                upload_params = {
-                    'data': file_stream,
-                    'overwrite': True
-                }
-                
-                if content_type:
-                    from azure.storage.blob import ContentSettings
-                    upload_params['content_settings'] = ContentSettings(content_type=content_type)
-                
-                if metadata:
-                    upload_params['metadata'] = metadata
-                
-                # Upload the file
-                blob_client.upload_blob(**upload_params)
-                
-                # Get blob properties to confirm upload
-                blob_properties = blob_client.get_blob_properties()
-                
-                return {
-                    'success': True,
-                    'file_path': file_path,
-                    'size': blob_properties.size,
-                    'last_modified': blob_properties.last_modified,
-                    'etag': blob_properties.etag,
-                    'url': blob_client.url,
-                    'storage_type': 'Blob_Storage'
-                }
+                file_stream.seek(0)
+            except Exception:
+                pass
+
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name,
+                blob=file_path
+            )
+
+            upload_params = {
+                'data': file_stream,
+                'overwrite': True
+            }
+
+            if content_type:
+                from azure.storage.blob import ContentSettings
+                upload_params['content_settings'] = ContentSettings(content_type=content_type)
+
+            if metadata:
+                upload_params['metadata'] = metadata
+
+            blob_client.upload_blob(**upload_params)
+
+            blob_properties = blob_client.get_blob_properties()
+
+            return {
+                'success': True,
+                'file_path': file_path,
+                'size': blob_properties.size,
+                'last_modified': blob_properties.last_modified,
+                'etag': blob_properties.etag,
+                'url': blob_client.url,
+                'storage_type': 'Blob_Storage'
+            }
             
         except AzureError as e:
             logger.error(f"Azure error uploading file {file_path}: {e}")

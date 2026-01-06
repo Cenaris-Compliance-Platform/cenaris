@@ -75,6 +75,23 @@ def seed_org_user(app, db_session):
 
         m = OrganizationMembership(organization_id=org.id, user_id=user.id, role="Admin", is_active=True)
         db_session.session.add(m)
+
+        # Seed RBAC and attach org-admin role_id for this membership.
+        try:
+            from app.services.rbac import ensure_rbac_seeded_for_org, BUILTIN_ROLE_KEYS
+            from app.models import RBACRole
+
+            ensure_rbac_seeded_for_org(int(org.id))
+            db_session.session.flush()
+            admin_role = (
+                RBACRole.query
+                .filter_by(organization_id=int(org.id), name=BUILTIN_ROLE_KEYS.ORG_ADMIN)
+                .first()
+            )
+            m.role_id = int(admin_role.id) if admin_role else None
+        except Exception:
+            m.role_id = None
+
         db_session.session.commit()
 
         return int(org.id), int(user.id), int(m.id)

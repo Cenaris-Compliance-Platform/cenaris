@@ -96,7 +96,7 @@
                                                 <td>
                                                     <div class="dropdown">
                                                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
-                                                                type="button" data-bs-toggle="dropdown">
+                                                                type="button" data-bs-toggle="dropdown" data-doc-actions-dropdown>
                                                             <i class="bi bi-three-dots"></i>
                                                         </button>
                                                         <ul class="dropdown-menu">
@@ -151,7 +151,7 @@
                                                 </p>
                                                 <div class="dropdown">
                                                     <button class="btn btn-sm btn-outline-primary dropdown-toggle" 
-                                                            type="button" data-bs-toggle="dropdown">
+                                                            type="button" data-bs-toggle="dropdown" data-doc-actions-dropdown>
                                                         Actions
                                                     </button>
                                                     <ul class="dropdown-menu">
@@ -329,5 +329,19 @@
             this.remove();
         });
     }
+
+    // Prevent dropdown menus from being clipped inside scroll/overflow containers.
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-doc-actions-dropdown]').forEach((toggle) => {
+            try {
+                bootstrap.Dropdown.getOrCreateInstance(toggle, {
+                    popperConfig: (defaultConfig) => ({
+                        ...defaultConfig,
+                        strategy: 'fixed',
+                    }),
+                });
+            } catch (e) { /* ignore */ }
+        });
+    });
 </script>
 {% endblock %}

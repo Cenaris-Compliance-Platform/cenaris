@@ -53,9 +53,39 @@ def _require_org_admin():
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
-    if not current_user.is_org_admin(_active_org_id()):
+    if not current_user.has_permission('users.manage', org_id=_active_org_id()):
         abort(403)
     return None
+
+
+def _require_org_permission(permission_code: str):
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+    if not current_user.has_permission(permission_code, org_id=_active_org_id()):
+        abort(403)
+    return None
+
+
+def _membership_has_permission(membership: OrganizationMembership, code: str) -> bool:
+    if not membership or not membership.is_active:
+        return False
+
+    if membership.rbac_role:
+        try:
+            return code in membership.rbac_role.effective_permission_codes()
+        except Exception:
+            return False
+
+    # Legacy fallback: only supports basic admin mapping.
+    if code == 'users.manage':
+        return (membership.role or '').strip().lower() in {
+            'admin',
+            'organisation administrator',
+            'organization administrator',
+        }
+
+    return False
 
 
 def _serializer() -> URLSafeTimedSerializer:
@@ -177,7 +207,7 @@ def switch_organization():
         return redirect(url_for('main.dashboard'))
 
     # Query the actual user object from the database to ensure changes persist
-    user = User.query.get(int(current_user.id))
+    user = db.session.get(User, int(current_user.id))
     user.organization_id = org_id
     db.session.commit()
     flash('Organization switched.', 'success')
@@ -192,13 +222,22 @@ def org_admin_dashboard():
     if maybe is not None:
         return maybe
 
-    from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm
+    from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm, UpdateMemberRoleForm
     from app.models import Department
 
     org_id = _active_org_id()
-    organization = Organization.query.get(org_id)
+    organization = db.session.get(Organization, int(org_id))
     if not organization:
         abort(404)
+
+    # Ensure RBAC defaults exist so UI can show role names reliably.
+    try:
+        from app.services.rbac import ensure_rbac_seeded_for_org
+
+        ensure_rbac_seeded_for_org(int(org_id))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     members = (
         OrganizationMembership.query
@@ -211,23 +250,30 @@ def org_admin_dashboard():
     pending_invites = [m for m in members if _is_pending_org_invite(m, m.user)]
 
     # Used to determine whether the current user (if admin) can remove their own membership.
-    active_admin_count = sum(
-        1
-        for m in members
-        if bool(m.is_active) and ((m.role or '').strip().lower() == 'admin')
-    )
+    def _can_manage_users(m: OrganizationMembership) -> bool:
+        return _membership_has_permission(m, 'users.manage')
+
+    active_admin_count = sum(1 for m in members if _can_manage_users(m))
     current_membership = next((m for m in members if int(m.user_id) == int(current_user.id)), None)
-    current_is_active_admin = bool(
-        current_membership
-        and current_membership.is_active
-        and ((current_membership.role or '').strip().lower() == 'admin')
-    )
+    current_is_active_admin = bool(current_membership and _can_manage_users(current_membership))
     can_current_user_leave_org = (not current_is_active_admin) or (active_admin_count > 1)
 
     user_count = sum(1 for m in members if bool(m.is_active))
     document_count = Document.query.filter_by(organization_id=int(org_id), is_active=True).count()
 
     invite_form = InviteMemberForm()
+    try:
+        from app.models import RBACRole
+
+        roles = (
+            RBACRole.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(RBACRole.name.asc())
+            .all()
+        )
+        invite_form.role.choices = [(str(r.id), r.name) for r in roles]
+    except Exception:
+        invite_form.role.choices = []
     departments = (
         Department.query
         .filter_by(organization_id=int(org_id))
@@ -238,8 +284,23 @@ def org_admin_dashboard():
         (str(d.id), d.name) for d in departments
     ]
     member_action_form = MembershipActionForm()
+    update_role_form = UpdateMemberRoleForm()
     pending_invite_resend_form = PendingInviteResendForm()
     pending_invite_revoke_form = PendingInviteRevokeForm()
+
+    # Populate role choices for role-update form.
+    try:
+        from app.models import RBACRole
+
+        roles = (
+            RBACRole.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(RBACRole.name.asc())
+            .all()
+        )
+        update_role_form.role_id.choices = [(str(r.id), r.name) for r in roles]
+    except Exception:
+        update_role_form.role_id.choices = []
 
     return render_template(
         'main/org_admin_dashboard.html',
@@ -253,17 +314,98 @@ def org_admin_dashboard():
         document_count=document_count,
         invite_form=invite_form,
         member_action_form=member_action_form,
+        update_role_form=update_role_form,
         pending_invite_resend_form=pending_invite_resend_form,
         pending_invite_revoke_form=pending_invite_revoke_form,
         departments=departments,
     )
 
 
+@bp.route('/org/admin/members/role', methods=['POST'])
+@login_required
+def org_admin_update_member_role():
+    """Update a member's org-scoped RBAC role."""
+    maybe = _require_org_permission('roles.manage')
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import UpdateMemberRoleForm
+    from app.models import RBACRole
+
+    org_id = _active_org_id()
+
+    form = UpdateMemberRoleForm()
+
+    # Populate role choices so WTForms validates the selection.
+    try:
+        roles = (
+            RBACRole.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(RBACRole.name.asc())
+            .all()
+        )
+        form.role_id.choices = [(str(r.id), r.name) for r in roles]
+    except Exception:
+        form.role_id.choices = []
+
+    if not form.validate_on_submit():
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership_id_raw = (form.membership_id.data or '').strip()
+    role_id_raw = (form.role_id.data or '').strip()
+
+    if not membership_id_raw.isdigit() or not role_id_raw.isdigit():
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership = db.session.get(OrganizationMembership, int(membership_id_raw))
+    if not membership or int(membership.organization_id) != int(org_id):
+        flash('Membership not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    target_role = db.session.get(RBACRole, int(role_id_raw))
+    if not target_role or int(target_role.organization_id) != int(org_id):
+        flash('Role not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    currently_admin = _membership_has_permission(membership, 'users.manage')
+    try:
+        new_admin = 'users.manage' in target_role.effective_permission_codes()
+    except Exception:
+        new_admin = False
+
+    # Guard: never demote the last active admin.
+    if membership.is_active and currently_admin and not new_admin:
+        active_memberships = (
+            OrganizationMembership.query
+            .filter_by(organization_id=int(org_id), is_active=True)
+            .all()
+        )
+        active_admins = sum(1 for m in active_memberships if _membership_has_permission(m, 'users.manage'))
+        if active_admins <= 1:
+            flash('Cannot change role: you would remove the last admin.', 'error')
+            return redirect(url_for('main.org_admin_dashboard'))
+
+    try:
+        membership.role_id = int(target_role.id)
+        # Keep legacy string role in sync during transition.
+        membership.role = 'Admin' if new_admin else 'User'
+        db.session.commit()
+        flash('Role updated.', 'success')
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed updating member role')
+        flash('Failed to update role. Please try again.', 'error')
+
+    return redirect(url_for('main.org_admin_dashboard'))
+
+
 @bp.route('/org/admin/invite', methods=['POST'])
 @login_required
 def org_admin_invite_member():
     """Invite/add a user to the active organization by email."""
-    maybe = _require_org_admin()
+    maybe = _require_org_permission('users.invite')
     if maybe is not None:
         return maybe
 
@@ -273,11 +415,20 @@ def org_admin_invite_member():
     from app.models import Department
 
     org_id = _active_org_id()
-    organization = Organization.query.get(int(org_id))
+    organization = db.session.get(Organization, int(org_id))
     if not organization:
         abort(404)
 
     form = InviteMemberForm()
+
+    # Seed RBAC so role selection works.
+    try:
+        from app.services.rbac import ensure_rbac_seeded_for_org
+
+        ensure_rbac_seeded_for_org(int(org_id))
+        db.session.flush()
+    except Exception:
+        db.session.rollback()
     # Populate department choices (so WTForms validates select value).
     departments = (
         Department.query
@@ -286,6 +437,20 @@ def org_admin_invite_member():
         .all()
     )
     form.department_id.choices = [('', 'Select department')] + [(str(d.id), d.name) for d in departments]
+
+    # Populate role choices from RBAC roles.
+    try:
+        from app.models import RBACRole
+
+        roles = (
+            RBACRole.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(RBACRole.name.asc())
+            .all()
+        )
+        form.role.choices = [(str(r.id), r.name) for r in roles]
+    except Exception:
+        form.role.choices = []
     if not form.validate_on_submit():
         if getattr(form, 'department_id', None) is not None and getattr(form.department_id, 'errors', None):
             flash(form.department_id.errors[0], 'error')
@@ -294,9 +459,35 @@ def org_admin_invite_member():
         return redirect(url_for('main.org_admin_dashboard'))
 
     email = (form.email.data or '').strip().lower()
-    role = (form.role.data or 'User').strip()
-    if role not in {'User', 'Admin'}:
-        role = 'User'
+
+    role_id = None
+    selected_role = None
+    role_raw = (form.role.data or '').strip()
+    if role_raw.isdigit():
+        role_id = int(role_raw)
+        try:
+            from app.models import RBACRole
+
+            selected_role = db.session.get(RBACRole, int(role_id))
+            if not selected_role or int(selected_role.organization_id) != int(org_id):
+                selected_role = None
+        except Exception:
+            selected_role = None
+
+    if not selected_role:
+        try:
+            from app.models import RBACRole
+            from app.services.rbac import BUILTIN_ROLE_KEYS
+
+            selected_role = (
+                RBACRole.query
+                .filter_by(organization_id=int(org_id), name=BUILTIN_ROLE_KEYS.MEMBER)
+                .first()
+            )
+        except Exception:
+            selected_role = None
+
+    selected_role_id = int(selected_role.id) if selected_role else None
 
     # Department: either select existing OR create new.
     department = None
@@ -325,7 +516,7 @@ def org_admin_invite_member():
     else:
         dept_id_raw = (form.department_id.data or '').strip()
         if dept_id_raw.isdigit():
-            department = Department.query.get(int(dept_id_raw))
+            department = db.session.get(Department, int(dept_id_raw))
             if department and int(department.organization_id) != int(org_id):
                 department = None
 
@@ -349,7 +540,6 @@ def org_admin_invite_member():
         if not user:
             user = User(
                 email=email,
-                role='User',
                 email_verified=False,
                 is_active=True,
                 created_at=datetime.now(timezone.utc),
@@ -366,17 +556,28 @@ def org_admin_invite_member():
         )
         if membership:
             membership.is_active = True
-            membership.role = role
+            membership.role_id = selected_role_id
             membership.department_id = int(department.id) if department else None
         else:
             membership = OrganizationMembership(
                 organization_id=int(org_id),
                 user_id=int(user.id),
-                role=role,
+                role_id=selected_role_id,
                 is_active=True,
                 department_id=(int(department.id) if department else None),
             )
             db.session.add(membership)
+
+        # Keep legacy role string compatible with existing admin checks.
+        try:
+            from app.services.rbac import BUILTIN_ROLE_KEYS
+
+            if selected_role and (selected_role.name or '').strip() == BUILTIN_ROLE_KEYS.ORG_ADMIN:
+                membership.role = 'Admin'
+            else:
+                membership.role = 'User'
+        except Exception:
+            membership.role = membership.role or 'User'
 
         # Track invites only for "pending" invited users (no password set yet).
         if not bool(user.password_hash):
@@ -427,7 +628,7 @@ def org_admin_invite_member():
 @login_required
 def org_admin_create_department():
     """Create a department for the active organization (AJAX helper)."""
-    maybe = _require_org_admin()
+    maybe = _require_org_permission('departments.manage')
     if maybe is not None:
         return maybe
 
@@ -488,7 +689,7 @@ def org_admin_create_department():
 @login_required
 def org_admin_edit_department(dept_id):
     """Edit a department (AJAX helper)."""
-    maybe = _require_org_admin()
+    maybe = _require_org_permission('departments.manage')
     if maybe is not None:
         return maybe
 
@@ -548,7 +749,7 @@ def org_admin_edit_department(dept_id):
 @login_required
 def org_admin_delete_department(dept_id):
     """Delete a department (AJAX helper). Members assigned to this department will have it set to NULL."""
-    maybe = _require_org_admin()
+    maybe = _require_org_permission('departments.manage')
     if maybe is not None:
         return maybe
 
@@ -583,7 +784,7 @@ def org_admin_delete_department(dept_id):
 @login_required
 def org_admin_resend_invite():
     """Resend an invite email to a pending invited user (cooldown enforced)."""
-    maybe = _require_org_admin()
+    maybe = _require_org_permission('users.invite')
     if maybe is not None:
         return maybe
 
@@ -591,7 +792,7 @@ def org_admin_resend_invite():
     from datetime import datetime, timezone
 
     org_id = _active_org_id()
-    organization = Organization.query.get(int(org_id))
+    organization = db.session.get(Organization, int(org_id))
     if not organization:
         abort(404)
 
@@ -605,12 +806,12 @@ def org_admin_resend_invite():
         flash('Invalid request.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    membership = OrganizationMembership.query.get(int(membership_id_raw))
+    membership = db.session.get(OrganizationMembership, int(membership_id_raw))
     if not membership or int(membership.organization_id) != int(org_id):
         flash('Invite not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    user = User.query.get(int(membership.user_id)) if membership else None
+    user = db.session.get(User, int(membership.user_id)) if membership else None
     if not _is_pending_org_invite(membership, user):
         flash('That invite is no longer pending.', 'info')
         return redirect(url_for('main.org_admin_dashboard'))
@@ -651,7 +852,7 @@ def org_admin_resend_invite():
 @login_required
 def org_admin_revoke_invite():
     """Revoke a pending invite by disabling the membership."""
-    maybe = _require_org_admin()
+    maybe = _require_org_permission('users.invite')
     if maybe is not None:
         return maybe
 
@@ -670,7 +871,7 @@ def org_admin_revoke_invite():
         flash('Invalid request.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    membership = OrganizationMembership.query.get(int(membership_id_raw))
+    membership = db.session.get(OrganizationMembership, int(membership_id_raw))
     if not membership or int(membership.organization_id) != int(org_id):
         flash('Invite not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
@@ -680,7 +881,7 @@ def org_admin_revoke_invite():
         flash('You cannot revoke your own access.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    user = User.query.get(int(membership.user_id)) if membership else None
+    user = db.session.get(User, int(membership.user_id)) if membership else None
     if not _is_pending_org_invite(membership, user):
         flash('That invite is no longer pending.', 'info')
         return redirect(url_for('main.org_admin_dashboard'))
@@ -721,20 +922,20 @@ def org_admin_remove_member():
         return redirect(url_for('main.org_admin_dashboard'))
 
     membership_id = int(membership_id_raw)
-    membership = OrganizationMembership.query.get(membership_id)
+    membership = db.session.get(OrganizationMembership, membership_id)
     if not membership or int(membership.organization_id) != int(org_id):
         flash('Membership not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    # Guard: do not remove the last active admin.
-    is_admin = (membership.role or '').strip().lower() == 'admin'
+    # Guard: do not remove the last active user-manager.
+    is_admin = _membership_has_permission(membership, 'users.manage')
     if is_admin and membership.is_active:
-        active_admins = (
+        active_memberships = (
             OrganizationMembership.query
             .filter_by(organization_id=int(org_id), is_active=True)
-            .filter(OrganizationMembership.role.ilike('admin'))
-            .count()
+            .all()
         )
+        active_admins = sum(1 for m in active_memberships if _membership_has_permission(m, 'users.manage'))
         if active_admins <= 1:
             flash('Cannot remove the last admin. Promote another member to admin first.', 'error')
             return redirect(url_for('main.org_admin_dashboard'))
@@ -742,12 +943,12 @@ def org_admin_remove_member():
     # Allow self-removal only when there is another active admin (if the user is an admin).
     if int(membership.user_id) == int(current_user.id):
         if is_admin and membership.is_active:
-            active_admins = (
+            active_memberships = (
                 OrganizationMembership.query
                 .filter_by(organization_id=int(org_id), is_active=True)
-                .filter(OrganizationMembership.role.ilike('admin'))
-                .count()
+                .all()
             )
+            active_admins = sum(1 for m in active_memberships if _membership_has_permission(m, 'users.manage'))
             if active_admins <= 1:
                 flash('You are the only admin. Promote another admin before leaving the organization.', 'error')
                 return redirect(url_for('main.org_admin_dashboard'))
@@ -862,6 +1063,8 @@ def dashboard():
         return maybe
 
     org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
     recent_documents = (
         Document.query.filter_by(organization_id=org_id, is_active=True)
         .order_by(Document.uploaded_at.desc())
@@ -907,6 +1110,8 @@ def documents():
         return maybe
 
     org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
     query = Document.query.filter_by(organization_id=org_id, is_active=True)
     user_documents = query.order_by(Document.uploaded_at.desc()).all()
     return render_template('main/documents.html', 
@@ -922,6 +1127,8 @@ def evidence_repository():
         return maybe
 
     org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
     query = Document.query.filter_by(organization_id=org_id, is_active=True)
     documents = query.order_by(Document.uploaded_at.desc()).all()
     return render_template('main/evidence_repository.html', 
@@ -951,9 +1158,12 @@ def download_document(doc_id):
     )
     if not membership:
         abort(404)
+
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(404)
     
     # Get document from database
-    document = Document.query.get(doc_id)
+    document = db.session.get(Document, int(doc_id))
     
     # Check if document exists and belongs to active org
     if not document or not getattr(document, 'is_active', True):
@@ -999,11 +1209,14 @@ def delete_document(doc_id):
     from flask import flash, redirect
     from app.services.azure_storage import AzureBlobStorageService
     
-    # Get document from database
-    document = Document.query.get(doc_id)
-    
-    # Check if document exists and belongs to user
     org_id = _active_org_id()
+    if not current_user.has_permission('documents.delete', org_id=int(org_id)):
+        abort(403)
+
+    # Get document from database
+    document = db.session.get(Document, int(doc_id))
+
+    # Check if document exists and belongs to user
     if not document:
         flash('Document not found or access denied.', 'error')
         return redirect(url_for('main.evidence_repository'))
@@ -1043,10 +1256,12 @@ def document_details(doc_id):
     from flask import abort
     
     # Get document from database
-    document = Document.query.get(doc_id)
+    document = db.session.get(Document, int(doc_id))
     
     # Check if document exists and belongs to user
     org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
     if not document:
         abort(404)
     if document.organization_id != org_id:
@@ -1098,7 +1313,7 @@ def organization_settings():
     from flask import abort, flash, make_response, request
     from app.main.forms import OrganizationBillingForm, OrganizationProfileSettingsForm
 
-    maybe = _require_org_admin()
+    maybe = _require_org_permission('org.manage')
     if maybe is not None:
         return maybe
 
@@ -1106,7 +1321,7 @@ def organization_settings():
         flash('No organization is associated with this account.', 'error')
         return redirect(url_for('main.dashboard'))
 
-    organization = Organization.query.get(current_user.organization_id)
+    organization = db.session.get(Organization, int(current_user.organization_id))
     if not organization:
         abort(404)
 
@@ -1177,7 +1392,7 @@ def organization_logo():
     if not org_id:
         abort(404)
 
-    organization = Organization.query.get(org_id)
+    organization = db.session.get(Organization, int(org_id))
     if not organization or not organization.logo_blob_name:
         abort(404)
 
@@ -1212,7 +1427,7 @@ def organization_logo_by_id(org_id):
     if not membership:
         abort(404)
 
-    organization = Organization.query.get(int(org_id))
+    organization = db.session.get(Organization, int(org_id))
     if not organization or not organization.logo_blob_name:
         abort(404)
 
@@ -1259,7 +1474,7 @@ def ai_evidence_detail(entry_id):
 @login_required
 def document_detail(doc_id):
     """Document detail route."""
-    document = Document.query.get(doc_id)
+    document = db.session.get(Document, int(doc_id))
     if not document or document.uploaded_by != current_user.id:
         return redirect(url_for('main.documents'))
     
@@ -1396,12 +1611,29 @@ def help():
 @login_required
 def profile():
     """User profile route."""
-    if request.method == 'POST':
-        # User avatars are intentionally disabled; org logo is the single branding image.
-        flash('Profile photos are disabled. Use the organization logo instead.', 'info')
-        return redirect(url_for('main.profile'))
+    from app.main.forms import UserProfileForm
 
-    return render_template('main/profile.html', title='My Profile')
+    form = UserProfileForm(obj=current_user)
+
+    if form.validate_on_submit():
+        current_user.first_name = (form.first_name.data or '').strip() or None
+        current_user.last_name = (form.last_name.data or '').strip() or None
+
+        # Keep full_name in sync if it was empty.
+        if not (current_user.full_name or '').strip():
+            parts = [p for p in [(current_user.first_name or ''), (current_user.last_name or '')] if p.strip()]
+            current_user.full_name = ' '.join([p.strip() for p in parts]) or None
+
+        try:
+            db.session.commit()
+            flash('Profile updated.', 'success')
+            return redirect(url_for('main.profile'))
+        except Exception as e:
+            db.session.rollback()
+            flash('Profile update failed. Please try again.', 'error')
+            current_app.logger.error(f"Profile update failed for user {current_user.id}: {e}")
+
+    return render_template('main/profile.html', title='My Profile', form=form)
 
 
 @bp.route('/profile/avatar')
@@ -1513,6 +1745,10 @@ def adls_connection():
 @login_required
 def audit_export():
     """Audit export route for generating compliance reports."""
+    maybe = _require_org_permission('audits.export')
+    if maybe is not None:
+        return maybe
+
     export_stats = {
         'total_reports': 12,
         'ready_reports': 8,
@@ -1567,7 +1803,7 @@ def debug_adls():
 @login_required
 def generate_report(report_type):
     """Generate and download compliance reports."""
-    maybe = _require_active_org()
+    maybe = _require_org_permission('audits.export')
     if maybe is not None:
         return maybe
 
@@ -1576,7 +1812,7 @@ def generate_report(report_type):
     from datetime import datetime
 
     org_id = _active_org_id()
-    organization = Organization.query.get(org_id)
+    organization = db.session.get(Organization, int(org_id))
     if not organization:
         abort(404)
 

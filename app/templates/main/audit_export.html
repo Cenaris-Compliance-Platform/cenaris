@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="fade-in">
+<div class="fade-in position-relative">
+    <div style="pointer-events: none; user-select: none;">
     <!-- Header -->
     <div class="row mb-4">
         <div class="col-12">
@@ -359,6 +360,15 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="cancelExport()">Cancel</button>
             </div>
+        </div>
+    </div>
+
+    </div>
+
+    <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-body bg-opacity-75" style="z-index: 5;">
+        <div class="text-center p-4 rounded-3 border bg-body" style="max-width: 520px;">
+            <div class="h4 fw-bold mb-2">Coming soon</div>
+            <div class="text-body-secondary">Audit Export is not implemented yet.</div>
         </div>
     </div>
 </div>

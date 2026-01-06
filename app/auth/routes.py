@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, current_app, session
+from flask import render_template, redirect, url_for, flash, request, current_app, session, jsonify
 from flask_login import login_user, logout_user, current_user
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import requests
@@ -7,6 +7,7 @@ from flask_mail import Message
 from app.auth import bp
 from app.auth.forms import LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm
 from datetime import datetime, timezone, timedelta
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import User, Organization, OrganizationMembership, LoginEvent, SuspiciousIP
 from app import db, oauth, mail, limiter
@@ -22,6 +23,34 @@ _FAILED_LOGIN_WINDOW_SECONDS = 60 * 30
 _SUSPICIOUS_IP_WINDOW_SECONDS = 60 * 10
 _SUSPICIOUS_IP_FAILURE_THRESHOLD = 20
 _SUSPICIOUS_IP_BLOCK_SECONDS = 60 * 30
+
+
+def _looks_like_schema_mismatch(err: Exception) -> bool:
+    """Best-effort detection of missing migrations (table/column not found)."""
+    # psycopg2 exposes SQLSTATE codes for common schema issues.
+    orig = getattr(err, 'orig', None)
+    pgcode = getattr(orig, 'pgcode', None)
+    if pgcode in {'42P01', '42703'}:  # undefined_table, undefined_column
+        return True
+
+    msg = (str(orig) if orig is not None else str(err) or '').lower()
+    return any(
+        needle in msg
+        for needle in [
+            'does not exist',
+            'undefined table',
+            'undefined column',
+            'relation',
+            'column',
+        ]
+    )
+
+
+def _schema_upgrade_hint() -> str:
+    return (
+        'Database schema appears out of date. Run `flask db upgrade` against your configured database '
+        '(your DEV_DATABASE_URL) and restart the server.'
+    )
 
 
 def _now_ts() -> int:
@@ -74,7 +103,7 @@ def _after_login_redirect():
     if not org_id:
         return redirect(url_for('onboarding.organization'))
 
-    org = Organization.query.get(int(org_id))
+    org = db.session.get(Organization, int(org_id))
     if not org or not org.onboarding_complete():
         return redirect(url_for('onboarding.organization'))
     return redirect(url_for('main.dashboard'))
@@ -105,7 +134,8 @@ def _mail_configured() -> bool:
 
 
 def _email_verification_required() -> bool:
-    # Always require email verification (production best practice).
+    # Require email verification for password-based signups.
+    # OAuth sign-ins can mark the email as verified by the provider.
     return True
 
 
@@ -429,6 +459,28 @@ def signup():
             db.session.add(organization)
             db.session.flush()
 
+            # Ensure org-scoped RBAC roles exist. If RBAC tables are missing in the target DB
+            # (common when switching from SQLite tests to a fresh Postgres DB), fail fast with
+            # a clear migration hint.
+            org_admin_role_id = None
+            try:
+                from app.services.rbac import ensure_rbac_seeded_for_org, BUILTIN_ROLE_KEYS
+                from app.models import RBACRole
+
+                ensure_rbac_seeded_for_org(int(organization.id))
+                db.session.flush()
+                org_admin_role = (
+                    RBACRole.query
+                    .filter_by(organization_id=int(organization.id), name=BUILTIN_ROLE_KEYS.ORG_ADMIN)
+                    .first()
+                )
+                org_admin_role_id = int(org_admin_role.id) if org_admin_role else None
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.exception('RBAC seeding failed during signup')
+                flash(_schema_upgrade_hint() if _looks_like_schema_mismatch(e) else 'Account creation failed. Please try again.', 'error')
+                return render_template('auth/signup.html', form=form, title='Create Account')
+
             user = User(
                 email=email,
                 first_name=first_name,
@@ -437,7 +489,6 @@ def signup():
                 mobile_number=mobile_number,
                 time_zone=time_zone,
                 full_name=(f"{first_name} {last_name}").strip(),
-                role='Admin',
                 organization_id=organization.id,
                 email_verified=False,
                 terms_accepted_at=datetime.now(timezone.utc),
@@ -450,6 +501,7 @@ def signup():
                 organization_id=organization.id,
                 user_id=user.id,
                 role='Admin',
+                role_id=org_admin_role_id,
                 is_active=True,
             )
             db.session.add(membership)
@@ -483,7 +535,25 @@ def signup():
             return redirect(url_for('onboarding.organization'))
         except Exception as e:
             db.session.rollback()
-            flash('An error occurred while creating your account. Please try again.', 'error')
+            current_app.logger.exception('Signup failed')
+
+            # Provide a more actionable message in DEBUG so issues like missing
+            # migrations / DB connectivity are obvious during setup.
+            try:
+                from sqlalchemy.exc import IntegrityError  # type: ignore
+
+                if isinstance(e, IntegrityError):
+                    flash('That email address is already registered. Please sign in instead.', 'error')
+                    return render_template('auth/signup.html', form=form, title='Create Account')
+            except Exception:
+                pass
+
+            if current_app.debug:
+                msg = (str(e) or type(e).__name__).strip()
+                msg = (msg[:200] + '…') if len(msg) > 200 else msg
+                flash(f'Account creation failed: {msg}', 'error')
+            else:
+                flash('An error occurred while creating your account. Please try again.', 'error')
     
     return render_template('auth/signup.html', form=form, title='Create Account')
 
@@ -545,7 +615,7 @@ def reset_password(token):
         flash('This reset link is invalid or has expired. Please request a new one.', 'error')
         return redirect(url_for('auth.forgot_password'))
 
-    user = User.query.get(int(data['user_id']))
+    user = db.session.get(User, int(data['user_id']))
     if not user or (user.email or '').lower().strip() != (data.get('email') or '').lower().strip():
         flash('This reset link is invalid. Please request a new one.', 'error')
         return redirect(url_for('auth.forgot_password'))
@@ -654,9 +724,47 @@ def oauth_callback(provider):
         flash(f'{provider.title()} sign-in is not configured yet.', 'error')
         return redirect(url_for('auth.login'))
 
+    # Ensure Google client uses the same transport settings in the callback as in the
+    # initial authorize redirect. Without this, token exchange can fail on some
+    # Windows/corporate networks.
+    if (provider or '').lower() == 'google':
+        try:
+            from app.auth.oauth_transport import apply_google_tls12_workaround
+
+            apply_google_tls12_workaround(client)
+        except Exception:
+            pass
+
+    # Authlib raises specific exception types for common callback issues (state mismatch,
+    # provider errors). Import them best-effort so we can show actionable guidance.
+    try:  # pragma: no cover
+        from authlib.integrations.base_client.errors import MismatchingStateError, OAuthError  # type: ignore
+    except Exception:  # pragma: no cover
+        MismatchingStateError = None  # type: ignore
+        OAuthError = None  # type: ignore
+
     try:
         token = client.authorize_access_token()
     except Exception as e:
+        if MismatchingStateError is not None and isinstance(e, MismatchingStateError):
+            current_app.logger.warning('OAuth callback failed: mismatching_state (host=%s)', request.host, exc_info=True)
+            flash(
+                'OAuth sign-in failed because your login session could not be validated (state mismatch). '
+                'This commonly happens when switching between localhost and 127.0.0.1. '
+                'Retry using the same hostname you started with (recommended: http://localhost).',
+                'error',
+            )
+            return redirect(url_for('auth.login'))
+
+        if OAuthError is not None and isinstance(e, OAuthError):
+            desc = (getattr(e, 'description', None) or str(e) or '').strip()
+            current_app.logger.warning('OAuth token exchange failed: %s', desc or type(e).__name__, exc_info=True)
+            if current_app.debug and desc:
+                flash(f'OAuth sign-in failed: {desc}', 'error')
+            else:
+                flash('OAuth sign-in failed. Please try again.', 'error')
+            return redirect(url_for('auth.login'))
+
         # Most common local failure: TLS interception / proxy / missing certs on Windows.
         try:
             import requests  # type: ignore
@@ -675,7 +783,13 @@ def oauth_callback(provider):
             pass
 
         current_app.logger.exception('OAuth token exchange failed')
-        flash('OAuth sign-in failed. Please try again.', 'error')
+        if current_app.debug:
+            msg = (str(e) or type(e).__name__).strip()
+            # Keep it short to avoid flooding the UI.
+            msg = (msg[:160] + '…') if len(msg) > 160 else msg
+            flash(f'OAuth sign-in failed: {msg}', 'error')
+        else:
+            flash('OAuth sign-in failed. Please try again.', 'error')
         return redirect(url_for('auth.login'))
     userinfo = None
 
@@ -723,12 +837,31 @@ def oauth_callback(provider):
             db.session.add(organization)
             db.session.flush()
 
+            # Ensure org-scoped RBAC roles exist.
+            org_admin_role_id = None
+            try:
+                from app.services.rbac import ensure_rbac_seeded_for_org, BUILTIN_ROLE_KEYS
+                from app.models import RBACRole
+
+                ensure_rbac_seeded_for_org(int(organization.id))
+                db.session.flush()
+                org_admin_role = (
+                    RBACRole.query
+                    .filter_by(organization_id=int(organization.id), name=BUILTIN_ROLE_KEYS.ORG_ADMIN)
+                    .first()
+                )
+                org_admin_role_id = int(org_admin_role.id) if org_admin_role else None
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.exception('RBAC seeding failed during OAuth signup')
+                flash(_schema_upgrade_hint() if _looks_like_schema_mismatch(e) else 'Failed to create your account. Please try again.', 'error')
+                return redirect(url_for('auth.login'))
+
             user = User(
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
                 full_name=full_name,
-                role='Admin',
                 organization_id=organization.id,
                 email_verified=True,
                 terms_accepted_at=None,
@@ -740,6 +873,7 @@ def oauth_callback(provider):
                 organization_id=organization.id,
                 user_id=user.id,
                 role='Admin',
+                role_id=org_admin_role_id,
                 is_active=True,
             )
             db.session.add(membership)
@@ -763,7 +897,7 @@ def oauth_callback(provider):
                 organization = None
                 created_org = False
                 if getattr(user, 'organization_id', None):
-                    organization = Organization.query.get(int(user.organization_id))
+                    organization = db.session.get(Organization, int(user.organization_id))
 
                 if not organization:
                     email_domain = email.split('@')[-1] if '@' in email else ''
@@ -780,10 +914,35 @@ def oauth_callback(provider):
                 if not has_active_membership:
                     legacy_role = (getattr(user, 'role', None) or '').strip().lower()
                     membership_role = 'Admin' if (created_org or legacy_role == 'admin') else 'User'
+
+                    role_id = None
+                    try:
+                        from app.services.rbac import ensure_rbac_seeded_for_org
+
+                        ensure_rbac_seeded_for_org(int(organization.id))
+                        db.session.flush()
+                    except Exception as e:
+                        db.session.rollback()
+                        current_app.logger.exception('RBAC seeding failed during OAuth legacy safety')
+                        flash(_schema_upgrade_hint() if _looks_like_schema_mismatch(e) else 'OAuth sign-in failed. Please try again.', 'error')
+                        return redirect(url_for('auth.login'))
+
+                    try:
+                        # Prefer mapping via seeded roles.
+                        from app.models import RBACRole
+                        from app.services.rbac import BUILTIN_ROLE_KEYS
+
+                        target = BUILTIN_ROLE_KEYS.ORG_ADMIN if membership_role == 'Admin' else BUILTIN_ROLE_KEYS.MEMBER
+                        r = RBACRole.query.filter_by(organization_id=int(organization.id), name=target).first()
+                        role_id = int(r.id) if r else None
+                    except Exception:
+                        role_id = None
+
                     membership = OrganizationMembership(
                         organization_id=int(organization.id),
                         user_id=int(user.id),
                         role=membership_role,
+                        role_id=role_id,
                         is_active=True,
                     )
                     db.session.add(membership)
@@ -795,6 +954,15 @@ def oauth_callback(provider):
     if not user.is_active:
         flash('This account is disabled. Please contact support.', 'error')
         return redirect(url_for('auth.login'))
+
+    # Successful OAuth sign-in implies the provider has verified control of the email.
+    # This allows Google/Microsoft users to proceed without an additional email-verification step.
+    try:
+        if not getattr(user, 'email_verified', False):
+            user.email_verified = True
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     if _email_verification_required() and not getattr(user, 'email_verified', False):
         # Avoid re-sending repeatedly within the cooldown.
@@ -883,7 +1051,7 @@ def verify_email(token):
         flash('This verification link is invalid or has expired. Please request a new one.', 'error')
         return redirect(url_for('auth.verify_email_request'))
 
-    user = User.query.get(int(data['user_id']))
+    user = db.session.get(User, int(data['user_id']))
     if not user or (user.email or '').lower().strip() != (data.get('email') or '').lower().strip():
         flash('This verification link is invalid. Please request a new one.', 'error')
         return redirect(url_for('auth.verify_email_request'))
@@ -954,6 +1122,21 @@ def verify_email_request():
         return redirect(url_for('auth.verify_email_request'))
 
     return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill, prefilled=prefilled, cooldown_seconds=0)
+
+
+@bp.route('/verify-email/status')
+def verify_email_status():
+    """Lightweight status endpoint for the verify-email page.
+
+    Used to auto-advance the UI once the current (authenticated) user becomes verified
+    after clicking the email link in another tab.
+    """
+    if not current_user.is_authenticated:
+        return jsonify({'authenticated': False, 'verified': False, 'next_url': None})
+
+    verified = bool(getattr(current_user, 'email_verified', False))
+    next_url = url_for('auth.verify_email_request') if verified else None
+    return jsonify({'authenticated': True, 'verified': verified, 'next_url': next_url})
 
 @bp.route('/logout', methods=['POST'])
 def logout():

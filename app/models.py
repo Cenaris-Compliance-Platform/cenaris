@@ -11,6 +11,8 @@ class OrganizationMembership(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     role = db.Column(db.String(20), default='User', nullable=False)
+    # Org-scoped RBAC role reference (preferred)
+    role_id = db.Column(db.Integer, db.ForeignKey('rbac_roles.id'), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
@@ -27,6 +29,13 @@ class OrganizationMembership(db.Model):
     )
 
     department = db.relationship('Department', lazy='joined')
+    rbac_role = db.relationship('RBACRole', lazy='joined')
+
+    @property
+    def display_role_name(self) -> str:
+        if self.rbac_role and (self.rbac_role.name or '').strip():
+            return (self.rbac_role.name or '').strip()
+        return (self.role or 'User').strip() or 'User'
 
 
 class Department(db.Model):
@@ -77,6 +86,7 @@ class Organization(db.Model):
     documents = db.relationship('Document', backref='organization', lazy='dynamic')
     memberships = db.relationship('OrganizationMembership', backref='organization', lazy='dynamic', cascade='all, delete-orphan')
     departments = db.relationship('Department', backref='organization', lazy='dynamic', cascade='all, delete-orphan')
+    roles = db.relationship('RBACRole', backref='organization', lazy='dynamic', cascade='all, delete-orphan')
 
     def core_details_complete(self) -> bool:
         return bool(
@@ -148,12 +158,38 @@ class User(UserMixin, db.Model):
         return (self.email or '').strip()
 
     def is_org_admin(self, org_id: int | None = None) -> bool:
+        return bool(self.has_permission('users.manage', org_id=org_id))
+
+    def active_membership(self, org_id: int | None = None) -> OrganizationMembership | None:
         org_id = int(org_id) if org_id is not None else (int(self.organization_id) if self.organization_id else None)
         if not org_id:
+            return None
+        return self.memberships.filter_by(organization_id=org_id, is_active=True).first()
+
+    def active_role_name(self, org_id: int | None = None) -> str | None:
+        membership = self.active_membership(org_id=org_id)
+        return membership.display_role_name if membership else None
+
+    def has_permission(self, code: str, org_id: int | None = None) -> bool:
+        code = (code or '').strip()
+        if not code:
             return False
 
-        membership = self.memberships.filter_by(organization_id=org_id, is_active=True).first()
-        return bool(membership and (membership.role or '').strip().lower() in {'admin', 'organisation administrator', 'organization administrator'})
+        membership = self.active_membership(org_id=org_id)
+        if not membership:
+            return False
+
+        # Preferred: RBAC role with permissions.
+        if membership.rbac_role:
+            return code in membership.rbac_role.effective_permission_codes()
+
+        # Legacy fallback (until role_id is fully backfilled everywhere)
+        legacy = (membership.role or '').strip().lower()
+        if legacy in {'admin', 'organisation administrator', 'organization administrator'}:
+            return True
+
+        # Conservative defaults for legacy non-admin members.
+        return code in {'documents.view', 'documents.upload'}
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -179,7 +215,76 @@ class Document(db.Model):
 
     uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='joined')
 
-    uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='joined')
+
+rbac_role_permissions = db.Table(
+    'rbac_role_permissions',
+    db.Column('role_id', db.Integer, db.ForeignKey('rbac_roles.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('rbac_permissions.id', ondelete='CASCADE'), primary_key=True),
+)
+
+
+rbac_role_inherits = db.Table(
+    'rbac_role_inherits',
+    db.Column('role_id', db.Integer, db.ForeignKey('rbac_roles.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('inherited_role_id', db.Integer, db.ForeignKey('rbac_roles.id', ondelete='CASCADE'), primary_key=True),
+)
+
+
+class RBACPermission(db.Model):
+    __tablename__ = 'rbac_permissions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(80), unique=True, nullable=False)
+    description = db.Column(db.String(255))
+
+
+class RBACRole(db.Model):
+    __tablename__ = 'rbac_roles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    description = db.Column(db.String(255))
+    is_system = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    permissions = db.relationship('RBACPermission', secondary=rbac_role_permissions, lazy='joined')
+    inherits = db.relationship(
+        'RBACRole',
+        secondary=rbac_role_inherits,
+        primaryjoin=(rbac_role_inherits.c.role_id == id),
+        secondaryjoin=(rbac_role_inherits.c.inherited_role_id == id),
+        lazy='joined',
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'name', name='uq_rbac_roles_org_name'),
+        db.Index('ix_rbac_roles_org_id', 'organization_id'),
+    )
+
+    def effective_permission_codes(self) -> set[str]:
+        """Return direct + inherited permission codes (cycle-safe)."""
+        seen_role_ids: set[int] = set()
+        codes: set[str] = set()
+
+        def walk(role: 'RBACRole') -> None:
+            if not role or not role.id:
+                return
+            rid = int(role.id)
+            if rid in seen_role_ids:
+                return
+            seen_role_ids.add(rid)
+
+            for perm in (role.permissions or []):
+                c = (getattr(perm, 'code', None) or '').strip()
+                if c:
+                    codes.add(c)
+
+            for inherited in (role.inherits or []):
+                walk(inherited)
+
+        walk(self)
+        return codes
 
 
 class LoginEvent(db.Model):

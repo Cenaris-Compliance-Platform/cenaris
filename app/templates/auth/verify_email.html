@@ -78,4 +78,49 @@
 {% if config.get('TURNSTILE_SITE_KEY') %}
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 {% endif %}
+
+<script>
+  // If the user verifies their email in another tab, reload this page
+  // when they return so the app can redirect them forward automatically.
+  (function () {
+    const statusUrl = "{{ url_for('auth.verify_email_status') }}";
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(statusUrl, {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.verified && data.next_url) {
+          window.location.href = data.next_url;
+        }
+      } catch (e) {
+        // no-op
+      }
+    };
+
+    const reload = () => {
+      try {
+        window.location.reload();
+      } catch (e) {
+        // no-op
+      }
+    };
+
+    window.addEventListener('focus', reload);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') reload();
+    });
+
+    // Also poll in the background so the page can advance without manual refresh.
+    // This stays safe because it only reports status for the currently authenticated user.
+    setInterval(checkStatus, 2000);
+    checkStatus();
+  })();
+</script>
 {% endblock %}
