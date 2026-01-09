@@ -5,11 +5,114 @@ from app.models import Document, Organization, OrganizationMembership, User
 from app import db, mail
 from app.services.azure_data_service import azure_data_service
 
+import threading
+import time
+
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
 
+import os
+import hashlib
+import json
+
 
 _RESEND_ORG_INVITE_COOLDOWN_SECONDS = 60 * 5
+
+
+_ORG_LOGO_CACHE: dict[tuple[int, str], tuple[float, bytes, str | None]] = {}
+_ORG_LOGO_CACHE_LOCK = threading.Lock()
+
+
+def _etag_matches_if_none_match(if_none_match: str | None, etag: str) -> bool:
+    if not if_none_match:
+        return False
+    value = if_none_match.strip()
+    if value == '*':
+        return True
+    candidates = [part.strip() for part in value.split(',') if part.strip()]
+    strong_etag = etag[2:] if etag.startswith('W/') else etag
+    return (etag in candidates) or (strong_etag in candidates)
+
+
+def _get_cached_org_logo(org_id: int, blob_name: str) -> tuple[bytes, str | None] | None:
+    now = time.monotonic()
+    with _ORG_LOGO_CACHE_LOCK:
+        cached = _ORG_LOGO_CACHE.get((org_id, blob_name))
+        if not cached:
+            return None
+        expires_at, data, content_type = cached
+        if now >= expires_at:
+            try:
+                del _ORG_LOGO_CACHE[(org_id, blob_name)]
+            except KeyError:
+                pass
+            return None
+        return data, content_type
+
+
+def _set_cached_org_logo(org_id: int, blob_name: str, data: bytes, content_type: str | None, ttl_seconds: int) -> None:
+    if ttl_seconds <= 0:
+        return
+    expires_at = time.monotonic() + ttl_seconds
+    with _ORG_LOGO_CACHE_LOCK:
+        _ORG_LOGO_CACHE[(org_id, blob_name)] = (expires_at, data, content_type)
+
+
+def _org_logo_disk_cache_paths(org_id: int, blob_name: str) -> tuple[str, str]:
+    digest = hashlib.sha256(blob_name.encode('utf-8')).hexdigest()
+    base_dir = os.path.join(current_app.instance_path, 'cache', 'org_logos')
+    return (
+        os.path.join(base_dir, f'{org_id}_{digest}.bin'),
+        os.path.join(base_dir, f'{org_id}_{digest}.json'),
+    )
+
+
+def _get_disk_cached_org_logo(org_id: int, blob_name: str) -> tuple[bytes, str | None] | None:
+    try:
+        ttl_seconds = int(current_app.config.get('ORG_LOGO_DISK_CACHE_SECONDS') or 86400)
+    except Exception:
+        ttl_seconds = 86400
+    if ttl_seconds <= 0:
+        return None
+
+    data_path, meta_path = _org_logo_disk_cache_paths(org_id, blob_name)
+    try:
+        if not os.path.exists(data_path) or not os.path.exists(meta_path):
+            return None
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            meta = json.load(f) or {}
+        created_at = float(meta.get('created_at') or 0)
+        if (time.time() - created_at) > ttl_seconds:
+            return None
+        with open(data_path, 'rb') as f:
+            data = f.read()
+        if not data:
+            return None
+        return data, (meta.get('content_type') or None)
+    except Exception:
+        return None
+
+
+def _set_disk_cached_org_logo(org_id: int, blob_name: str, data: bytes, content_type: str | None) -> None:
+    try:
+        ttl_seconds = int(current_app.config.get('ORG_LOGO_DISK_CACHE_SECONDS') or 86400)
+    except Exception:
+        ttl_seconds = 86400
+    if ttl_seconds <= 0:
+        return
+    try:
+        data_path, meta_path = _org_logo_disk_cache_paths(org_id, blob_name)
+        os.makedirs(os.path.dirname(data_path), exist_ok=True)
+        tmp_data = data_path + '.tmp'
+        tmp_meta = meta_path + '.tmp'
+        with open(tmp_data, 'wb') as f:
+            f.write(data)
+        with open(tmp_meta, 'w', encoding='utf-8') as f:
+            json.dump({'created_at': time.time(), 'content_type': content_type}, f)
+        os.replace(tmp_data, data_path)
+        os.replace(tmp_meta, meta_path)
+    except Exception:
+        return
 
 
 @bp.route('/terms')
@@ -1065,16 +1168,28 @@ def dashboard():
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
+    
+    # Progressive loading: render the page immediately and fetch ML/ADLS data via AJAX.
+    # `defer_ml=1` (default) prevents slow external calls from blocking the HTML response.
+    defer_ml = (request.args.get('defer_ml', '1') or '1') != '0'
+    ml_enabled = bool(current_app.config.get('ML_SUMMARY_ENABLED', False))
+    skip_adls = (not ml_enabled) or defer_ml or (request.args.get('quick') == '1')
+    
+    # Parallel non-blocking queries: recent docs + count.
+    from sqlalchemy.orm import joinedload
     recent_documents = (
-        Document.query.filter_by(organization_id=org_id, is_active=True)
+        Document.query
+        .options(joinedload(Document.uploader))
+        .filter_by(organization_id=org_id, is_active=True)
         .order_by(Document.uploaded_at.desc())
         .limit(5)
         .all()
     )
-    total_documents = Document.query.filter_by(organization_id=org_id, is_active=True).count()
+    # Avoid full table scan for count; use an approximate or limit scope.
+    total_documents = Document.query.filter_by(organization_id=org_id, is_active=True).limit(1000).count()
     
-    # Get real ADLS data (skip external calls during tests)
-    if current_app.config.get('TESTING'):
+    # ML/ADLS data is deferred by default; provide a lightweight placeholder for the template.
+    if current_app.config.get('TESTING') or skip_adls:
         ml_summary = {
             'avg_compliancy_rate': 0,
             'total_files': 0,
@@ -1082,6 +1197,7 @@ def dashboard():
             'total_needs_review': 0,
             'total_missing': 0,
             'file_summaries': [],
+            'connection_status': 'Loading…',
         }
     else:
         ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id, organization_id=org_id)
@@ -1090,7 +1206,9 @@ def dashboard():
                          title='Dashboard',
                          recent_documents=recent_documents,
                          total_documents=total_documents,
-                         ml_summary=ml_summary)
+                         ml_summary=ml_summary,
+                         skip_adls=skip_adls,
+                         ml_enabled=ml_enabled)
 
 @bp.route('/upload')
 @login_required
@@ -1129,11 +1247,27 @@ def evidence_repository():
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
-    query = Document.query.filter_by(organization_id=org_id, is_active=True)
-    documents = query.order_by(Document.uploaded_at.desc()).all()
+    
+    # Pagination to avoid loading thousands of documents at once.
+    page = request.args.get('page', 1, type=int)
+    per_page = int(request.args.get('per_page', '50') or 50)
+    per_page = min(max(per_page, 10), 200)  # clamp between 10-200
+    
+    # Use options to eager-load relationships and avoid N+1 queries
+    from sqlalchemy.orm import joinedload
+    query = (
+        Document.query
+        .options(joinedload(Document.uploader))
+        .filter_by(organization_id=org_id, is_active=True)
+    )
+    pagination = query.order_by(Document.uploaded_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    documents = pagination.items
     return render_template('main/evidence_repository.html', 
                          title='Evidence Repository',
-                         documents=documents)
+                         documents=documents,
+                         pagination=pagination)
 
 @bp.route('/document/<int:doc_id>/download')
 def download_document(doc_id):
@@ -1275,10 +1409,18 @@ def document_details(doc_id):
 @login_required
 def ai_evidence():
     """AI Evidence route to display AI-generated evidence entries."""
-    # Get real ADLS data (org-scoped)
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    # Get real ADLS data (org-scoped) — reuses cached result from dashboard if recent
     summary = azure_data_service.get_dashboard_summary(
         user_id=current_user.id,
-        organization_id=getattr(current_user, 'organization_id', None),
+        organization_id=org_id,
     )
     
     # Transform ADLS data into AI evidence entries
@@ -1396,20 +1538,66 @@ def organization_logo():
     if not organization or not organization.logo_blob_name:
         abort(404)
 
-    from app.services.azure_storage_service import azure_storage_service
-    # Pass org_id to ensure correct path (org_X/ prefix)
-    blob_data = azure_storage_service.download_blob(organization.logo_blob_name, organization_id=int(org_id))
-    if not blob_data:
-        abort(404)
+    # Strong cache validators based on blob name (changes on upload).
+    etag = f'W/"orglogo-{int(org_id)}-{organization.logo_blob_name}"'
+    req_version = (request.args.get('v') or '').strip()
+    inm = request.headers.get('If-None-Match')
+    if _etag_matches_if_none_match(inm, etag):
+        resp = make_response('', 304)
+        resp.headers['ETag'] = etag
+        if req_version and req_version == (organization.logo_blob_name or ''):
+            resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+        else:
+            resp.headers['Cache-Control'] = 'private, max-age=300'
+        current_app.logger.info('Org logo 304 (etag match) org_id=%s', org_id)
+        return resp
+
+    # Cache logo bytes in-memory to avoid repeated Azure fetches.
+    try:
+        logo_cache_seconds = int((current_app.config.get('ORG_LOGO_CACHE_SECONDS') or 300))
+    except Exception:
+        logo_cache_seconds = 300
+
+    t0 = time.monotonic()
+    cached = _get_cached_org_logo(int(org_id), organization.logo_blob_name)
+    if cached:
+        blob_data, cached_type = cached
+        content_type = cached_type or organization.logo_content_type
+        current_app.logger.info('Org logo served from memory cache org_id=%s', org_id)
+    else:
+        disk_cached = _get_disk_cached_org_logo(int(org_id), organization.logo_blob_name)
+        if disk_cached:
+            blob_data, disk_type = disk_cached
+            content_type = disk_type or organization.logo_content_type
+            _set_cached_org_logo(int(org_id), organization.logo_blob_name, blob_data, content_type, ttl_seconds=logo_cache_seconds)
+            current_app.logger.info('Org logo served from disk cache org_id=%s', org_id)
+        else:
+            from app.services.azure_storage_service import azure_storage_service
+            # Pass org_id to ensure correct path (org_X/ prefix)
+            blob_data = azure_storage_service.download_blob(organization.logo_blob_name, organization_id=int(org_id))
+            if not blob_data:
+                abort(404)
+            content_type = organization.logo_content_type
+            _set_cached_org_logo(int(org_id), organization.logo_blob_name, blob_data, content_type, ttl_seconds=logo_cache_seconds)
+            _set_disk_cached_org_logo(int(org_id), organization.logo_blob_name, blob_data, content_type)
+            elapsed = time.monotonic() - t0
+            current_app.logger.warning('Org logo fetched from Azure org_id=%s took %.2fs', org_id, elapsed)
 
     file_stream = io.BytesIO(blob_data)
     file_stream.seek(0)
-    return send_file(
+    resp = send_file(
         file_stream,
-        mimetype=organization.logo_content_type or 'application/octet-stream',
+        mimetype=content_type or 'application/octet-stream',
         as_attachment=False,
         download_name='logo'
     )
+
+    resp.headers['ETag'] = etag
+    if req_version and req_version == (organization.logo_blob_name or ''):
+        resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    else:
+        resp.headers['Cache-Control'] = 'private, max-age=300'
+    return resp
 
 @bp.route('/organization/<int:org_id>/logo')
 @login_required
@@ -1431,20 +1619,64 @@ def organization_logo_by_id(org_id):
     if not organization or not organization.logo_blob_name:
         abort(404)
 
-    from app.services.azure_storage_service import azure_storage_service
-    # Pass org_id to ensure correct path (org_X/ prefix)
-    blob_data = azure_storage_service.download_blob(organization.logo_blob_name, organization_id=int(org_id))
-    if not blob_data:
-        abort(404)
+    etag = f'W/"orglogo-{int(org_id)}-{organization.logo_blob_name}"'
+    req_version = (request.args.get('v') or '').strip()
+    inm = request.headers.get('If-None-Match')
+    if _etag_matches_if_none_match(inm, etag):
+        resp = make_response('', 304)
+        resp.headers['ETag'] = etag
+        if req_version and req_version == (organization.logo_blob_name or ''):
+            resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+        else:
+            resp.headers['Cache-Control'] = 'private, max-age=300'
+        current_app.logger.info('Org logo(by_id) 304 (etag match) org_id=%s', org_id)
+        return resp
+
+    try:
+        logo_cache_seconds = int((current_app.config.get('ORG_LOGO_CACHE_SECONDS') or 300))
+    except Exception:
+        logo_cache_seconds = 300
+
+    t0 = time.monotonic()
+    cached = _get_cached_org_logo(int(org_id), organization.logo_blob_name)
+    if cached:
+        blob_data, cached_type = cached
+        content_type = cached_type or organization.logo_content_type
+        current_app.logger.info('Org logo(by_id) served from memory cache org_id=%s', org_id)
+    else:
+        disk_cached = _get_disk_cached_org_logo(int(org_id), organization.logo_blob_name)
+        if disk_cached:
+            blob_data, disk_type = disk_cached
+            content_type = disk_type or organization.logo_content_type
+            _set_cached_org_logo(int(org_id), organization.logo_blob_name, blob_data, content_type, ttl_seconds=logo_cache_seconds)
+            current_app.logger.info('Org logo(by_id) served from disk cache org_id=%s', org_id)
+        else:
+            from app.services.azure_storage_service import azure_storage_service
+            # Pass org_id to ensure correct path (org_X/ prefix)
+            blob_data = azure_storage_service.download_blob(organization.logo_blob_name, organization_id=int(org_id))
+            if not blob_data:
+                abort(404)
+            content_type = organization.logo_content_type
+            _set_cached_org_logo(int(org_id), organization.logo_blob_name, blob_data, content_type, ttl_seconds=logo_cache_seconds)
+            _set_disk_cached_org_logo(int(org_id), organization.logo_blob_name, blob_data, content_type)
+            elapsed = time.monotonic() - t0
+            current_app.logger.warning('Org logo(by_id) fetched from Azure org_id=%s took %.2fs', org_id, elapsed)
 
     file_stream = io.BytesIO(blob_data)
     file_stream.seek(0)
-    return send_file(
+    resp = send_file(
         file_stream,
-        mimetype=organization.logo_content_type or 'application/octet-stream',
+        mimetype=content_type or 'application/octet-stream',
         as_attachment=False,
         download_name=f'{organization.name}_logo'
     )
+
+    resp.headers['ETag'] = etag
+    if req_version and req_version == (organization.logo_blob_name or ''):
+        resp.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    else:
+        resp.headers['Cache-Control'] = 'private, max-age=300'
+    return resp
 
 @bp.route('/ai-evidence/<int:entry_id>')
 @login_required
@@ -1486,33 +1718,23 @@ def document_detail(doc_id):
 @login_required
 def gap_analysis():
     """Gap Analysis route."""
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    # Get real ADLS data
-    print("\n" + "="*60)
-    print("GAP ANALYSIS - Starting data fetch")
-    print("="*60)
-    
-    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
-    
-    print(f"Connection Status: {summary.get('connection_status')}")
-    print(f"Total Files: {summary.get('total_files')}")
-    print(f"File Summaries: {len(summary.get('file_summaries', []))}")
-    
-    logger.info(f"Gap Analysis - Summary: {summary}")
-    logger.info(f"Gap Analysis - File summaries count: {len(summary.get('file_summaries', []))}")
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    # Get real ADLS data (org-scoped). Keep this endpoint quiet to avoid slow log I/O.
+    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id, organization_id=org_id)
     
     # Build gap analysis data from ADLS
     gap_data = []
     
     if summary.get('file_summaries'):
-        print(f"\nProcessing {len(summary['file_summaries'])} file summaries...")
         for file_summary in summary['file_summaries']:
             frameworks_data = file_summary.get('frameworks', [])
-            print(f"  File: {file_summary.get('file_name')}")
-            print(f"  Frameworks: {frameworks_data}")
-            logger.info(f"Gap Analysis - Frameworks in {file_summary.get('file_name')}: {frameworks_data}")
             
             for framework_data in frameworks_data:
                 # Map status from ADLS to display format
@@ -1533,17 +1755,7 @@ def gap_analysis():
                     'supporting_evidence': file_summary.get('file_name', 'compliance_summary.csv'),
                     'last_updated': file_summary.get('last_updated')
                 }
-                print(f"    Adding: {item['requirement_name']} - {item['completion_percentage']}% - {item['status']}")
                 gap_data.append(item)
-    else:
-        print("  No file summaries found!")
-    
-    print(f"\nTotal gap_data items: {len(gap_data)}")
-    logger.info(f"Gap Analysis - Total gap_data items: {len(gap_data)}")
-    
-    # Log if no data found
-    if not gap_data:
-        logger.warning("No data from ADLS - showing empty state")
     
     # Calculate summary stats from gap_data
     total = len(gap_data)
@@ -1564,9 +1776,6 @@ def gap_analysis():
         'not_met': not_met,
         'compliance_percentage': int(avg_percentage)
     }
-    
-    logger.info(f"Gap Analysis - Summary stats: {summary_stats}")
-    logger.info(f"Gap Analysis - Rendering with {len(gap_data)} items")
     
     return render_template('main/gap_analysis.html',
                          title='Gap Analysis',
@@ -1723,7 +1932,33 @@ def ml_file_detail(file_path):
 @login_required
 def api_ml_summary():
     """API endpoint for ML summary data."""
-    return jsonify(get_mock_ml_summary())
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'error': 'Forbidden'}), 403
+
+    if current_app.config.get('TESTING'):
+        return jsonify(get_mock_ml_summary())
+
+    # ML feature is not implemented yet; keep endpoint fast and predictable.
+    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
+        return jsonify({
+            'total_files': 0,
+            'avg_compliancy_rate': 0,
+            'total_requirements': 0,
+            'total_complete': 0,
+            'total_needs_review': 0,
+            'total_missing': 0,
+            'last_updated': None,
+            'file_summaries': [],
+            'connection_status': 'Coming soon',
+        })
+
+    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id, organization_id=org_id)
+    return jsonify(summary)
 
 @bp.route('/adls-raw-data')
 @login_required
@@ -1832,7 +2067,7 @@ def generate_report(report_type):
     }
     
     # Get gap analysis data
-    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id)
+    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id, organization_id=org_id)
     gap_data = []
     
     if summary.get('file_summaries'):

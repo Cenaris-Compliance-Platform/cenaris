@@ -6,6 +6,7 @@ Handles upload, download, and deletion of documents in Azure Blob Storage.
 import os
 import logging
 from typing import Optional
+import time
 
 try:
     from azure.storage.blob import BlobServiceClient
@@ -39,7 +40,18 @@ class AzureStorageService:
             connection_string = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
             
             if connection_string and BlobServiceClient:
-                self.blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+                # Network timeouts (best-effort; supported by azure-storage-blob via azure-core).
+                connect_timeout = int(os.getenv('AZURE_BLOB_CONNECTION_TIMEOUT_SECONDS', '3') or 3)
+                read_timeout = int(os.getenv('AZURE_BLOB_READ_TIMEOUT_SECONDS', '5') or 5)
+                try:
+                    self.blob_service_client = BlobServiceClient.from_connection_string(
+                        connection_string,
+                        connection_timeout=connect_timeout,
+                        read_timeout=read_timeout,
+                    )
+                except TypeError:
+                    # Older/newer SDK variants may not accept these kwargs.
+                    self.blob_service_client = BlobServiceClient.from_connection_string(connection_string)
                 logger.info("Azure Blob Storage client initialized successfully")
             else:
                 logger.warning("No Azure connection string found - blob operations will fail")
@@ -134,9 +146,20 @@ class AzureStorageService:
                 blob=blob_name,
             )
 
-            download_stream = blob_client.download_blob()
+            start = time.monotonic()
+            # Best-effort request timeout (server-side). Client-side timeouts come from transport.
+            timeout_seconds = int(os.getenv('AZURE_BLOB_DOWNLOAD_TIMEOUT_SECONDS', '5') or 5)
+            try:
+                download_stream = blob_client.download_blob(timeout=timeout_seconds)
+            except TypeError:
+                download_stream = blob_client.download_blob()
             data = download_stream.readall()
+            elapsed = time.monotonic() - start
 
+            if elapsed > 1.0:
+                logger.warning(
+                    f"Slow blob download ({elapsed:.2f}s): {self.logos_container_name}/{blob_name}"
+                )
             logger.info(f"Successfully downloaded blob: {self.logos_container_name}/{blob_name}")
             return data
 

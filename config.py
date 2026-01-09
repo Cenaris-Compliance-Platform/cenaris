@@ -29,6 +29,7 @@ class Config:
     # SQLAlchemy (Milestone 1)
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ECHO = True  # Set to True temporarily to log all SQL queries for debugging
     
     # Database Connection Pooling (Production)
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -83,6 +84,10 @@ class Config:
 
     # Rate limiting (Flask-Limiter)
     RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI') or 'memory://'
+
+    # Feature flags
+    # ML/ADLS summary is not shipped yet; keep disabled unless explicitly enabled.
+    ML_SUMMARY_ENABLED = (os.environ.get('ML_SUMMARY_ENABLED') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
     
     @staticmethod
     def init_app(app):

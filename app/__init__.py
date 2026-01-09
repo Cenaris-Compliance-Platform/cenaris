@@ -1,10 +1,12 @@
-from flask import Flask, redirect, request
+from flask import Flask, redirect, request, g
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from config import config
 import os
 import logging
+import threading
+import time
 
 import click
 
@@ -17,6 +19,10 @@ from flask_limiter.util import get_remote_address
 login_manager = LoginManager()
 
 logger = logging.getLogger(__name__)
+
+
+_ORG_SWITCHER_CONTEXT_CACHE: dict[tuple[int, int | None], tuple[float, dict]] = {}
+_ORG_SWITCHER_CONTEXT_CACHE_LOCK = threading.Lock()
 
 
 def _maybe_enable_system_cert_store() -> None:
@@ -86,16 +92,24 @@ def create_app(config_name=None):
     config[config_name].init_app(app)
 
     @app.before_request
-    def _normalize_localhost_for_turnstile():
-        """Turnstile widgets are bound to hostnames; localhost != 127.0.0.1.
+    def _normalize_localhost_hostnames():
+        """Keep local dev hostnames consistent (localhost vs 127.0.0.1).
 
-        In local development, users often browse via http://127.0.0.1:PORT.
-        If Turnstile is configured for 'localhost' only, Cloudflare shows
-        'Invalid domain'. Redirect GET/HEAD requests to localhost to match.
+        OAuth callbacks in this app use http://localhost:PORT by default.
+        If a user browses via http://127.0.0.1:PORT, cookies set on localhost
+        won't be sent to 127.0.0.1, which makes users appear logged out.
+
+        Redirect GET/HEAD requests from any non-canonical host to the canonical
+        host to ensure the session cookie remains consistent across navigations.
         """
-        # The error happens at widget render time, so the site key alone is
-        # sufficient to consider Turnstile "enabled" for this normalization.
-        if not app.config.get('TURNSTILE_SITE_KEY'):
+
+        # Opt-out switch (mostly for testing multi-host scenarios).
+        flag = (os.environ.get('DEV_CANONICAL_HOST') or '1').strip().lower()
+        if flag in {'0', 'false', 'no', 'off'}:
+            return None
+
+        # Only canonicalize in debug/dev.
+        if not app.debug:
             return None
 
         if request.method not in {'GET', 'HEAD'}:
@@ -103,16 +117,40 @@ def create_app(config_name=None):
 
         host = (request.host or '')
         host_only = host.split(':', 1)[0]
-        if host_only != '127.0.0.1':
+
+        canonical = (os.environ.get('DEV_CANONICAL_HOSTNAME') or 'localhost').strip() or 'localhost'
+        if host_only == canonical:
             return None
 
         port = host.split(':', 1)[1] if ':' in host else ''
-        new_host = f'localhost:{port}' if port else 'localhost'
+        new_host = f'{canonical}:{port}' if port else canonical
 
         from urllib.parse import urlsplit, urlunsplit
 
         parts = urlsplit(request.url)
         return redirect(urlunsplit((parts.scheme, new_host, parts.path, parts.query, parts.fragment)), code=302)
+
+    @app.before_request
+    def _start_request_timer():
+        """Start timing the request for performance debugging."""
+        g.request_start_time = time.time()
+
+    @app.after_request
+    def _log_slow_requests(response):
+        """Log requests that take longer than threshold."""
+        try:
+            if hasattr(g, 'request_start_time'):
+                elapsed = time.time() - g.request_start_time
+                # Log requests slower than 1 second to identify bottlenecks
+                if elapsed > 1.0:
+                    endpoint = request.endpoint or 'unknown'
+                    method = request.method
+                    current_app.logger.warning(
+                        f'SLOW REQUEST: {method} {endpoint} took {elapsed:.2f}s'
+                    )
+        except Exception:
+            pass
+        return response
 
     # Initialize database extensions
     db.init_app(app)
@@ -157,9 +195,17 @@ def create_app(config_name=None):
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Please sign in to access this page.'
     login_manager.login_message_category = 'info'
-    # Disable session protection in testing to allow test client requests to work
-    # Without this, Flask-Login's session protection can invalidate sessions between requests
-    login_manager.session_protection = None if app.config.get('TESTING') else 'strong'
+    # Flask-Login session protection:
+    # - In testing, disable to keep the test client stable.
+    # - In debug/dev, use a relaxed mode to avoid spurious logouts (e.g., IPv4/IPv6 loopback
+    #   differences or varying proxy headers during local development).
+    # - In production, keep protection enabled.
+    if app.config.get('TESTING'):
+        login_manager.session_protection = None
+    elif app.debug:
+        login_manager.session_protection = 'basic'
+    else:
+        login_manager.session_protection = 'strong'
     login_manager.refresh_view = 'auth.login'
     login_manager.needs_refresh_message = 'Please re-authenticate to access this page.'
     login_manager.needs_refresh_message_category = 'info'
@@ -168,14 +214,28 @@ def create_app(config_name=None):
     def _check_session_security():
         """Check session inactivity timeout, version, and password changes."""
         try:
+            # Static assets should not require loading the user from the DB.
+            # If we touch `current_user` here, Flask-Login will load the user for every image/css/js request.
+            path = request.path or ''
+            if path.startswith('/static/'):
+                return None
+
             from flask_login import current_user, logout_user
-            from flask import session, url_for, flash
+            from flask import session, url_for, flash, abort
             from datetime import datetime, timezone, timedelta
             from app.models import User
             import time
 
             if not getattr(current_user, 'is_authenticated', False):
                 return None
+
+            endpoint = request.endpoint or ''
+            path = request.path or ''
+            is_asset_like = endpoint in {
+                'static',
+                'main.organization_logo',
+                'main.organization_logo_by_id',
+            } or path.startswith('/static/')
             
             # 1. Check session inactivity timeout (30 minutes)
             last_activity = session.get('last_activity_time')
@@ -189,11 +249,14 @@ def create_app(config_name=None):
                         session.clear()
                     except Exception:
                         pass
+                    if is_asset_like:
+                        return abort(401)
                     flash('Your session expired due to inactivity. Please sign in again.', 'info')
                     return redirect(url_for('auth.login'))
             
-            # Update last activity timestamp
-            session['last_activity_time'] = now_ts
+            # Update last activity timestamp only for non-asset requests
+            if not is_asset_like:
+                session['last_activity_time'] = now_ts
             
             # 2. Check session version (for logout-all-devices)
             user_session_version = session.get('session_version')
@@ -205,17 +268,38 @@ def create_app(config_name=None):
                         session.clear()
                     except Exception:
                         pass
+                    if is_asset_like:
+                        return abort(401)
                     flash('You have been logged out from all devices. Please sign in again.', 'info')
                     return redirect(url_for('auth.login'))
 
             # 3. Check password change timestamp (force logout if changed)
-            # Query fresh user from DB to get latest password_changed_at
-            # (current_user proxy may have stale data)
-            from app import db
-            user = db.session.get(User, int(current_user.id))
-            if user:
-                # Force refresh from DB to get latest values
-                db.session.refresh(user)
+            # Query fresh user from DB periodically to get latest password_changed_at.
+            # Doing this on every request can be very expensive and slows down all page loads.
+            # The interval keeps security guarantees (logout after password change) while reducing DB pressure.
+            # Increase from 15s to 60s: password changes are rare, so a 1-minute delay is acceptable.
+            password_check_interval = int(app.config.get('SECURITY_DB_CHECK_INTERVAL_SECONDS') or 60)
+            last_pwd_check = session.get('last_pwd_check_ts')
+
+            user = None
+
+            # Avoid an extra DB refresh on asset-like requests; they already pay the user_loader DB hit.
+            if is_asset_like:
+                user = current_user
+            else:
+                if last_pwd_check is not None and (now_ts - float(last_pwd_check)) < password_check_interval:
+                    # Use the user loaded by Flask-Login for this request.
+                    user = current_user
+                else:
+                    from app import db
+                    user = db.session.get(User, int(current_user.id))
+                    if user:
+                        try:
+                            db.session.refresh(user)
+                        except Exception:
+                            pass
+                    session['last_pwd_check_ts'] = now_ts
+
             if not user:
                 return None
 
@@ -249,6 +333,8 @@ def create_app(config_name=None):
                     session.clear()
                 except Exception:
                     pass
+                if is_asset_like:
+                    return abort(401)
                 flash('Your password was changed. Please sign in again.', 'info')
                 return redirect(url_for('auth.login'))
         except Exception:
@@ -333,32 +419,66 @@ def create_app(config_name=None):
 
     @app.context_processor
     def inject_org_switcher():
-        """Provide organization switcher data to templates."""
+        """Provide organization switcher data to templates.
+        
+        PERFORMANCE: This runs on EVERY page render. Keep it minimal.
+        Only compute expensive data when absolutely needed.
+        """
         try:
             from flask_login import current_user
             if not getattr(current_user, 'is_authenticated', False):
                 return {}
 
-            from app.models import Organization, OrganizationMembership, Department
+            # FAST PATH: Skip all DB work for non-navigation pages (assets, AJAX, etc)
+            endpoint = request.endpoint or ''
+            if endpoint in {'static', 'main.organization_logo', 'main.organization_logo_by_id'}:
+                return {}
 
-            orgs = (
-                Organization.query
-                .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
-                .filter(OrganizationMembership.user_id == int(current_user.id), OrganizationMembership.is_active.is_(True))
-                .order_by(Organization.name.asc())
+            user_id = int(getattr(current_user, 'id'))
+            active_org_id_raw = getattr(current_user, 'organization_id', None)
+            active_org_id = int(active_org_id_raw) if active_org_id_raw else None
+
+            # Aggressive cache: 5 minutes instead of 30 seconds
+            cache_seconds = int((app.config.get('ORG_SWITCHER_CACHE_SECONDS') or 300))
+            if cache_seconds > 0:
+                cache_key = (user_id, active_org_id)
+                now = time.monotonic()
+                with _ORG_SWITCHER_CONTEXT_CACHE_LOCK:
+                    cached = _ORG_SWITCHER_CONTEXT_CACHE.get(cache_key)
+                if cached:
+                    expires_at, payload = cached
+                    if now < expires_at:
+                        return payload
+
+            from app.models import Organization, OrganizationMembership
+
+            # Load ONLY org IDs for the switcher (avoid loading RBAC/department relationships).
+            memberships_rows = (
+                OrganizationMembership.query
+                .with_entities(OrganizationMembership.organization_id)
+                .filter_by(user_id=user_id, is_active=True)
                 .all()
             )
+            org_ids = [int(row[0]) for row in memberships_rows]
+            orgs = (
+                Organization.query
+                .filter(Organization.id.in_(org_ids))
+                .order_by(Organization.name.asc())
+                .all()
+            ) if org_ids else []
 
-            # Build org data with logo info for switcher
-            org_data = []
-            for org in orgs:
-                org_data.append({
+            # Build minimal org data for switcher
+            org_data = [
+                {
                     'id': org.id,
                     'name': org.name,
                     'has_logo': bool(org.logo_blob_name),
-                })
+                    'logo_blob_name': (org.logo_blob_name or ''),
+                }
+                for org in orgs
+            ]
 
-            active_org_id = getattr(current_user, 'organization_id', None)
+            # Initialize defaults (no expensive queries yet)
             is_org_admin_active = False
             can_invite_member = False
             can_manage_team = False
@@ -366,58 +486,60 @@ def create_app(config_name=None):
             can_manage_org = False
             can_manage_roles = False
             active_role_name = None
-            user_departments = []
             available_roles = []
+            user_departments = []
             
             if active_org_id:
                 try:
-                    # Refresh organization data to show logo updates immediately
-                    from app import db
-                    db.session.expire_all()
-                    active_role_name = current_user.active_role_name(int(active_org_id))
-                    can_manage_team = bool(current_user.has_permission('users.manage', org_id=int(active_org_id)))
-                    can_invite_member = bool(current_user.has_permission('users.invite', org_id=int(active_org_id)))
-                    can_export_audit = bool(current_user.has_permission('audits.export', org_id=int(active_org_id)))
-                    can_manage_org = bool(current_user.has_permission('org.manage', org_id=int(active_org_id)))
-                    can_manage_roles = bool(current_user.has_permission('roles.manage', org_id=int(active_org_id)))
-                    is_org_admin_active = can_manage_team
+                    # Reuse request-scoped membership + permission caches.
+                    membership = current_user.active_membership(org_id=int(active_org_id))
+                    if membership:
+                        active_role_name = membership.display_role_name
 
-                    # Ensure RBAC roles exist and load role options for invite modal.
-                    try:
-                        from app.services.rbac import ensure_rbac_seeded_for_org
-                        from app.models import RBACRole
+                    can_manage_team = current_user.has_permission('users.manage', org_id=int(active_org_id))
+                    can_invite_member = current_user.has_permission('users.invite', org_id=int(active_org_id))
+                    can_export_audit = current_user.has_permission('audits.export', org_id=int(active_org_id))
+                    can_manage_org = current_user.has_permission('org.manage', org_id=int(active_org_id))
+                    can_manage_roles = current_user.has_permission('roles.manage', org_id=int(active_org_id))
+                    is_org_admin_active = bool(can_manage_team)
 
-                        ensure_rbac_seeded_for_org(int(active_org_id))
-                        db.session.flush()
-                        available_roles = (
-                            RBACRole.query
-                            .filter_by(organization_id=int(active_org_id))
-                            .order_by(RBACRole.name.asc())
-                            .all()
-                        )
-                    except Exception:
-                        available_roles = []
+                    # ONLY load roles/departments if the user needs the invite modal (admin pages).
+                    if can_invite_member and request.endpoint and 'admin' in request.endpoint:
+                        try:
+                            from app.models import RBACRole, Department
 
-                    # Load departments for invite modal
-                    if can_invite_member:
-                        user_departments = (
-                            Department.query
-                            .filter_by(organization_id=int(active_org_id))
-                            .order_by(Department.name.asc())
-                            .all()
-                        )
+                            has_any_role = (
+                                RBACRole.query
+                                .filter_by(organization_id=int(active_org_id))
+                                .limit(1)
+                                .first()
+                            )
+                            if not has_any_role:
+                                from app.services.rbac import ensure_rbac_seeded_for_org
+                                ensure_rbac_seeded_for_org(int(active_org_id))
+
+                            available_roles = (
+                                RBACRole.query
+                                .filter_by(organization_id=int(active_org_id))
+                                .order_by(RBACRole.name.asc())
+                                .all()
+                            )
+
+                            user_departments = (
+                                Department.query
+                                .filter_by(organization_id=int(active_org_id))
+                                .order_by(Department.name.asc())
+                                .all()
+                            )
+                        except Exception:
+                            available_roles = []
+                            user_departments = []
                 except Exception:
-                    is_org_admin_active = False
-                    can_invite_member = False
-                    can_manage_team = False
-                    can_export_audit = False
-                    can_manage_org = False
-                    can_manage_roles = False
-                    active_role_name = None
-                    available_roles = []
+                    pass
 
-            return {
-                'user_organizations': orgs,
+            # Only cache lightweight data structures; avoid caching ORM objects across requests.
+            payload = {
+                'user_organizations': org_data,
                 'user_organizations_with_logos': org_data,
                 'is_org_admin_active': is_org_admin_active,
                 'can_invite_member': can_invite_member,
@@ -426,9 +548,20 @@ def create_app(config_name=None):
                 'can_manage_org': can_manage_org,
                 'can_manage_roles': can_manage_roles,
                 'active_role_name': active_role_name,
-                'available_roles': available_roles,
-                'user_departments': user_departments,
+                'available_roles': [{'id': r.id, 'name': r.name} for r in (available_roles or [])],
+                'user_departments': [{'id': d.id, 'name': d.name} for d in (user_departments or [])],
             }
+
+            if cache_seconds > 0:
+                try:
+                    cache_key = (user_id, active_org_id)
+                    expires_at = time.monotonic() + max(1, cache_seconds)
+                    with _ORG_SWITCHER_CONTEXT_CACHE_LOCK:
+                        _ORG_SWITCHER_CONTEXT_CACHE[cache_key] = (expires_at, payload)
+                except Exception:
+                    pass
+
+            return payload
         except Exception:
             return {}
     

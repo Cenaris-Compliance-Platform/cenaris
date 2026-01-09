@@ -79,7 +79,13 @@
               </div>
             </div>
             <div class="flex-grow-1 ms-3">
-              <div class="fw-bold h4 mb-0">{{ ml_summary.avg_compliancy_rate }}%</div>
+              {% if skip_adls %}
+              <div class="placeholder-glow">
+                <span class="placeholder col-4"></span>
+              </div>
+              {% else %}
+              <div class="fw-bold h4 mb-0" id="mlComplianceRateValue">{{ ml_summary.avg_compliancy_rate }}%</div>
+              {% endif %}
               <div class="text-body-secondary small">ML Compliance Rate</div>
             </div>
           </div>
@@ -100,7 +106,13 @@
               </div>
             </div>
             <div class="flex-grow-1 ms-3">
-              <div class="fw-bold h4 mb-0">{{ ml_summary.total_files }}</div>
+              {% if skip_adls %}
+              <div class="placeholder-glow">
+                <span class="placeholder col-3"></span>
+              </div>
+              {% else %}
+              <div class="fw-bold h4 mb-0" id="mlTotalFilesValue">{{ ml_summary.total_files }}</div>
+              {% endif %}
               <div class="text-body-secondary small">ML Analysis Files</div>
             </div>
           </div>
@@ -256,9 +268,8 @@
     </div>
   </div>
 
-  <!-- ML Results Summary -->
-  {% if ml_summary.total_files > 0 %}
-  <div class="row mb-4">
+  <!-- ML Results Summary (progressive loading) -->
+  <div class="row mb-4" id="mlResultsSection">
     <div class="col-12">
       <div class="card border-0 shadow">
         <div class="card-header bg-body-tertiary border-bottom">
@@ -271,7 +282,61 @@
             </a>
           </div>
         </div>
-        <div class="card-body">
+        <div class="card-body" id="mlResultsBody">
+          {% if skip_adls %}
+          <div class="row">
+            <div class="col-lg-8">
+              <div class="row g-3">
+                {% for _ in range(4) %}
+                <div class="col-md-6">
+                  <div class="border rounded p-3 h-100 placeholder-glow">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                      <div class="flex-grow-1">
+                        <span class="placeholder col-6"></span>
+                        <div><span class="placeholder col-8"></span></div>
+                      </div>
+                      <span class="placeholder col-3"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <span class="placeholder col-3"></span>
+                      <span class="placeholder col-4"></span>
+                    </div>
+                    <div class="progress mb-2" style="height: 6px;">
+                      <div class="progress-bar" style="width: 50%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                      <span class="placeholder col-2"></span>
+                      <span class="placeholder col-2"></span>
+                      <span class="placeholder col-2"></span>
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <div class="text-center placeholder-glow">
+                <div class="position-relative d-inline-block mb-3">
+                  <svg width="150" height="150">
+                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"/>
+                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"
+                            stroke-dasharray="188, 377" stroke-linecap="round" transform="rotate(-90 75 75)"/>
+                  </svg>
+                  <div class="position-absolute top-50 start-50 translate-middle text-center">
+                    <div class="h3 fw-bold mb-0 text-primary"><span class="placeholder col-4"></span></div>
+                    <small class="text-body-secondary">Overall</small>
+                  </div>
+                </div>
+                <div class="row g-2">
+                  <div class="col-4"><span class="placeholder col-6"></span></div>
+                  <div class="col-4"><span class="placeholder col-6"></span></div>
+                  <div class="col-4"><span class="placeholder col-6"></span></div>
+                </div>
+                <div class="mt-3 text-body-secondary small">Loading analysis…</div>
+              </div>
+            </div>
+          </div>
+          {% else %}
           <div class="row">
             <div class="col-lg-8">
               <div class="row g-3">
@@ -351,11 +416,11 @@
               </div>
             </div>
           </div>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
-  {% endif %}
 
 </div>
 {% endblock %} {% block extra_js %}
@@ -401,27 +466,179 @@
     }
   });
 
-  // Auto-refresh ML data every 2 minutes
-  {% if ml_summary.total_files > 0 %}
+  function escapeHtml(text) {
+    return String(text || '').replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[ch]));
+  }
+
+  function renderMlSummary(data) {
+    // Update stat cards if present
+    const rateEl = document.getElementById('mlComplianceRateValue');
+    if (rateEl) rateEl.textContent = `${data.avg_compliancy_rate || 0}%`;
+    const filesEl = document.getElementById('mlTotalFilesValue');
+    if (filesEl) filesEl.textContent = `${data.total_files || 0}`;
+
+    // Replace the ML results body with real content
+    const body = document.getElementById('mlResultsBody');
+    if (!body) return;
+
+    const fileSummaries = Array.isArray(data.file_summaries) ? data.file_summaries.slice(0, 4) : [];
+    const totalFiles = Number(data.total_files || 0);
+
+    if (totalFiles <= 0) {
+      body.innerHTML = `
+        <div class="text-center py-4">
+          <i class="bi bi-info-circle text-body-secondary" style="font-size: 2.25rem; opacity: 0.6"></i>
+          <p class="text-body-secondary mt-3 mb-0">No ML analysis files found yet</p>
+          <small class="text-body-secondary">Upload documents and run analysis to see results here</small>
+        </div>
+      `;
+      return;
+    }
+
+    const avg = Number(data.avg_compliancy_rate || 0);
+    const dash = Math.round((avg / 100) * 377);
+    const complete = Number(data.total_complete || 0);
+    const review = Number(data.total_needs_review || 0);
+    const missing = Number(data.total_missing || 0);
+
+    const cardsHtml = fileSummaries.map((fs) => {
+      const status = String(fs.overall_status || 'Unknown');
+      let badge = 'bg-danger';
+      if (status === 'Excellent') badge = 'bg-success';
+      else if (status === 'Good') badge = 'bg-info';
+      else if (status === 'Needs Attention') badge = 'bg-warning';
+
+      const rate = Number(fs.compliancy_rate || 0);
+      let bar = 'bg-danger';
+      if (rate >= 90) bar = 'bg-success';
+      else if (rate >= 70) bar = 'bg-info';
+      else if (rate >= 50) bar = 'bg-warning';
+
+      return `
+        <div class="col-md-6">
+          <div class="border rounded p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div class="flex-grow-1">
+                <h6 class="fw-bold mb-1">${escapeHtml(fs.framework || 'Unknown')}</h6>
+                <small class="text-body-secondary">${escapeHtml((fs.file_name || '').slice(0, 30))}...</small>
+              </div>
+              <span class="badge ${badge}">${escapeHtml(status)}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold h5 mb-0">${rate}%</span>
+              <small class="text-body-secondary">${Number(fs.total_requirements || 0)} requirements</small>
+            </div>
+            <div class="progress mb-2" style="height: 6px;">
+              <div class="progress-bar ${bar}" style="width: ${Math.max(0, Math.min(100, rate))}%"></div>
+            </div>
+            <div class="d-flex justify-content-between">
+              <small class="text-success">✓ ${Number(fs.complete_count || 0)}</small>
+              <small class="text-warning">⏳ ${Number(fs.needs_review_count || 0)}</small>
+              <small class="text-danger">✗ ${Number(fs.missing_count || 0)}</small>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    body.innerHTML = `
+      <div class="row">
+        <div class="col-lg-8">
+          <div class="row g-3">
+            ${cardsHtml}
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="text-center">
+            <div class="position-relative d-inline-block mb-3">
+              <svg width="150" height="150">
+                <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"/>
+                <circle cx="75" cy="75" r="60" fill="none" stroke="#28a745" stroke-width="15"
+                        stroke-dasharray="${dash}, 377" stroke-linecap="round" transform="rotate(-90 75 75)"/>
+              </svg>
+              <div class="position-absolute top-50 start-50 translate-middle text-center">
+                <div class="h3 fw-bold mb-0 text-primary">${avg}%</div>
+                <small class="text-body-secondary">Overall</small>
+              </div>
+            </div>
+            <div class="row g-2">
+              <div class="col-4">
+                <div class="fw-bold text-success">${complete}</div>
+                <small class="text-body-secondary d-block">Complete</small>
+              </div>
+              <div class="col-4">
+                <div class="fw-bold text-warning">${review}</div>
+                <small class="text-body-secondary d-block">Review</small>
+              </div>
+              <div class="col-4">
+                <div class="fw-bold text-danger">${missing}</div>
+                <small class="text-body-secondary d-block">Missing</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Progressive-load ML data on first paint
+  {% if skip_adls and ml_enabled %}
+  fetch('{{ url_for("main.api_ml_summary") }}')
+    .then((r) => r.json())
+    .then((data) => {
+      renderMlSummary(data);
+      window.__mlSummarySnapshot = {
+        total_files: Number(data.total_files || 0),
+        last_updated: data.last_updated || null,
+      };
+    })
+    .catch(() => {
+      const body = document.getElementById('mlResultsBody');
+      if (body) {
+        body.innerHTML = `
+          <div class="alert alert-warning mb-0">
+            Could not load ML analysis data right now.
+          </div>
+        `;
+      }
+    });
+  {% endif %}
+
+  // Auto-refresh ML data every 2 minutes (preserve existing behavior)
+  window.__mlSummarySnapshot = window.__mlSummarySnapshot || {
+    total_files: Number({{ ml_summary.total_files or 0 }}),
+    last_updated: {% if ml_summary.last_updated %}'{{ ml_summary.last_updated.isoformat() }}'{% else %}null{% endif %}
+  };
+
   setInterval(() => {
     fetch('{{ url_for("main.api_ml_summary") }}')
       .then(response => response.json())
       .then(data => {
-        // Check if there are new results
-        if (data.total_files !== {{ ml_summary.total_files }} || 
-            data.last_updated !== '{{ ml_summary.last_updated.isoformat() }}') {
-          
-          // Show notification
+        const snapshot = window.__mlSummarySnapshot || { total_files: 0, last_updated: null };
+        const nextTotal = Number(data.total_files || 0);
+        const nextUpdated = data.last_updated || null;
+
+        // If we didn't have an initial snapshot (deferred), initialize it without reloading.
+        if (!snapshot.last_updated && nextUpdated) {
+          window.__mlSummarySnapshot = { total_files: nextTotal, last_updated: nextUpdated };
+          return;
+        }
+
+        if (snapshot.total_files !== nextTotal || (snapshot.last_updated && nextUpdated && snapshot.last_updated !== nextUpdated)) {
           showToast('New ML analysis results available!', 'success');
-          
-          // Auto-refresh after 3 seconds
           setTimeout(() => {
             window.location.reload();
           }, 3000);
         }
       })
-      .catch(error => console.log('Auto-refresh check failed:', error));
-  }, 120000); // 2 minutes
+      .catch(() => {});
+  }, 120000);
 
   function showToast(message, type = 'info') {
     const toastDiv = document.createElement('div');
@@ -445,6 +662,5 @@
       toastDiv.remove();
     });
   }
-  {% endif %}
 </script>
 {% endblock %}

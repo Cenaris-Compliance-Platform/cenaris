@@ -21,7 +21,7 @@ def create_sample_data():
         user_email = 'user@compliance.com'
 
         if not User.query.filter_by(email=admin_email).first():
-                admin_user = User(email=admin_email, email_verified=True)
+            admin_user = User(email=admin_email, email_verified=True)
             admin_user.set_password('admin123')
             db.session.add(admin_user)
             print("Sample admin user created: admin@compliance.com / admin123")
@@ -29,7 +29,7 @@ def create_sample_data():
             print("Admin user already exists")
 
         if not User.query.filter_by(email=user_email).first():
-                user = User(email=user_email, email_verified=True)
+            user = User(email=user_email, email_verified=True)
             user.set_password('user123')
             db.session.add(user)
             print("Sample user created: user@compliance.com / user123")

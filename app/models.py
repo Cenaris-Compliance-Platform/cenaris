@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from flask import g
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
@@ -28,8 +29,9 @@ class OrganizationMembership(db.Model):
         db.UniqueConstraint('organization_id', 'user_id', name='uq_org_membership_org_user'),
     )
 
-    department = db.relationship('Department', lazy='joined')
-    rbac_role = db.relationship('RBACRole', lazy='joined')
+    # Avoid large JOINs on every membership lookup; load related rows only when needed.
+    department = db.relationship('Department', lazy='selectin')
+    rbac_role = db.relationship('RBACRole', lazy='selectin')
 
     @property
     def display_role_name(self) -> str:
@@ -164,7 +166,28 @@ class User(UserMixin, db.Model):
         org_id = int(org_id) if org_id is not None else (int(self.organization_id) if self.organization_id else None)
         if not org_id:
             return None
-        return self.memberships.filter_by(organization_id=org_id, is_active=True).first()
+
+        # Request-scoped cache to avoid repeated DB queries when templates/routes
+        # call permission checks multiple times on the same request.
+        try:
+            cache = getattr(g, '_active_membership_cache', None)
+            if cache is None:
+                cache = {}
+                setattr(g, '_active_membership_cache', cache)
+            key = (int(self.id), int(org_id))
+            if key in cache:
+                return cache[key]
+        except Exception:
+            cache = None
+            key = None
+
+        membership = self.memberships.filter_by(organization_id=org_id, is_active=True).first()
+        try:
+            if cache is not None and key is not None:
+                cache[key] = membership
+        except Exception:
+            pass
+        return membership
 
     def active_role_name(self, org_id: int | None = None) -> str | None:
         membership = self.active_membership(org_id=org_id)
@@ -181,7 +204,22 @@ class User(UserMixin, db.Model):
 
         # Preferred: RBAC role with permissions.
         if membership.rbac_role:
-            return code in membership.rbac_role.effective_permission_codes()
+            try:
+                perm_cache = getattr(g, '_role_permission_codes_cache', None)
+                if perm_cache is None:
+                    perm_cache = {}
+                    setattr(g, '_role_permission_codes_cache', perm_cache)
+                role_id = int(getattr(membership.rbac_role, 'id', 0) or 0)
+                if role_id and role_id in perm_cache:
+                    codes = perm_cache[role_id]
+                else:
+                    codes = membership.rbac_role.effective_permission_codes()
+                    if role_id:
+                        perm_cache[role_id] = codes
+            except Exception:
+                codes = membership.rbac_role.effective_permission_codes()
+
+            return code in codes
 
         # Legacy fallback (until role_id is fully backfilled everywhere)
         legacy = (membership.role or '').strip().lower()
@@ -213,7 +251,7 @@ class Document(db.Model):
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
 
-    uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='joined')
+    uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='select')
 
 
 rbac_role_permissions = db.Table(
@@ -248,13 +286,14 @@ class RBACRole(db.Model):
     is_system = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
-    permissions = db.relationship('RBACPermission', secondary=rbac_role_permissions, lazy='joined')
+    # These collections can be large; selectin avoids row explosion from JOINs.
+    permissions = db.relationship('RBACPermission', secondary=rbac_role_permissions, lazy='selectin')
     inherits = db.relationship(
         'RBACRole',
         secondary=rbac_role_inherits,
         primaryjoin=(rbac_role_inherits.c.role_id == id),
         secondaryjoin=(rbac_role_inherits.c.inherited_role_id == id),
-        lazy='joined',
+        lazy='selectin',
     )
 
     __table_args__ = (

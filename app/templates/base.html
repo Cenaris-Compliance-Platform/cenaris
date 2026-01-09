@@ -15,8 +15,8 @@
       {% if title %}{{ title }} - {% endif %}Cenaris
     </title>
 
-    <link rel="icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" sizes="any" />
-    <link rel="shortcut icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" />
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" sizes="any" />
+    <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" />
 
     <!-- Bootstrap 5 CSS -->
     <link
@@ -514,7 +514,7 @@
                 {% set _has_org_logo = current_user.organization and current_user.organization.logo_blob_name %}
                 {% if _has_org_logo %}
                 <img
-                  src="{{ url_for('main.organization_logo') }}"
+                  src="{{ url_for('main.organization_logo', v=(current_user.organization.logo_blob_name or '') ) }}"
                   alt="{{ _org_name }} logo"
                   class="rounded me-2"
                   style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
@@ -547,7 +547,7 @@
                     <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
                       {% if org_info.has_logo %}
                       <img
-                        src="{{ url_for('main.organization_logo_by_id', org_id=org_info.id) }}"
+                        src="{{ url_for('main.organization_logo_by_id', org_id=org_info.id, v=(org_info.logo_blob_name or '') ) }}"
                         alt="{{ org_info.name }} logo"
                         class="rounded"
                         style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"

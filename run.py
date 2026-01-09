@@ -15,7 +15,7 @@ if __name__ == '__main__':
     debug = bool(app.config.get('DEBUG', False))
 
     print("🚀 Starting Cenaris Compliance Management System...")
-    print(f"📊 Dashboard will be available at: http://127.0.0.1:{port}")
+    print(f"📊 Dashboard will be available at: http://localhost:{port}")
     print("🔐 Create an account or use sample users:")
     print("   • admin@compliance.com / admin123")
     print("   • user@compliance.com / user123")
@@ -27,5 +27,6 @@ if __name__ == '__main__':
         host='0.0.0.0',  # Allow external connections
         port=port,
         debug=debug,
-        use_reloader=debug
+        use_reloader=debug,
+        threaded=True,
     )
