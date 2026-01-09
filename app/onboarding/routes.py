@@ -41,7 +41,11 @@ def _send_welcome_email(user: User, dashboard_url: str) -> bool:
             'You can now upload documents and start managing your compliance evidence.\n'
         ),
     )
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception:
+        current_app.logger.exception('Failed to send welcome email to %s', user.email)
+        raise
     return True
 
 

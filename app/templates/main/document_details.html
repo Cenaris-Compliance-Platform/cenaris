@@ -90,12 +90,6 @@
                             </tr>
                             <tr>
                                 <td class="text-body-secondary">
-                                    <i class="bi bi-cloud me-2"></i>Blob Name
-                                </td>
-                                <td><code>{{ document.blob_name }}</code></td>
-                            </tr>
-                            <tr>
-                                <td class="text-body-secondary">
                                     <i class="bi bi-hdd me-2"></i>File Size
                                 </td>
                                 <td>
@@ -167,9 +161,6 @@
                         <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-outline-primary">
                             <i class="bi bi-download me-2"></i>Download Document
                         </a>
-                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ document.blob_name }}')">
-                            <i class="bi bi-clipboard me-2"></i>Copy Blob Name
-                        </button>
                         <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ document.id }}')">
                             <i class="bi bi-hash me-2"></i>Copy Document ID
                         </button>
@@ -181,29 +172,19 @@
                 </div>
             </div>
             
-            <!-- Storage Info -->
+            <!-- Storage Info (vendor-neutral) -->
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-body-tertiary border-bottom">
                     <h5 class="card-title mb-0">
-                        <i class="bi bi-cloud-arrow-up me-2 text-primary"></i>
-                        Storage Information
+                        <i class="bi bi-shield-lock me-2 text-primary"></i>
+                        Storage
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <small class="text-body-secondary d-block mb-1">Storage Location</small>
-                        <div class="fw-medium">Azure Blob Storage</div>
-                    </div>
-                    <div class="mb-3">
-                        <small class="text-body-secondary d-block mb-1">Container</small>
-                        <code class="small">user-uploads</code>
-                    </div>
-                    <div class="mb-0">
-                        <small class="text-body-secondary d-block mb-1">Encryption</small>
-                        <span class="badge bg-success">
-                            <i class="bi bi-shield-lock me-1"></i>AES-256 Encrypted
-                        </span>
-                    </div>
+                    <small class="text-body-secondary d-block mb-1">Encryption</small>
+                    <span class="badge bg-success">
+                        <i class="bi bi-shield-lock me-1"></i>AES-256 Encrypted
+                    </span>
                 </div>
             </div>
         </div>
@@ -234,7 +215,7 @@
                             </div>
                             <p class="text-body-secondary mb-0">
                                 <i class="bi bi-info-circle me-1"></i>
-                                This action cannot be undone. The document will be removed from both the database and Azure storage.
+                                This action cannot be undone. The document will be removed from both the database and secure storage.
                             </p>
                         </div>
                         <div class="modal-footer">

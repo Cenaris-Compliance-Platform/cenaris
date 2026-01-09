@@ -169,7 +169,11 @@ def _send_email_verification_email(user: User, verify_url: str) -> None:
             'If you did not create this account, you can ignore this email.'
         ),
     )
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception:
+        current_app.logger.exception('Failed to send verification email to %s', user.email)
+        raise
 
 
 def _turnstile_enabled() -> bool:
@@ -312,7 +316,11 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
         body=render_template('email/password_reset.txt', user=user, reset_url=reset_url),
         html=render_template('email/password_reset.html', user=user, reset_url=reset_url),
     )
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception:
+        current_app.logger.exception('Failed to send password reset email to %s', user.email)
+        raise
 
 @bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute')

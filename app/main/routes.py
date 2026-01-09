@@ -218,7 +218,11 @@ def _send_invite_email(user: User, reset_url: str, organization: Organization) -
             "If you weren't expecting this invite, you can ignore this email."
         ),
     )
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception:
+        current_app.logger.exception('Failed to send invite email to %s (org_id=%s)', user.email, getattr(organization, 'id', None))
+        raise
 
 
 def _is_pending_org_invite(membership: OrganizationMembership, user: User) -> bool:
@@ -1897,6 +1901,13 @@ def notifications():
 @login_required
 def ml_results():
     """ML Results dashboard."""
+    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
+        abort(404)
+
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
     compliance_files = [
         {
             'file_name': 'policy_document.pdf',
@@ -1915,6 +1926,13 @@ def ml_results():
 @login_required
 def ml_file_detail(file_path):
     """Detailed view of ML analysis file."""
+    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
+        abort(404)
+
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
     file_analysis = {
         'file_name': file_path,
         'compliance_score': 85,
@@ -1964,6 +1982,13 @@ def api_ml_summary():
 @login_required
 def adls_raw_data():
     """Show raw ADLS data."""
+    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
+        abort(404)
+
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
     return render_template('main/adls_raw_data.html',
                          title='ADLS Raw Data',
                          ml_summary=get_mock_ml_summary())
@@ -1972,6 +1997,13 @@ def adls_raw_data():
 @login_required
 def adls_connection():
     """Show ADLS connection status."""
+    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
+        abort(404)
+
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
     return render_template('main/adls_connection.html',
                          title='ADLS Connection',
                          ml_summary=get_mock_ml_summary())
