@@ -2,6 +2,7 @@ from flask import render_template, redirect, url_for, flash, request, current_ap
 from flask_login import login_user, logout_user, current_user
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import requests
+import os
 
 from flask_mail import Message
 from app.auth import bp
@@ -160,20 +161,56 @@ def _send_email_verification_email(user: User, verify_url: str) -> None:
         current_app.logger.warning('MAIL not configured; verify-email URL: %s', verify_url)
         return
 
-    msg = Message(
-        subject='Verify your email',
-        recipients=[user.email],
-        body=(
-            'Welcome to CCM. Please verify your email address to activate your account.\n\n'
-            f'Verify link: {verify_url}\n\n'
-            'If you did not create this account, you can ignore this email.'
-        ),
+    subject = 'Verify your email'
+    body = (
+        'Welcome to CCM. Please verify your email address to activate your account.\n\n'
+        f'Verify link: {verify_url}\n\n'
+        'If you did not create this account, you can ignore this email.'
     )
+    
     try:
-        mail.send(msg)
+        _send_email(user.email, subject, body)
     except Exception:
         current_app.logger.exception('Failed to send verification email to %s', user.email)
         raise
+
+
+def _send_email(to_email: str, subject: str, body: str) -> None:
+    """Send email via SendGrid API (fast, no SMTP port issues) or SMTP fallback."""
+    sendgrid_api_key = os.environ.get('SENDGRID_API_KEY')
+    
+    # Try SendGrid Web API first (more reliable on cloud hosts that block SMTP)
+    if sendgrid_api_key:
+        try:
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail as SGMail
+            
+            sender = current_app.config.get('MAIL_DEFAULT_SENDER')
+            message = SGMail(
+                from_email=sender,
+                to_emails=to_email,
+                subject=subject,
+                plain_text_content=body,
+            )
+            
+            sg = SendGridAPIClient(sendgrid_api_key)
+            response = sg.send(message)
+            
+            if response.status_code not in (200, 201, 202):
+                raise Exception(f'SendGrid API returned {response.status_code}')
+            
+            current_app.logger.info('Email sent via SendGrid API to %s', to_email)
+            return
+        except Exception as e:
+            current_app.logger.warning('SendGrid API failed (%s), falling back to SMTP', e)
+    
+    # Fallback to SMTP (Flask-Mail)
+    msg = Message(
+        subject=subject,
+        recipients=[to_email],
+        body=body,
+    )
+    mail.send(msg)
 
 
 def _turnstile_enabled() -> bool:
@@ -329,17 +366,54 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
 
     from flask import render_template
 
-    msg = Message(
-        subject='Reset your password',
-        recipients=[user.email],
-        body=render_template('email/password_reset.txt', user=user, reset_url=reset_url),
-        html=render_template('email/password_reset.html', user=user, reset_url=reset_url),
-    )
+    subject = 'Reset your password'
+    body = render_template('email/password_reset.txt', user=user, reset_url=reset_url)
+    html = render_template('email/password_reset.html', user=user, reset_url=reset_url)
+    
     try:
-        mail.send(msg)
+        _send_email_html(user.email, subject, body, html)
     except Exception:
         current_app.logger.exception('Failed to send password reset email to %s', user.email)
         raise
+
+
+def _send_email_html(to_email: str, subject: str, body: str, html: str) -> None:
+    """Send HTML email via SendGrid API or SMTP fallback."""
+    sendgrid_api_key = os.environ.get('SENDGRID_API_KEY')
+    
+    if sendgrid_api_key:
+        try:
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail as SGMail
+            
+            sender = current_app.config.get('MAIL_DEFAULT_SENDER')
+            message = SGMail(
+                from_email=sender,
+                to_emails=to_email,
+                subject=subject,
+                plain_text_content=body,
+                html_content=html,
+            )
+            
+            sg = SendGridAPIClient(sendgrid_api_key)
+            response = sg.send(message)
+            
+            if response.status_code not in (200, 201, 202):
+                raise Exception(f'SendGrid API returned {response.status_code}')
+            
+            current_app.logger.info('HTML email sent via SendGrid API to %s', to_email)
+            return
+        except Exception as e:
+            current_app.logger.warning('SendGrid API failed (%s), falling back to SMTP', e)
+    
+    # Fallback to SMTP
+    msg = Message(
+        subject=subject,
+        recipients=[to_email],
+        body=body,
+        html=html,
+    )
+    mail.send(msg)
 
 @bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute')
