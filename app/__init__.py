@@ -8,6 +8,8 @@ import logging
 import threading
 import time
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 import click
 
 from authlib.integrations.flask_client import OAuth
@@ -86,6 +88,11 @@ def create_app(config_name=None):
         config_name = 'default'
     
     app = Flask(__name__)
+
+    # Respect X-Forwarded-* headers when running behind a reverse proxy (e.g. Render).
+    # This fixes request.remote_addr (otherwise often 127.0.0.1) and makes url_for(...,_external=True)
+    # generate the correct scheme/host for OAuth callbacks.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
     # Ensure the instance folder exists early so SQLite can create/open the DB file.
     os.makedirs(app.instance_path, exist_ok=True)
     app.config.from_object(config[config_name])
