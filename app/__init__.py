@@ -404,11 +404,12 @@ def create_app(config_name=None):
             """Add Content Security Policy header."""
             csp = (
                 "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://challenges.cloudflare.com; "
                 "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
                 "font-src 'self' https://cdn.jsdelivr.net; "
                 "img-src 'self' data:; "
-                "connect-src 'self'"
+                "connect-src 'self'; "
+                "frame-src https://challenges.cloudflare.com"
             )
             response.headers['Content-Security-Policy'] = csp
             return response
