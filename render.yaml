@@ -20,11 +20,4 @@ services:
       - key: AZURE_ML_RESULTS_PATH
         value: compliance-results
       - key: DATABASE_URL
-        fromDatabase:
-          name: cenaris-db
-          property: connectionString
-
-databases:
-  - name: cenaris-db
-    databaseName: cenaris_production
-    user: cenaris_user
+        sync: false
