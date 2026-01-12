@@ -180,30 +180,49 @@ def _turnstile_enabled() -> bool:
     return bool(current_app.config.get('TURNSTILE_SECRET_KEY'))
 
 
-def _verify_turnstile() -> bool:
-    """Verify Cloudflare Turnstile CAPTCHA if configured; otherwise allow."""
+def _verify_turnstile() -> tuple[bool, str]:
+    """Verify Cloudflare Turnstile CAPTCHA.
+
+    Returns (ok, reason) where reason is one of:
+    - 'disabled': Turnstile not configured
+    - 'missing': no token was submitted (user didn't complete widget or script blocked)
+    - 'invalid': Turnstile rejected the token
+    - 'error': verification request failed
+    - 'ok': verified
+    """
     if not _turnstile_enabled():
-        return True
+        return True, 'disabled'
 
     token = (request.form.get('cf-turnstile-response') or '').strip()
     if not token:
-        return False
+        return False, 'missing'
+
     secret = current_app.config.get('TURNSTILE_SECRET_KEY')
     try:
+        # NOTE: Do not send remoteip.
+        # In proxied deployments (Render/NGINX), request.remote_addr may not be the real client IP.
+        # Turnstile verification works without it and avoids false negatives.
         resp = requests.post(
             'https://challenges.cloudflare.com/turnstile/v0/siteverify',
             data={
                 'secret': secret,
                 'response': token,
-                'remoteip': request.remote_addr,
             },
             timeout=5,
         )
         data = resp.json() if resp is not None else {}
-        return bool(data.get('success'))
+        ok = bool(data.get('success'))
+        if ok:
+            return True, 'ok'
+
+        # Helpful diagnostics in server logs (do NOT log the token).
+        error_codes = data.get('error-codes') or data.get('error_codes')
+        hostname = data.get('hostname')
+        current_app.logger.warning('Turnstile rejected token: error_codes=%s hostname=%s', error_codes, hostname)
+        return False, 'invalid'
     except Exception:
-        current_app.logger.exception('Turnstile verification failed')
-        return False
+        current_app.logger.exception('Turnstile verification request failed')
+        return False, 'error'
 
 
 def _client_ip() -> str | None:
@@ -444,8 +463,9 @@ def signup():
     form = RegisterForm()
     
     if form.validate_on_submit():
-        if not _verify_turnstile():
-            flash('CAPTCHA verification failed. Please try again.', 'error')
+        ok, reason = _verify_turnstile()
+        if not ok:
+            flash('Please complete the CAPTCHA.' if reason == 'missing' else 'CAPTCHA verification failed. Please try again.', 'error')
             return render_template('auth/signup.html', form=form, title='Create Account')
 
         org_name = form.organization_name.data.strip()
@@ -587,8 +607,9 @@ def forgot_password():
             flash(f'Please wait {wait_seconds} seconds before requesting another reset link.', 'warning')
             return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=False)
 
-        if not _verify_turnstile():
-            flash('CAPTCHA verification failed. Please try again.', 'error')
+        ok, reason = _verify_turnstile()
+        if not ok:
+            flash('Please complete the CAPTCHA.' if reason == 'missing' else 'CAPTCHA verification failed. Please try again.', 'error')
             return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=False)
 
         email = form.email.data.lower().strip()
@@ -1109,8 +1130,9 @@ def verify_email_request():
             return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill, prefilled=prefilled, cooldown_seconds=max(wait_seconds, 0))
 
         # Optional: protect resend form too.
-        if not _verify_turnstile():
-            flash('CAPTCHA verification failed. Please try again.', 'error')
+        ok, reason = _verify_turnstile()
+        if not ok:
+            flash('Please complete the CAPTCHA.' if reason == 'missing' else 'CAPTCHA verification failed. Please try again.', 'error')
             return render_template('auth/verify_email.html', title='Verify Email', email=email_prefill, prefilled=prefilled)
 
         user = User.query.filter_by(email=email_prefill).first()
