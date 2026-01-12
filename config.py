@@ -56,6 +56,9 @@ class Config:
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or os.environ.get('MAIL_USERNAME')
+    
+    # SMTP connection timeout (prevents worker hangs when SMTP is unreachable)
+    MAIL_TIMEOUT = 10
 
     # Email verification (token-based)
     REQUIRE_EMAIL_VERIFICATION = (os.environ.get('REQUIRE_EMAIL_VERIFICATION') or 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
