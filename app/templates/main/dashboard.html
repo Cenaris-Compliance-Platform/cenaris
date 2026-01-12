@@ -79,7 +79,10 @@
               </div>
             </div>
             <div class="flex-grow-1 ms-3">
-              {% if skip_adls %}
+              {% if not ml_enabled %}
+              <div class="fw-bold h4 mb-0">—</div>
+              <div class="mt-1"><span class="badge bg-body-tertiary text-body border">Coming soon</span></div>
+              {% elif skip_adls %}
               <div class="placeholder-glow">
                 <span class="placeholder col-4"></span>
               </div>
@@ -106,7 +109,10 @@
               </div>
             </div>
             <div class="flex-grow-1 ms-3">
-              {% if skip_adls %}
+              {% if not ml_enabled %}
+              <div class="fw-bold h4 mb-0">—</div>
+              <div class="mt-1"><span class="badge bg-body-tertiary text-body border">Coming soon</span></div>
+              {% elif skip_adls %}
               <div class="placeholder-glow">
                 <span class="placeholder col-3"></span>
               </div>
@@ -277,13 +283,23 @@
             <h5 class="card-title mb-0">
               <i class="bi bi-cpu me-2 text-primary"></i>ML Compliance Analysis
             </h5>
-            <a href="{{ url_for('main.ml_results') }}" class="btn btn-sm btn-outline-primary">
-              View Details
-            </a>
+            {% if ml_enabled %}
+              <a href="{{ url_for('main.ml_results') }}" class="btn btn-sm btn-outline-primary">
+                View Details
+              </a>
+            {% else %}
+              <span class="badge bg-body-tertiary text-body border">Coming soon</span>
+            {% endif %}
           </div>
         </div>
         <div class="card-body" id="mlResultsBody">
-          {% if skip_adls %}
+          {% if not ml_enabled %}
+          <div class="text-center py-4">
+            <i class="bi bi-clock-history text-body-secondary" style="font-size: 2.25rem; opacity: 0.6"></i>
+            <p class="text-body-secondary mt-3 mb-0">ML compliance insights are coming soon</p>
+            <small class="text-body-secondary">This section will populate automatically once analysis is enabled.</small>
+          </div>
+          {% elif skip_adls %}
           <div class="row">
             <div class="col-lg-8">
               <div class="row g-3">
@@ -611,6 +627,7 @@
   {% endif %}
 
   // Auto-refresh ML data every 2 minutes (preserve existing behavior)
+  {% if ml_enabled %}
   window.__mlSummarySnapshot = window.__mlSummarySnapshot || {
     total_files: Number({{ ml_summary.total_files or 0 }}),
     last_updated: {% if ml_summary.last_updated %}'{{ ml_summary.last_updated.isoformat() }}'{% else %}null{% endif %}
@@ -639,6 +656,7 @@
       })
       .catch(() => {});
   }, 120000);
+  {% endif %}
 
   function showToast(message, type = 'info') {
     const toastDiv = document.createElement('div');
