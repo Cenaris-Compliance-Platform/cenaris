@@ -1,0 +1,1511 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.9, pytest-8.3.5, pluggy-1.6.0 -- C:\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: c:\Users\DELL\Desktop\cenaris
+configfile: pytest.ini
+plugins: anyio-4.11.0, Faker-20.1.0, langsmith-0.4.31
+collecting ... collected 1 item
+
+tests/test_security_features.py::test_pending_invites_resend_cooldown_and_revoke FAILED [100%]
+
+================================== FAILURES ===================================
+_______________ test_pending_invites_resend_cooldown_and_revoke _______________
+tests\test_security_features.py:130: in test_pending_invites_resend_cooldown_and_revoke
+    assert int(membership.invite_send_count or 0) == 2
+E   assert 1 == 2
+E    +  where 1 = int((1))
+E    +    where 1 = <OrganizationMembership 2>.invite_send_count
+---------------------------- Captured stdout setup ----------------------------
+2026-01-13 11:49:53,018 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:53,019 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("organization_memberships")
+2026-01-13 11:49:53,019 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,020 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("organization_memberships")
+2026-01-13 11:49:53,020 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,021 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("departments")
+2026-01-13 11:49:53,021 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,022 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("departments")
+2026-01-13 11:49:53,022 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,023 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("organizations")
+2026-01-13 11:49:53,023 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,023 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("organizations")
+2026-01-13 11:49:53,024 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,024 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("users")
+2026-01-13 11:49:53,024 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,024 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("users")
+2026-01-13 11:49:53,025 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,026 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("documents")
+2026-01-13 11:49:53,026 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,026 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("documents")
+2026-01-13 11:49:53,026 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,027 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("rbac_role_permissions")
+2026-01-13 11:49:53,027 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,027 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("rbac_role_permissions")
+2026-01-13 11:49:53,027 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,028 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("rbac_role_inherits")
+2026-01-13 11:49:53,028 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,028 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("rbac_role_inherits")
+2026-01-13 11:49:53,028 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,029 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("rbac_permissions")
+2026-01-13 11:49:53,029 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,030 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("rbac_permissions")
+2026-01-13 11:49:53,030 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,030 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("rbac_roles")
+2026-01-13 11:49:53,030 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,031 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("rbac_roles")
+2026-01-13 11:49:53,031 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,031 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("login_events")
+2026-01-13 11:49:53,031 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,032 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("login_events")
+2026-01-13 11:49:53,032 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,032 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("suspicious_ips")
+2026-01-13 11:49:53,032 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,033 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("suspicious_ips")
+2026-01-13 11:49:53,033 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,033 INFO sqlalchemy.engine.Engine COMMIT
+2026-01-13 11:49:53,034 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:53,034 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("organization_memberships")
+2026-01-13 11:49:53,034 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,035 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("organization_memberships")
+2026-01-13 11:49:53,035 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,036 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("departments")
+2026-01-13 11:49:53,036 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,036 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("departments")
+2026-01-13 11:49:53,036 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,037 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("organizations")
+2026-01-13 11:49:53,037 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,037 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("organizations")
+2026-01-13 11:49:53,037 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,037 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("users")
+2026-01-13 11:49:53,038 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,038 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("users")
+2026-01-13 11:49:53,038 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,039 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("documents")
+2026-01-13 11:49:53,039 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,039 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("documents")
+2026-01-13 11:49:53,039 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,040 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("rbac_role_permissions")
+2026-01-13 11:49:53,040 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,040 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("rbac_role_permissions")
+2026-01-13 11:49:53,040 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,040 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("rbac_role_inherits")
+2026-01-13 11:49:53,041 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,041 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("rbac_role_inherits")
+2026-01-13 11:49:53,041 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,041 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("rbac_permissions")
+2026-01-13 11:49:53,042 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,042 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("rbac_permissions")
+2026-01-13 11:49:53,042 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,042 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("rbac_roles")
+2026-01-13 11:49:53,042 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,043 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("rbac_roles")
+2026-01-13 11:49:53,043 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,043 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("login_events")
+2026-01-13 11:49:53,043 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,044 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("login_events")
+2026-01-13 11:49:53,044 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,044 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("suspicious_ips")
+2026-01-13 11:49:53,044 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,045 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("suspicious_ips")
+2026-01-13 11:49:53,045 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-01-13 11:49:53,047 INFO sqlalchemy.engine.Engine 
+CREATE TABLE organizations (
+	id INTEGER NOT NULL, 
+	name VARCHAR(100) NOT NULL, 
+	trading_name VARCHAR(100), 
+	abn VARCHAR(20), 
+	organization_type VARCHAR(40), 
+	contact_email VARCHAR(120), 
+	address VARCHAR(255), 
+	industry VARCHAR(60), 
+	billing_email VARCHAR(120), 
+	billing_address VARCHAR(255), 
+	logo_blob_name VARCHAR(255), 
+	logo_content_type VARCHAR(100), 
+	subscription_tier VARCHAR(20), 
+	operates_in_australia BOOLEAN, 
+	declarations_accepted_at DATETIME, 
+	declarations_accepted_by_user_id INTEGER, 
+	data_processing_ack_at DATETIME, 
+	data_processing_ack_by_user_id INTEGER, 
+	created_at DATETIME, 
+	PRIMARY KEY (id)
+)
+
+
+2026-01-13 11:49:53,047 INFO sqlalchemy.engine.Engine [no key 0.00046s] ()
+2026-01-13 11:49:53,056 INFO sqlalchemy.engine.Engine 
+CREATE TABLE rbac_permissions (
+	id INTEGER NOT NULL, 
+	code VARCHAR(80) NOT NULL, 
+	description VARCHAR(255), 
+	PRIMARY KEY (id), 
+	UNIQUE (code)
+)
+
+
+2026-01-13 11:49:53,057 INFO sqlalchemy.engine.Engine [no key 0.00047s] ()
+2026-01-13 11:49:53,065 INFO sqlalchemy.engine.Engine 
+CREATE TABLE suspicious_ips (
+	id INTEGER NOT NULL, 
+	ip_address VARCHAR(45) NOT NULL, 
+	window_started_at DATETIME, 
+	failure_count INTEGER NOT NULL, 
+	blocked_until DATETIME, 
+	last_seen_at DATETIME, 
+	created_at DATETIME NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (ip_address)
+)
+
+
+2026-01-13 11:49:53,065 INFO sqlalchemy.engine.Engine [no key 0.00044s] ()
+2026-01-13 11:49:53,072 INFO sqlalchemy.engine.Engine CREATE INDEX ix_suspicious_ips_blocked_until ON suspicious_ips (blocked_until)
+2026-01-13 11:49:53,073 INFO sqlalchemy.engine.Engine [no key 0.00054s] ()
+2026-01-13 11:49:53,098 INFO sqlalchemy.engine.Engine 
+CREATE TABLE departments (
+	id INTEGER NOT NULL, 
+	organization_id INTEGER NOT NULL, 
+	name VARCHAR(80) NOT NULL, 
+	color VARCHAR(20) NOT NULL, 
+	created_at DATETIME, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_departments_org_name UNIQUE (organization_id, name), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id)
+)
+
+
+2026-01-13 11:49:53,099 INFO sqlalchemy.engine.Engine [no key 0.00047s] ()
+2026-01-13 11:49:53,106 INFO sqlalchemy.engine.Engine CREATE INDEX ix_departments_org_id ON departments (organization_id)
+2026-01-13 11:49:53,106 INFO sqlalchemy.engine.Engine [no key 0.00037s] ()
+2026-01-13 11:49:53,114 INFO sqlalchemy.engine.Engine 
+CREATE TABLE users (
+	id INTEGER NOT NULL, 
+	email VARCHAR(120) NOT NULL, 
+	password_hash VARCHAR(256), 
+	first_name VARCHAR(60), 
+	last_name VARCHAR(60), 
+	title VARCHAR(80), 
+	mobile_number VARCHAR(40), 
+	time_zone VARCHAR(60), 
+	full_name VARCHAR(100), 
+	email_verified BOOLEAN NOT NULL, 
+	welcome_email_sent_at DATETIME, 
+	terms_accepted_at DATETIME, 
+	password_changed_at DATETIME, 
+	avatar_blob_name VARCHAR(255), 
+	avatar_content_type VARCHAR(100), 
+	role VARCHAR(20), 
+	is_active BOOLEAN, 
+	created_at DATETIME, 
+	organization_id INTEGER, 
+	last_login_at DATETIME, 
+	last_failed_login_at DATETIME, 
+	failed_login_count INTEGER NOT NULL, 
+	locked_until DATETIME, 
+	session_version INTEGER NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (email), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id)
+)
+
+
+2026-01-13 11:49:53,114 INFO sqlalchemy.engine.Engine [no key 0.00037s] ()
+2026-01-13 11:49:53,122 INFO sqlalchemy.engine.Engine 
+CREATE TABLE rbac_roles (
+	id INTEGER NOT NULL, 
+	organization_id INTEGER NOT NULL, 
+	name VARCHAR(80) NOT NULL, 
+	description VARCHAR(255), 
+	is_system BOOLEAN NOT NULL, 
+	created_at DATETIME, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_rbac_roles_org_name UNIQUE (organization_id, name), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id)
+)
+
+
+2026-01-13 11:49:53,123 INFO sqlalchemy.engine.Engine [no key 0.00044s] ()
+2026-01-13 11:49:53,131 INFO sqlalchemy.engine.Engine CREATE INDEX ix_rbac_roles_org_id ON rbac_roles (organization_id)
+2026-01-13 11:49:53,131 INFO sqlalchemy.engine.Engine [no key 0.00042s] ()
+2026-01-13 11:49:53,138 INFO sqlalchemy.engine.Engine 
+CREATE TABLE organization_memberships (
+	id INTEGER NOT NULL, 
+	organization_id INTEGER NOT NULL, 
+	user_id INTEGER NOT NULL, 
+	department_id INTEGER, 
+	role VARCHAR(20) NOT NULL, 
+	role_id INTEGER, 
+	is_active BOOLEAN NOT NULL, 
+	created_at DATETIME, 
+	invited_at DATETIME, 
+	invited_by_user_id INTEGER, 
+	invite_last_sent_at DATETIME, 
+	invite_send_count INTEGER NOT NULL, 
+	invite_accepted_at DATETIME, 
+	invite_revoked_at DATETIME, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_org_membership_org_user UNIQUE (organization_id, user_id), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id), 
+	FOREIGN KEY(user_id) REFERENCES users (id), 
+	FOREIGN KEY(department_id) REFERENCES departments (id), 
+	FOREIGN KEY(role_id) REFERENCES rbac_roles (id)
+)
+
+
+2026-01-13 11:49:53,139 INFO sqlalchemy.engine.Engine [no key 0.00040s] ()
+2026-01-13 11:49:53,147 INFO sqlalchemy.engine.Engine 
+CREATE TABLE documents (
+	id INTEGER NOT NULL, 
+	filename VARCHAR(255) NOT NULL, 
+	blob_name VARCHAR(255), 
+	file_size INTEGER, 
+	content_type VARCHAR(50), 
+	uploaded_at DATETIME, 
+	is_active BOOLEAN, 
+	uploaded_by INTEGER, 
+	organization_id INTEGER, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(uploaded_by) REFERENCES users (id), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id)
+)
+
+
+2026-01-13 11:49:53,148 INFO sqlalchemy.engine.Engine [no key 0.00066s] ()
+2026-01-13 11:49:53,156 INFO sqlalchemy.engine.Engine 
+CREATE TABLE rbac_role_permissions (
+	role_id INTEGER NOT NULL, 
+	permission_id INTEGER NOT NULL, 
+	PRIMARY KEY (role_id, permission_id), 
+	FOREIGN KEY(role_id) REFERENCES rbac_roles (id) ON DELETE CASCADE, 
+	FOREIGN KEY(permission_id) REFERENCES rbac_permissions (id) ON DELETE CASCADE
+)
+
+
+2026-01-13 11:49:53,157 INFO sqlalchemy.engine.Engine [no key 0.00036s] ()
+2026-01-13 11:49:53,164 INFO sqlalchemy.engine.Engine 
+CREATE TABLE rbac_role_inherits (
+	role_id INTEGER NOT NULL, 
+	inherited_role_id INTEGER NOT NULL, 
+	PRIMARY KEY (role_id, inherited_role_id), 
+	FOREIGN KEY(role_id) REFERENCES rbac_roles (id) ON DELETE CASCADE, 
+	FOREIGN KEY(inherited_role_id) REFERENCES rbac_roles (id) ON DELETE CASCADE
+)
+
+
+2026-01-13 11:49:53,164 INFO sqlalchemy.engine.Engine [no key 0.00036s] ()
+2026-01-13 11:49:53,172 INFO sqlalchemy.engine.Engine 
+CREATE TABLE login_events (
+	id INTEGER NOT NULL, 
+	user_id INTEGER, 
+	email VARCHAR(120), 
+	provider VARCHAR(20) NOT NULL, 
+	success BOOLEAN NOT NULL, 
+	reason VARCHAR(80), 
+	ip_address VARCHAR(45), 
+	user_agent VARCHAR(255), 
+	created_at DATETIME NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(user_id) REFERENCES users (id)
+)
+
+
+2026-01-13 11:49:53,172 INFO sqlalchemy.engine.Engine [no key 0.00041s] ()
+2026-01-13 11:49:53,180 INFO sqlalchemy.engine.Engine CREATE INDEX ix_login_events_ip_created_at ON login_events (ip_address, created_at)
+2026-01-13 11:49:53,180 INFO sqlalchemy.engine.Engine [no key 0.00044s] ()
+2026-01-13 11:49:53,188 INFO sqlalchemy.engine.Engine CREATE INDEX ix_login_events_user_id_created_at ON login_events (user_id, created_at)
+2026-01-13 11:49:53,189 INFO sqlalchemy.engine.Engine [no key 0.00044s] ()
+2026-01-13 11:49:53,197 INFO sqlalchemy.engine.Engine COMMIT
+2026-01-13 11:49:54,145 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:54,150 INFO sqlalchemy.engine.Engine INSERT INTO organizations (name, trading_name, abn, organization_type, contact_email, address, industry, billing_email, billing_address, logo_blob_name, logo_content_type, subscription_tier, operates_in_australia, declarations_accepted_at, declarations_accepted_by_user_id, data_processing_ack_at, data_processing_ack_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-13 11:49:54,150 INFO sqlalchemy.engine.Engine [generated in 0.00072s] ('Org A', None, '12345678901', 'Company', 'contact@example.com', '1 Test St', 'Other', None, None, None, None, 'Starter', 1, '2026-01-13 06:49:53.316708', None, '2026-01-13 06:49:53.316720', None, '2026-01-13 06:49:51.944115')
+2026-01-13 11:49:54,157 INFO sqlalchemy.engine.Engine INSERT INTO users (email, password_hash, first_name, last_name, title, mobile_number, time_zone, full_name, email_verified, welcome_email_sent_at, terms_accepted_at, password_changed_at, avatar_blob_name, avatar_content_type, role, is_active, created_at, organization_id, last_login_at, last_failed_login_at, failed_login_count, locked_until, session_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-13 11:49:54,157 INFO sqlalchemy.engine.Engine [generated in 0.00070s] ('user@example.com', 'pbkdf2:sha256:600000$QGEOP7GVnIIugCLN$0fdc57f9153dbfe7a2c194441d0a3a9806561c55da53d1eb7dd406d7d6908223', None, None, None, None, None, None, 1, None, None, '2026-01-13 06:49:54.143614', None, None, 'User', 1, '2026-01-13 06:49:51.950360', 1, None, None, 0, None, 1)
+2026-01-13 11:49:54,168 INFO sqlalchemy.engine.Engine INSERT INTO organization_memberships (organization_id, user_id, department_id, role, role_id, is_active, created_at, invited_at, invited_by_user_id, invite_last_sent_at, invite_send_count, invite_accepted_at, invite_revoked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-13 11:49:54,169 INFO sqlalchemy.engine.Engine [generated in 0.00094s] (1, 1, None, 'Admin', None, 1, '2026-01-13 06:49:51.933923', None, None, None, 0, None, None)
+2026-01-13 11:49:54,174 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+2026-01-13 11:49:54,174 INFO sqlalchemy.engine.Engine [generated in 0.00046s] ()
+2026-01-13 11:49:54,178 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,179 INFO sqlalchemy.engine.Engine [generated in 0.00033s (insertmanyvalues) 1/9 (ordered; batch not supported)] ('documents.view', 'View documents')
+2026-01-13 11:49:54,179 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,179 INFO sqlalchemy.engine.Engine [insertmanyvalues 2/9 (ordered; batch not supported)] ('documents.upload', 'Upload documents')
+2026-01-13 11:49:54,180 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,180 INFO sqlalchemy.engine.Engine [insertmanyvalues 3/9 (ordered; batch not supported)] ('documents.delete', 'Delete documents')
+2026-01-13 11:49:54,180 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,181 INFO sqlalchemy.engine.Engine [insertmanyvalues 4/9 (ordered; batch not supported)] ('audits.export', 'Export audit data')
+2026-01-13 11:49:54,181 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,181 INFO sqlalchemy.engine.Engine [insertmanyvalues 5/9 (ordered; batch not supported)] ('org.manage', 'Manage organization profile/settings')
+2026-01-13 11:49:54,181 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,182 INFO sqlalchemy.engine.Engine [insertmanyvalues 6/9 (ordered; batch not supported)] ('departments.manage', 'Manage departments')
+2026-01-13 11:49:54,182 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,182 INFO sqlalchemy.engine.Engine [insertmanyvalues 7/9 (ordered; batch not supported)] ('users.invite', 'Invite users to organization')
+2026-01-13 11:49:54,182 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,183 INFO sqlalchemy.engine.Engine [insertmanyvalues 8/9 (ordered; batch not supported)] ('users.manage', 'Manage users and memberships')
+2026-01-13 11:49:54,183 INFO sqlalchemy.engine.Engine INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+2026-01-13 11:49:54,183 INFO sqlalchemy.engine.Engine [insertmanyvalues 9/9 (ordered; batch not supported)] ('roles.manage', 'Manage roles and permissions')
+2026-01-13 11:49:54,188 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ?
+2026-01-13 11:49:54,188 INFO sqlalchemy.engine.Engine [generated in 0.00044s] (1,)
+2026-01-13 11:49:54,190 INFO sqlalchemy.engine.Engine INSERT INTO rbac_roles (organization_id, name, description, is_system, created_at) VALUES (?, ?, ?, ?, ?)
+2026-01-13 11:49:54,191 INFO sqlalchemy.engine.Engine [generated in 0.00044s] (1, 'Organization Admin', 'Full administrative access for this organization.', 1, '2026-01-13 06:49:51.963794')
+2026-01-13 11:49:54,192 INFO sqlalchemy.engine.Engine INSERT INTO rbac_roles (organization_id, name, description, is_system, created_at) VALUES (?, ?, ?, ?, ?)
+2026-01-13 11:49:54,193 INFO sqlalchemy.engine.Engine [cached since 0.002448s ago] (1, 'Compliance Manager', 'Manage compliance workflows and documents.', 1, '2026-01-13 06:49:51.963794')
+2026-01-13 11:49:54,193 INFO sqlalchemy.engine.Engine INSERT INTO rbac_roles (organization_id, name, description, is_system, created_at) VALUES (?, ?, ?, ?, ?)
+2026-01-13 11:49:54,194 INFO sqlalchemy.engine.Engine [cached since 0.003587s ago] (1, 'Auditor', 'Read-only access for audits and evidence review.', 1, '2026-01-13 06:49:51.963794')
+2026-01-13 11:49:54,195 INFO sqlalchemy.engine.Engine INSERT INTO rbac_roles (organization_id, name, description, is_system, created_at) VALUES (?, ?, ?, ?, ?)
+2026-01-13 11:49:54,195 INFO sqlalchemy.engine.Engine [cached since 0.005227s ago] (1, 'Member', 'Standard member access.', 1, '2026-01-13 06:49:51.963794')
+2026-01-13 11:49:54,197 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+2026-01-13 11:49:54,197 INFO sqlalchemy.engine.Engine [cached since 0.02367s ago] ()
+2026-01-13 11:49:54,203 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+2026-01-13 11:49:54,203 INFO sqlalchemy.engine.Engine [generated in 0.00046s] (4,)
+2026-01-13 11:49:54,205 INFO sqlalchemy.engine.Engine INSERT INTO rbac_role_permissions (role_id, permission_id) VALUES (?, ?)
+2026-01-13 11:49:54,206 INFO sqlalchemy.engine.Engine [generated in 0.00038s] [(4, 1), (4, 2)]
+2026-01-13 11:49:54,207 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+2026-01-13 11:49:54,207 INFO sqlalchemy.engine.Engine [cached since 0.004332s ago] (3,)
+2026-01-13 11:49:54,208 INFO sqlalchemy.engine.Engine INSERT INTO rbac_role_permissions (role_id, permission_id) VALUES (?, ?)
+2026-01-13 11:49:54,209 INFO sqlalchemy.engine.Engine [cached since 0.003308s ago] [(3, 1), (3, 4)]
+2026-01-13 11:49:54,209 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+2026-01-13 11:49:54,210 INFO sqlalchemy.engine.Engine [cached since 0.006999s ago] (2,)
+2026-01-13 11:49:54,211 INFO sqlalchemy.engine.Engine INSERT INTO rbac_role_permissions (role_id, permission_id) VALUES (?, ?)
+2026-01-13 11:49:54,212 INFO sqlalchemy.engine.Engine [cached since 0.006287s ago] [(2, 1), (2, 2), (2, 3), (2, 4)]
+2026-01-13 11:49:54,213 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+2026-01-13 11:49:54,213 INFO sqlalchemy.engine.Engine [cached since 0.01029s ago] (1,)
+2026-01-13 11:49:54,215 INFO sqlalchemy.engine.Engine INSERT INTO rbac_role_permissions (role_id, permission_id) VALUES (?, ?)
+2026-01-13 11:49:54,215 INFO sqlalchemy.engine.Engine [cached since 0.009896s ago] [(1, 5), (1, 6), (1, 7), (1, 8), (1, 9)]
+2026-01-13 11:49:54,217 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:54,217 INFO sqlalchemy.engine.Engine [generated in 0.00036s] (1,)
+2026-01-13 11:49:54,220 INFO sqlalchemy.engine.Engine INSERT INTO rbac_role_inherits (role_id, inherited_role_id) VALUES (?, ?)
+2026-01-13 11:49:54,220 INFO sqlalchemy.engine.Engine [generated in 0.00036s] (1, 2)
+2026-01-13 11:49:54,221 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:54,221 INFO sqlalchemy.engine.Engine [cached since 0.004125s ago] (2,)
+2026-01-13 11:49:54,223 INFO sqlalchemy.engine.Engine INSERT INTO rbac_role_inherits (role_id, inherited_role_id) VALUES (?, ?)
+2026-01-13 11:49:54,223 INFO sqlalchemy.engine.Engine [cached since 0.003356s ago] (2, 4)
+2026-01-13 11:49:54,224 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:54,224 INFO sqlalchemy.engine.Engine [cached since 0.006894s ago] (3,)
+2026-01-13 11:49:54,225 INFO sqlalchemy.engine.Engine INSERT INTO rbac_role_inherits (role_id, inherited_role_id) VALUES (?, ?)
+2026-01-13 11:49:54,225 INFO sqlalchemy.engine.Engine [cached since 0.005822s ago] (3, 4)
+2026-01-13 11:49:54,229 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ? AND rbac_roles.name = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:54,229 INFO sqlalchemy.engine.Engine [generated in 0.00062s] (1, 'Organization Admin', 1, 0)
+2026-01-13 11:49:54,235 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:54,235 INFO sqlalchemy.engine.Engine [generated in 0.00051s] (1,)
+2026-01-13 11:49:54,238 INFO sqlalchemy.engine.Engine UPDATE organization_memberships SET role_id=? WHERE organization_memberships.id = ?
+2026-01-13 11:49:54,239 INFO sqlalchemy.engine.Engine [generated in 0.00039s] (1, 1)
+2026-01-13 11:49:54,239 INFO sqlalchemy.engine.Engine COMMIT
+2026-01-13 11:49:54,247 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:54,251 INFO sqlalchemy.engine.Engine SELECT organizations.id AS organizations_id, organizations.name AS organizations_name, organizations.trading_name AS organizations_trading_name, organizations.abn AS organizations_abn, organizations.organization_type AS organizations_organization_type, organizations.contact_email AS organizations_contact_email, organizations.address AS organizations_address, organizations.industry AS organizations_industry, organizations.billing_email AS organizations_billing_email, organizations.billing_address AS organizations_billing_address, organizations.logo_blob_name AS organizations_logo_blob_name, organizations.logo_content_type AS organizations_logo_content_type, organizations.subscription_tier AS organizations_subscription_tier, organizations.operates_in_australia AS organizations_operates_in_australia, organizations.declarations_accepted_at AS organizations_declarations_accepted_at, organizations.declarations_accepted_by_user_id AS organizations_declarations_accepted_by_user_id, organizations.data_processing_ack_at AS organizations_data_processing_ack_at, organizations.data_processing_ack_by_user_id AS organizations_data_processing_ack_by_user_id, organizations.created_at AS organizations_created_at 
+FROM organizations 
+WHERE organizations.id = ?
+2026-01-13 11:49:54,251 INFO sqlalchemy.engine.Engine [generated in 0.00049s] (1,)
+2026-01-13 11:49:54,256 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+2026-01-13 11:49:54,257 INFO sqlalchemy.engine.Engine [generated in 0.00046s] (1,)
+2026-01-13 11:49:54,261 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.id = ?
+2026-01-13 11:49:54,262 INFO sqlalchemy.engine.Engine [generated in 0.00112s] (1,)
+2026-01-13 11:49:54,283 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id = ?
+2026-01-13 11:49:54,284 INFO sqlalchemy.engine.Engine [generated in 0.00045s] (1,)
+2026-01-13 11:49:54,285 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+2026-01-13 11:49:54,286 INFO sqlalchemy.engine.Engine [cached since 0.08344s ago] (1,)
+2026-01-13 11:49:54,288 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:54,288 INFO sqlalchemy.engine.Engine [cached since 0.07103s ago] (1,)
+2026-01-13 11:49:54,293 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:54,293 INFO sqlalchemy.engine.Engine [generated in 0.00063s] (2,)
+2026-01-13 11:49:54,296 INFO sqlalchemy.engine.Engine ROLLBACK
+----------------------------- Captured log setup ------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("organization_memberships")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("organization_memberships")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("departments")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("departments")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("organizations")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("organizations")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("users")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("users")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("documents")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("documents")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("rbac_role_permissions")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("rbac_role_permissions")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("rbac_role_inherits")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("rbac_role_inherits")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("rbac_permissions")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("rbac_permissions")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("rbac_roles")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("rbac_roles")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("login_events")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("login_events")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("suspicious_ips")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("suspicious_ips")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:2708 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("organization_memberships")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("organization_memberships")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("departments")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("departments")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("organizations")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("organizations")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("users")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("users")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("documents")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("documents")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("rbac_role_permissions")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("rbac_role_permissions")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("rbac_role_inherits")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("rbac_role_inherits")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("rbac_permissions")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("rbac_permissions")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("rbac_roles")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("rbac_roles")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("login_events")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("login_events")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA main.table_info("suspicious_ips")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 PRAGMA temp.table_info("suspicious_ips")
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE organizations (
+	id INTEGER NOT NULL, 
+	name VARCHAR(100) NOT NULL, 
+	trading_name VARCHAR(100), 
+	abn VARCHAR(20), 
+	organization_type VARCHAR(40), 
+	contact_email VARCHAR(120), 
+	address VARCHAR(255), 
+	industry VARCHAR(60), 
+	billing_email VARCHAR(120), 
+	billing_address VARCHAR(255), 
+	logo_blob_name VARCHAR(255), 
+	logo_content_type VARCHAR(100), 
+	subscription_tier VARCHAR(20), 
+	operates_in_australia BOOLEAN, 
+	declarations_accepted_at DATETIME, 
+	declarations_accepted_by_user_id INTEGER, 
+	data_processing_ack_at DATETIME, 
+	data_processing_ack_by_user_id INTEGER, 
+	created_at DATETIME, 
+	PRIMARY KEY (id)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00046s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE rbac_permissions (
+	id INTEGER NOT NULL, 
+	code VARCHAR(80) NOT NULL, 
+	description VARCHAR(255), 
+	PRIMARY KEY (id), 
+	UNIQUE (code)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00047s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE suspicious_ips (
+	id INTEGER NOT NULL, 
+	ip_address VARCHAR(45) NOT NULL, 
+	window_started_at DATETIME, 
+	failure_count INTEGER NOT NULL, 
+	blocked_until DATETIME, 
+	last_seen_at DATETIME, 
+	created_at DATETIME NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (ip_address)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00044s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 CREATE INDEX ix_suspicious_ips_blocked_until ON suspicious_ips (blocked_until)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00054s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE departments (
+	id INTEGER NOT NULL, 
+	organization_id INTEGER NOT NULL, 
+	name VARCHAR(80) NOT NULL, 
+	color VARCHAR(20) NOT NULL, 
+	created_at DATETIME, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_departments_org_name UNIQUE (organization_id, name), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00047s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 CREATE INDEX ix_departments_org_id ON departments (organization_id)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00037s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE users (
+	id INTEGER NOT NULL, 
+	email VARCHAR(120) NOT NULL, 
+	password_hash VARCHAR(256), 
+	first_name VARCHAR(60), 
+	last_name VARCHAR(60), 
+	title VARCHAR(80), 
+	mobile_number VARCHAR(40), 
+	time_zone VARCHAR(60), 
+	full_name VARCHAR(100), 
+	email_verified BOOLEAN NOT NULL, 
+	welcome_email_sent_at DATETIME, 
+	terms_accepted_at DATETIME, 
+	password_changed_at DATETIME, 
+	avatar_blob_name VARCHAR(255), 
+	avatar_content_type VARCHAR(100), 
+	role VARCHAR(20), 
+	is_active BOOLEAN, 
+	created_at DATETIME, 
+	organization_id INTEGER, 
+	last_login_at DATETIME, 
+	last_failed_login_at DATETIME, 
+	failed_login_count INTEGER NOT NULL, 
+	locked_until DATETIME, 
+	session_version INTEGER NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (email), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00037s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE rbac_roles (
+	id INTEGER NOT NULL, 
+	organization_id INTEGER NOT NULL, 
+	name VARCHAR(80) NOT NULL, 
+	description VARCHAR(255), 
+	is_system BOOLEAN NOT NULL, 
+	created_at DATETIME, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_rbac_roles_org_name UNIQUE (organization_id, name), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00044s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 CREATE INDEX ix_rbac_roles_org_id ON rbac_roles (organization_id)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00042s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE organization_memberships (
+	id INTEGER NOT NULL, 
+	organization_id INTEGER NOT NULL, 
+	user_id INTEGER NOT NULL, 
+	department_id INTEGER, 
+	role VARCHAR(20) NOT NULL, 
+	role_id INTEGER, 
+	is_active BOOLEAN NOT NULL, 
+	created_at DATETIME, 
+	invited_at DATETIME, 
+	invited_by_user_id INTEGER, 
+	invite_last_sent_at DATETIME, 
+	invite_send_count INTEGER NOT NULL, 
+	invite_accepted_at DATETIME, 
+	invite_revoked_at DATETIME, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_org_membership_org_user UNIQUE (organization_id, user_id), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id), 
+	FOREIGN KEY(user_id) REFERENCES users (id), 
+	FOREIGN KEY(department_id) REFERENCES departments (id), 
+	FOREIGN KEY(role_id) REFERENCES rbac_roles (id)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00040s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE documents (
+	id INTEGER NOT NULL, 
+	filename VARCHAR(255) NOT NULL, 
+	blob_name VARCHAR(255), 
+	file_size INTEGER, 
+	content_type VARCHAR(50), 
+	uploaded_at DATETIME, 
+	is_active BOOLEAN, 
+	uploaded_by INTEGER, 
+	organization_id INTEGER, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(uploaded_by) REFERENCES users (id), 
+	FOREIGN KEY(organization_id) REFERENCES organizations (id)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00066s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE rbac_role_permissions (
+	role_id INTEGER NOT NULL, 
+	permission_id INTEGER NOT NULL, 
+	PRIMARY KEY (role_id, permission_id), 
+	FOREIGN KEY(role_id) REFERENCES rbac_roles (id) ON DELETE CASCADE, 
+	FOREIGN KEY(permission_id) REFERENCES rbac_permissions (id) ON DELETE CASCADE
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00036s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE rbac_role_inherits (
+	role_id INTEGER NOT NULL, 
+	inherited_role_id INTEGER NOT NULL, 
+	PRIMARY KEY (role_id, inherited_role_id), 
+	FOREIGN KEY(role_id) REFERENCES rbac_roles (id) ON DELETE CASCADE, 
+	FOREIGN KEY(inherited_role_id) REFERENCES rbac_roles (id) ON DELETE CASCADE
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00036s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 
+CREATE TABLE login_events (
+	id INTEGER NOT NULL, 
+	user_id INTEGER, 
+	email VARCHAR(120), 
+	provider VARCHAR(20) NOT NULL, 
+	success BOOLEAN NOT NULL, 
+	reason VARCHAR(80), 
+	ip_address VARCHAR(45), 
+	user_agent VARCHAR(255), 
+	created_at DATETIME NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(user_id) REFERENCES users (id)
+)
+
+
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00041s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 CREATE INDEX ix_login_events_ip_created_at ON login_events (ip_address, created_at)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00044s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 CREATE INDEX ix_login_events_user_id_created_at ON login_events (user_id, created_at)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00044s] ()
+INFO     sqlalchemy.engine.Engine:base.py:2708 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO organizations (name, trading_name, abn, organization_type, contact_email, address, industry, billing_email, billing_address, logo_blob_name, logo_content_type, subscription_tier, operates_in_australia, declarations_accepted_at, declarations_accepted_by_user_id, data_processing_ack_at, data_processing_ack_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00072s] ('Org A', None, '12345678901', 'Company', 'contact@example.com', '1 Test St', 'Other', None, None, None, None, 'Starter', 1, '2026-01-13 06:49:53.316708', None, '2026-01-13 06:49:53.316720', None, '2026-01-13 06:49:51.944115')
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO users (email, password_hash, first_name, last_name, title, mobile_number, time_zone, full_name, email_verified, welcome_email_sent_at, terms_accepted_at, password_changed_at, avatar_blob_name, avatar_content_type, role, is_active, created_at, organization_id, last_login_at, last_failed_login_at, failed_login_count, locked_until, session_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00070s] ('user@example.com', 'pbkdf2:sha256:600000$QGEOP7GVnIIugCLN$0fdc57f9153dbfe7a2c194441d0a3a9806561c55da53d1eb7dd406d7d6908223', None, None, None, None, None, None, 1, None, None, '2026-01-13 06:49:54.143614', None, None, 'User', 1, '2026-01-13 06:49:51.950360', 1, None, None, 0, None, 1)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO organization_memberships (organization_id, user_id, department_id, role, role_id, is_active, created_at, invited_at, invited_by_user_id, invite_last_sent_at, invite_send_count, invite_accepted_at, invite_revoked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00094s] (1, 1, None, 'Admin', None, 1, '2026-01-13 06:49:51.933923', None, None, None, 0, None, None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00046s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [generated in 0.00033s (insertmanyvalues) 1/9 (ordered; batch not supported)] ('documents.view', 'View documents')
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [insertmanyvalues 2/9 (ordered; batch not supported)] ('documents.upload', 'Upload documents')
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [insertmanyvalues 3/9 (ordered; batch not supported)] ('documents.delete', 'Delete documents')
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [insertmanyvalues 4/9 (ordered; batch not supported)] ('audits.export', 'Export audit data')
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [insertmanyvalues 5/9 (ordered; batch not supported)] ('org.manage', 'Manage organization profile/settings')
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [insertmanyvalues 6/9 (ordered; batch not supported)] ('departments.manage', 'Manage departments')
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [insertmanyvalues 7/9 (ordered; batch not supported)] ('users.invite', 'Invite users to organization')
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [insertmanyvalues 8/9 (ordered; batch not supported)] ('users.manage', 'Manage users and memberships')
+INFO     sqlalchemy.engine.Engine:base.py:1844 INSERT INTO rbac_permissions (code, description) VALUES (?, ?) RETURNING id
+INFO     sqlalchemy.engine.Engine:base.py:1844 [insertmanyvalues 9/9 (ordered; batch not supported)] ('roles.manage', 'Manage roles and permissions')
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00044s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_roles (organization_id, name, description, is_system, created_at) VALUES (?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00044s] (1, 'Organization Admin', 'Full administrative access for this organization.', 1, '2026-01-13 06:49:51.963794')
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_roles (organization_id, name, description, is_system, created_at) VALUES (?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.002448s ago] (1, 'Compliance Manager', 'Manage compliance workflows and documents.', 1, '2026-01-13 06:49:51.963794')
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_roles (organization_id, name, description, is_system, created_at) VALUES (?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.003587s ago] (1, 'Auditor', 'Read-only access for audits and evidence review.', 1, '2026-01-13 06:49:51.963794')
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_roles (organization_id, name, description, is_system, created_at) VALUES (?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.005227s ago] (1, 'Member', 'Standard member access.', 1, '2026-01-13 06:49:51.963794')
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.02367s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00046s] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_role_permissions (role_id, permission_id) VALUES (?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00038s] [(4, 1), (4, 2)]
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.004332s ago] (3,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_role_permissions (role_id, permission_id) VALUES (?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.003308s ago] [(3, 1), (3, 4)]
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.006999s ago] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_role_permissions (role_id, permission_id) VALUES (?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.006287s ago] [(2, 1), (2, 2), (2, 3), (2, 4)]
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.01029s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_role_permissions (role_id, permission_id) VALUES (?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.009896s ago] [(1, 5), (1, 6), (1, 7), (1, 8), (1, 9)]
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00036s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_role_inherits (role_id, inherited_role_id) VALUES (?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00036s] (1, 2)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.004125s ago] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_role_inherits (role_id, inherited_role_id) VALUES (?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.003356s ago] (2, 4)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.006894s ago] (3,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO rbac_role_inherits (role_id, inherited_role_id) VALUES (?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.005822s ago] (3, 4)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ? AND rbac_roles.name = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00062s] (1, 'Organization Admin', 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00051s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE organization_memberships SET role_id=? WHERE organization_memberships.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00039s] (1, 1)
+INFO     sqlalchemy.engine.Engine:base.py:2708 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organizations.id AS organizations_id, organizations.name AS organizations_name, organizations.trading_name AS organizations_trading_name, organizations.abn AS organizations_abn, organizations.organization_type AS organizations_organization_type, organizations.contact_email AS organizations_contact_email, organizations.address AS organizations_address, organizations.industry AS organizations_industry, organizations.billing_email AS organizations_billing_email, organizations.billing_address AS organizations_billing_address, organizations.logo_blob_name AS organizations_logo_blob_name, organizations.logo_content_type AS organizations_logo_content_type, organizations.subscription_tier AS organizations_subscription_tier, organizations.operates_in_australia AS organizations_operates_in_australia, organizations.declarations_accepted_at AS organizations_declarations_accepted_at, organizations.declarations_accepted_by_user_id AS organizations_declarations_accepted_by_user_id, organizations.data_processing_ack_at AS organizations_data_processing_ack_at, organizations.data_processing_ack_by_user_id AS organizations_data_processing_ack_by_user_id, organizations.created_at AS organizations_created_at 
+FROM organizations 
+WHERE organizations.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00049s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00046s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00112s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00045s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.08344s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.07103s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00063s] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:2705 ROLLBACK
+---------------------------- Captured stdout call -----------------------------
+2026-01-13 11:49:54,315 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:54,317 INFO sqlalchemy.engine.Engine SELECT suspicious_ips.id AS suspicious_ips_id, suspicious_ips.ip_address AS suspicious_ips_ip_address, suspicious_ips.window_started_at AS suspicious_ips_window_started_at, suspicious_ips.failure_count AS suspicious_ips_failure_count, suspicious_ips.blocked_until AS suspicious_ips_blocked_until, suspicious_ips.last_seen_at AS suspicious_ips_last_seen_at, suspicious_ips.created_at AS suspicious_ips_created_at 
+FROM suspicious_ips 
+WHERE suspicious_ips.ip_address = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:54,318 INFO sqlalchemy.engine.Engine [generated in 0.00043s] ('10.0.0.11', 1, 0)
+2026-01-13 11:49:54,321 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.email = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:54,321 INFO sqlalchemy.engine.Engine [generated in 0.00042s] ('user@example.com', 1, 0)
+2026-01-13 11:49:55,144 INFO sqlalchemy.engine.Engine UPDATE users SET last_login_at=? WHERE users.id = ?
+2026-01-13 11:49:55,144 INFO sqlalchemy.engine.Engine [generated in 0.00068s] ('2026-01-13 06:49:54.314276', 1)
+2026-01-13 11:49:55,147 INFO sqlalchemy.engine.Engine COMMIT
+2026-01-13 11:49:55,153 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:55,153 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+2026-01-13 11:49:55,154 INFO sqlalchemy.engine.Engine [cached since 0.8973s ago] (1,)
+2026-01-13 11:49:55,155 INFO sqlalchemy.engine.Engine SELECT suspicious_ips.id AS suspicious_ips_id, suspicious_ips.ip_address AS suspicious_ips_ip_address, suspicious_ips.window_started_at AS suspicious_ips_window_started_at, suspicious_ips.failure_count AS suspicious_ips_failure_count, suspicious_ips.blocked_until AS suspicious_ips_blocked_until, suspicious_ips.last_seen_at AS suspicious_ips_last_seen_at, suspicious_ips.created_at AS suspicious_ips_created_at 
+FROM suspicious_ips 
+WHERE suspicious_ips.ip_address = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:55,155 INFO sqlalchemy.engine.Engine [cached since 0.8382s ago] ('10.0.0.11', 1, 0)
+2026-01-13 11:49:55,159 INFO sqlalchemy.engine.Engine INSERT INTO login_events (user_id, email, provider, success, reason, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-13 11:49:55,159 INFO sqlalchemy.engine.Engine [generated in 0.00051s] (1, 'user@example.com', 'password', 1, None, '10.0.0.11', 'Werkzeug/2.3.7', '2026-01-13 06:49:51.968603')
+2026-01-13 11:49:55,162 INFO sqlalchemy.engine.Engine COMMIT
+2026-01-13 11:49:55,168 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:55,169 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+2026-01-13 11:49:55,169 INFO sqlalchemy.engine.Engine [cached since 0.9125s ago] (1,)
+2026-01-13 11:49:55,172 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ? AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:55,172 INFO sqlalchemy.engine.Engine [generated in 0.00045s] (1, 1, 1, 0)
+2026-01-13 11:49:55,175 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+2026-01-13 11:49:55,176 INFO sqlalchemy.engine.Engine [generated in 0.00046s] (1,)
+2026-01-13 11:49:55,182 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:55,183 INFO sqlalchemy.engine.Engine [generated in 0.00057s] (1,)
+2026-01-13 11:49:55,189 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:55,190 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+2026-01-13 11:49:55,190 INFO sqlalchemy.engine.Engine [cached since 1.017s ago] ()
+2026-01-13 11:49:55,192 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ?
+2026-01-13 11:49:55,193 INFO sqlalchemy.engine.Engine [cached since 1.005s ago] (1,)
+2026-01-13 11:49:55,195 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?, ?, ?, ?)
+2026-01-13 11:49:55,196 INFO sqlalchemy.engine.Engine [cached since 0.961s ago] (1, 2, 3, 4)
+2026-01-13 11:49:55,198 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+2026-01-13 11:49:55,198 INFO sqlalchemy.engine.Engine [cached since 1.024s ago] ()
+2026-01-13 11:49:55,199 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:55,200 INFO sqlalchemy.engine.Engine [cached since 0.9825s ago] (1,)
+2026-01-13 11:49:55,201 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:55,201 INFO sqlalchemy.engine.Engine [cached since 0.9841s ago] (2,)
+2026-01-13 11:49:55,202 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:55,203 INFO sqlalchemy.engine.Engine [cached since 0.9856s ago] (3,)
+2026-01-13 11:49:55,203 INFO sqlalchemy.engine.Engine COMMIT
+2026-01-13 11:49:55,204 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:55,205 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ? AND rbac_roles.name = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:55,205 INFO sqlalchemy.engine.Engine [cached since 0.9768s ago] (1, 'Member', 1, 0)
+2026-01-13 11:49:55,207 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:55,207 INFO sqlalchemy.engine.Engine [cached since 0.9724s ago] (4,)
+2026-01-13 11:49:55,208 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-01-13 11:49:55,214 INFO sqlalchemy.engine.Engine SELECT users.id, users.email, users.password_hash, users.first_name, users.last_name, users.title, users.mobile_number, users.time_zone, users.full_name, users.email_verified, users.welcome_email_sent_at, users.terms_accepted_at, users.password_changed_at, users.avatar_blob_name, users.avatar_content_type, users.role, users.is_active, users.created_at, users.organization_id, users.last_login_at, users.last_failed_login_at, users.failed_login_count, users.locked_until, users.session_version 
+FROM users 
+WHERE users.id = ?
+2026-01-13 11:49:55,215 INFO sqlalchemy.engine.Engine [generated in 0.00105s] (1,)
+2026-01-13 11:49:55,218 INFO sqlalchemy.engine.Engine SELECT organizations.id AS organizations_id, organizations.name AS organizations_name, organizations.trading_name AS organizations_trading_name, organizations.abn AS organizations_abn, organizations.organization_type AS organizations_organization_type, organizations.contact_email AS organizations_contact_email, organizations.address AS organizations_address, organizations.industry AS organizations_industry, organizations.billing_email AS organizations_billing_email, organizations.billing_address AS organizations_billing_address, organizations.logo_blob_name AS organizations_logo_blob_name, organizations.logo_content_type AS organizations_logo_content_type, organizations.subscription_tier AS organizations_subscription_tier, organizations.operates_in_australia AS organizations_operates_in_australia, organizations.declarations_accepted_at AS organizations_declarations_accepted_at, organizations.declarations_accepted_by_user_id AS organizations_declarations_accepted_by_user_id, organizations.data_processing_ack_at AS organizations_data_processing_ack_at, organizations.data_processing_ack_by_user_id AS organizations_data_processing_ack_by_user_id, organizations.created_at AS organizations_created_at 
+FROM organizations 
+WHERE organizations.id = ?
+2026-01-13 11:49:55,219 INFO sqlalchemy.engine.Engine [generated in 0.00042s] (1,)
+2026-01-13 11:49:55,220 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ? AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:55,221 INFO sqlalchemy.engine.Engine [cached since 0.049s ago] (1, 1, 1, 0)
+2026-01-13 11:49:55,222 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+2026-01-13 11:49:55,223 INFO sqlalchemy.engine.Engine [cached since 0.0476s ago] (1,)
+2026-01-13 11:49:55,225 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:55,225 INFO sqlalchemy.engine.Engine [cached since 0.04299s ago] (1,)
+2026-01-13 11:49:55,229 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE ? = organization_memberships.user_id AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:55,230 INFO sqlalchemy.engine.Engine [generated in 0.00060s] (1, 1, 1, 0)
+2026-01-13 11:49:55,231 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+2026-01-13 11:49:55,232 INFO sqlalchemy.engine.Engine [cached since 0.05655s ago] (1,)
+2026-01-13 11:49:55,234 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:55,234 INFO sqlalchemy.engine.Engine [cached since 0.05194s ago] (1,)
+2026-01-13 11:49:55,236 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:55,236 INFO sqlalchemy.engine.Engine [cached since 1.019s ago] (1,)
+2026-01-13 11:49:55,238 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:55,238 INFO sqlalchemy.engine.Engine [cached since 0.9456s ago] (2,)
+2026-01-13 11:49:55,240 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:55,240 INFO sqlalchemy.engine.Engine [cached since 1.023s ago] (2,)
+2026-01-13 11:49:55,242 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:55,242 INFO sqlalchemy.engine.Engine [cached since 0.949s ago] (4,)
+2026-01-13 11:49:55,243 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:55,244 INFO sqlalchemy.engine.Engine [cached since 1.027s ago] (4,)
+2026-01-13 11:49:55,248 INFO sqlalchemy.engine.Engine SELECT organizations.id AS organizations_id, organizations.name AS organizations_name, organizations.trading_name AS organizations_trading_name, organizations.abn AS organizations_abn, organizations.organization_type AS organizations_organization_type, organizations.contact_email AS organizations_contact_email, organizations.address AS organizations_address, organizations.industry AS organizations_industry, organizations.billing_email AS organizations_billing_email, organizations.billing_address AS organizations_billing_address, organizations.logo_blob_name AS organizations_logo_blob_name, organizations.logo_content_type AS organizations_logo_content_type, organizations.subscription_tier AS organizations_subscription_tier, organizations.operates_in_australia AS organizations_operates_in_australia, organizations.declarations_accepted_at AS organizations_declarations_accepted_at, organizations.declarations_accepted_by_user_id AS organizations_declarations_accepted_by_user_id, organizations.data_processing_ack_at AS organizations_data_processing_ack_at, organizations.data_processing_ack_by_user_id AS organizations_data_processing_ack_by_user_id, organizations.created_at AS organizations_created_at 
+FROM organizations 
+WHERE organizations.id = ?
+2026-01-13 11:49:55,249 INFO sqlalchemy.engine.Engine [cached since 0.03044s ago] (1,)
+2026-01-13 11:49:55,251 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+2026-01-13 11:49:55,251 INFO sqlalchemy.engine.Engine [cached since 1.077s ago] ()
+2026-01-13 11:49:55,252 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ?
+2026-01-13 11:49:55,252 INFO sqlalchemy.engine.Engine [cached since 1.065s ago] (1,)
+2026-01-13 11:49:55,254 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?, ?, ?, ?)
+2026-01-13 11:49:55,254 INFO sqlalchemy.engine.Engine [cached since 1.02s ago] (1, 2, 3, 4)
+2026-01-13 11:49:55,256 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+2026-01-13 11:49:55,256 INFO sqlalchemy.engine.Engine [cached since 1.082s ago] ()
+2026-01-13 11:49:55,257 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:55,257 INFO sqlalchemy.engine.Engine [cached since 1.04s ago] (3,)
+2026-01-13 11:49:55,262 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.organization_id = ? ORDER BY departments.name ASC
+2026-01-13 11:49:55,262 INFO sqlalchemy.engine.Engine [generated in 0.00045s] (1,)
+2026-01-13 11:49:55,265 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ? ORDER BY rbac_roles.name ASC
+2026-01-13 11:49:55,265 INFO sqlalchemy.engine.Engine [generated in 0.00045s] (1,)
+2026-01-13 11:49:55,267 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?, ?, ?, ?)
+2026-01-13 11:49:55,267 INFO sqlalchemy.engine.Engine [cached since 1.033s ago] (3, 2, 4, 1)
+2026-01-13 11:49:55,271 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.organization_id = ? AND lower(departments.name) = lower(?)
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:55,272 INFO sqlalchemy.engine.Engine [generated in 0.00045s] (1, 'General', 1, 0)
+2026-01-13 11:49:55,274 INFO sqlalchemy.engine.Engine INSERT INTO departments (organization_id, name, color, created_at) VALUES (?, ?, ?, ?)
+2026-01-13 11:49:55,274 INFO sqlalchemy.engine.Engine [generated in 0.00047s] (1, 'General', 'primary', '2026-01-13 06:49:51.940241')
+2026-01-13 11:49:55,278 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.email = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:55,279 INFO sqlalchemy.engine.Engine [cached since 0.958s ago] ('invited@example.com', 1, 0)
+2026-01-13 11:49:55,281 INFO sqlalchemy.engine.Engine INSERT INTO users (email, password_hash, first_name, last_name, title, mobile_number, time_zone, full_name, email_verified, welcome_email_sent_at, terms_accepted_at, password_changed_at, avatar_blob_name, avatar_content_type, role, is_active, created_at, organization_id, last_login_at, last_failed_login_at, failed_login_count, locked_until, session_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-13 11:49:55,281 INFO sqlalchemy.engine.Engine [generated in 0.00051s] ('invited@example.com', None, None, None, None, None, None, None, 0, None, None, None, None, None, 'User', 1, '2026-01-13 06:49:55.279629', 1, None, None, 0, None, 1)
+2026-01-13 11:49:55,284 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.organization_id = ? AND organization_memberships.user_id = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:55,284 INFO sqlalchemy.engine.Engine [generated in 0.00044s] (1, 2, 1, 0)
+2026-01-13 11:49:55,288 INFO sqlalchemy.engine.Engine INSERT INTO organization_memberships (organization_id, user_id, department_id, role, role_id, is_active, created_at, invited_at, invited_by_user_id, invite_last_sent_at, invite_send_count, invite_accepted_at, invite_revoked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-01-13 11:49:55,288 INFO sqlalchemy.engine.Engine [generated in 0.00047s] (1, 2, 1, 'User', 4, 1, '2026-01-13 06:49:51.933923', '2026-01-13 06:49:55.285710', 1, '2026-01-13 06:49:55.285710', 1, None, None)
+2026-01-13 11:49:55,289 INFO sqlalchemy.engine.Engine COMMIT
+2026-01-13 11:49:55,297 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:55,298 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+2026-01-13 11:49:55,298 INFO sqlalchemy.engine.Engine [cached since 1.042s ago] (2,)
+2026-01-13 11:49:55,300 INFO sqlalchemy.engine.Engine SELECT organizations.id AS organizations_id, organizations.name AS organizations_name, organizations.trading_name AS organizations_trading_name, organizations.abn AS organizations_abn, organizations.organization_type AS organizations_organization_type, organizations.contact_email AS organizations_contact_email, organizations.address AS organizations_address, organizations.industry AS organizations_industry, organizations.billing_email AS organizations_billing_email, organizations.billing_address AS organizations_billing_address, organizations.logo_blob_name AS organizations_logo_blob_name, organizations.logo_content_type AS organizations_logo_content_type, organizations.subscription_tier AS organizations_subscription_tier, organizations.operates_in_australia AS organizations_operates_in_australia, organizations.declarations_accepted_at AS organizations_declarations_accepted_at, organizations.declarations_accepted_by_user_id AS organizations_declarations_accepted_by_user_id, organizations.data_processing_ack_at AS organizations_data_processing_ack_at, organizations.data_processing_ack_by_user_id AS organizations_data_processing_ack_by_user_id, organizations.created_at AS organizations_created_at 
+FROM organizations 
+WHERE organizations.id = ?
+2026-01-13 11:49:55,300 INFO sqlalchemy.engine.Engine [cached since 1.049s ago] (1,)
+2026-01-13 11:49:56,801 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:56,802 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.email = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:56,803 INFO sqlalchemy.engine.Engine [cached since 2.482s ago] ('invited@example.com', 1, 0)
+2026-01-13 11:49:56,807 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ?
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:56,808 INFO sqlalchemy.engine.Engine [generated in 0.00076s] (2, 1, 0)
+2026-01-13 11:49:56,811 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+2026-01-13 11:49:56,812 INFO sqlalchemy.engine.Engine [cached since 1.637s ago] (4,)
+2026-01-13 11:49:56,816 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.id IN (?)
+2026-01-13 11:49:56,817 INFO sqlalchemy.engine.Engine [generated in 0.00082s] (1,)
+2026-01-13 11:49:56,819 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:56,820 INFO sqlalchemy.engine.Engine [cached since 1.638s ago] (4,)
+2026-01-13 11:49:56,821 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-01-13 11:49:56,824 INFO sqlalchemy.engine.Engine SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+2026-01-13 11:49:56,824 INFO sqlalchemy.engine.Engine [cached since 2.568s ago] (1,)
+2026-01-13 11:49:56,827 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ? AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:56,827 INFO sqlalchemy.engine.Engine [cached since 1.656s ago] (1, 1, 1, 0)
+2026-01-13 11:49:56,831 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+2026-01-13 11:49:56,831 INFO sqlalchemy.engine.Engine [cached since 1.656s ago] (1,)
+2026-01-13 11:49:56,834 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:56,835 INFO sqlalchemy.engine.Engine [cached since 1.653s ago] (1,)
+2026-01-13 11:49:56,838 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.id = ?
+2026-01-13 11:49:56,839 INFO sqlalchemy.engine.Engine [cached since 2.578s ago] (2,)
+2026-01-13 11:49:56,841 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id = ?
+2026-01-13 11:49:56,843 INFO sqlalchemy.engine.Engine [cached since 2.559s ago] (4,)
+2026-01-13 11:49:56,845 INFO sqlalchemy.engine.Engine SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+2026-01-13 11:49:56,845 INFO sqlalchemy.engine.Engine [cached since 2.642s ago] (4,)
+2026-01-13 11:49:56,847 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+2026-01-13 11:49:56,847 INFO sqlalchemy.engine.Engine [cached since 2.63s ago] (4,)
+2026-01-13 11:49:56,850 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.id = ?
+2026-01-13 11:49:56,851 INFO sqlalchemy.engine.Engine [generated in 0.00071s] (1,)
+2026-01-13 11:49:56,855 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:56,858 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.id = ?
+2026-01-13 11:49:56,859 INFO sqlalchemy.engine.Engine [generated in 0.00089s] (2,)
+2026-01-13 11:49:56,861 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+2026-01-13 11:49:56,862 INFO sqlalchemy.engine.Engine [cached since 1.686s ago] (4,)
+2026-01-13 11:49:56,863 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.id IN (?)
+2026-01-13 11:49:56,864 INFO sqlalchemy.engine.Engine [cached since 0.04794s ago] (1,)
+2026-01-13 11:49:56,866 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:56,866 INFO sqlalchemy.engine.Engine [cached since 1.684s ago] (4,)
+2026-01-13 11:49:56,868 INFO sqlalchemy.engine.Engine UPDATE organization_memberships SET invite_last_sent_at=? WHERE organization_memberships.id = ?
+2026-01-13 11:49:56,869 INFO sqlalchemy.engine.Engine [generated in 0.00049s] ('2026-01-13 06:39:56.867378', 2)
+2026-01-13 11:49:56,872 INFO sqlalchemy.engine.Engine COMMIT
+2026-01-13 11:49:56,882 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ? AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+2026-01-13 11:49:56,883 INFO sqlalchemy.engine.Engine [cached since 1.711s ago] (1, 1, 1, 0)
+2026-01-13 11:49:56,886 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+2026-01-13 11:49:56,886 INFO sqlalchemy.engine.Engine [cached since 1.711s ago] (1,)
+2026-01-13 11:49:56,889 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:56,889 INFO sqlalchemy.engine.Engine [cached since 1.707s ago] (1,)
+2026-01-13 11:49:56,895 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-01-13 11:49:56,896 INFO sqlalchemy.engine.Engine SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.id = ?
+2026-01-13 11:49:56,896 INFO sqlalchemy.engine.Engine [cached since 0.03788s ago] (2,)
+2026-01-13 11:49:56,898 INFO sqlalchemy.engine.Engine SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+2026-01-13 11:49:56,898 INFO sqlalchemy.engine.Engine [cached since 1.723s ago] (4,)
+2026-01-13 11:49:56,900 INFO sqlalchemy.engine.Engine SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.id IN (?)
+2026-01-13 11:49:56,900 INFO sqlalchemy.engine.Engine [cached since 0.08432s ago] (1,)
+2026-01-13 11:49:56,902 INFO sqlalchemy.engine.Engine SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+2026-01-13 11:49:56,903 INFO sqlalchemy.engine.Engine [cached since 1.721s ago] (4,)
+2026-01-13 11:49:56,904 INFO sqlalchemy.engine.Engine ROLLBACK
+------------------------------ Captured log call ------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT suspicious_ips.id AS suspicious_ips_id, suspicious_ips.ip_address AS suspicious_ips_ip_address, suspicious_ips.window_started_at AS suspicious_ips_window_started_at, suspicious_ips.failure_count AS suspicious_ips_failure_count, suspicious_ips.blocked_until AS suspicious_ips_blocked_until, suspicious_ips.last_seen_at AS suspicious_ips_last_seen_at, suspicious_ips.created_at AS suspicious_ips_created_at 
+FROM suspicious_ips 
+WHERE suspicious_ips.ip_address = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00043s] ('10.0.0.11', 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.email = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00042s] ('user@example.com', 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE users SET last_login_at=? WHERE users.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00068s] ('2026-01-13 06:49:54.314276', 1)
+INFO     sqlalchemy.engine.Engine:base.py:2708 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.8973s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT suspicious_ips.id AS suspicious_ips_id, suspicious_ips.ip_address AS suspicious_ips_ip_address, suspicious_ips.window_started_at AS suspicious_ips_window_started_at, suspicious_ips.failure_count AS suspicious_ips_failure_count, suspicious_ips.blocked_until AS suspicious_ips_blocked_until, suspicious_ips.last_seen_at AS suspicious_ips_last_seen_at, suspicious_ips.created_at AS suspicious_ips_created_at 
+FROM suspicious_ips 
+WHERE suspicious_ips.ip_address = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.8382s ago] ('10.0.0.11', 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO login_events (user_id, email, provider, success, reason, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00051s] (1, 'user@example.com', 'password', 1, None, '10.0.0.11', 'Werkzeug/2.3.7', '2026-01-13 06:49:51.968603')
+INFO     sqlalchemy.engine.Engine:base.py:2708 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.9125s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ? AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00045s] (1, 1, 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00046s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00057s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.017s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.005s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.961s ago] (1, 2, 3, 4)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.024s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.9825s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.9841s ago] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.9856s ago] (3,)
+INFO     sqlalchemy.engine.Engine:base.py:2708 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ? AND rbac_roles.name = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.9768s ago] (1, 'Member', 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.9724s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:2705 ROLLBACK
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id, users.email, users.password_hash, users.first_name, users.last_name, users.title, users.mobile_number, users.time_zone, users.full_name, users.email_verified, users.welcome_email_sent_at, users.terms_accepted_at, users.password_changed_at, users.avatar_blob_name, users.avatar_content_type, users.role, users.is_active, users.created_at, users.organization_id, users.last_login_at, users.last_failed_login_at, users.failed_login_count, users.locked_until, users.session_version 
+FROM users 
+WHERE users.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00105s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organizations.id AS organizations_id, organizations.name AS organizations_name, organizations.trading_name AS organizations_trading_name, organizations.abn AS organizations_abn, organizations.organization_type AS organizations_organization_type, organizations.contact_email AS organizations_contact_email, organizations.address AS organizations_address, organizations.industry AS organizations_industry, organizations.billing_email AS organizations_billing_email, organizations.billing_address AS organizations_billing_address, organizations.logo_blob_name AS organizations_logo_blob_name, organizations.logo_content_type AS organizations_logo_content_type, organizations.subscription_tier AS organizations_subscription_tier, organizations.operates_in_australia AS organizations_operates_in_australia, organizations.declarations_accepted_at AS organizations_declarations_accepted_at, organizations.declarations_accepted_by_user_id AS organizations_declarations_accepted_by_user_id, organizations.data_processing_ack_at AS organizations_data_processing_ack_at, organizations.data_processing_ack_by_user_id AS organizations_data_processing_ack_by_user_id, organizations.created_at AS organizations_created_at 
+FROM organizations 
+WHERE organizations.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00042s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ? AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.049s ago] (1, 1, 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.0476s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.04299s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE ? = organization_memberships.user_id AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00060s] (1, 1, 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.05655s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.05194s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.019s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.9456s ago] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.023s ago] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.949s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.027s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organizations.id AS organizations_id, organizations.name AS organizations_name, organizations.trading_name AS organizations_trading_name, organizations.abn AS organizations_abn, organizations.organization_type AS organizations_organization_type, organizations.contact_email AS organizations_contact_email, organizations.address AS organizations_address, organizations.industry AS organizations_industry, organizations.billing_email AS organizations_billing_email, organizations.billing_address AS organizations_billing_address, organizations.logo_blob_name AS organizations_logo_blob_name, organizations.logo_content_type AS organizations_logo_content_type, organizations.subscription_tier AS organizations_subscription_tier, organizations.operates_in_australia AS organizations_operates_in_australia, organizations.declarations_accepted_at AS organizations_declarations_accepted_at, organizations.declarations_accepted_by_user_id AS organizations_declarations_accepted_by_user_id, organizations.data_processing_ack_at AS organizations_data_processing_ack_at, organizations.data_processing_ack_by_user_id AS organizations_data_processing_ack_by_user_id, organizations.created_at AS organizations_created_at 
+FROM organizations 
+WHERE organizations.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.03044s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.077s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.065s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.02s ago] (1, 2, 3, 4)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.082s ago] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.04s ago] (3,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.organization_id = ? ORDER BY departments.name ASC
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00045s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.organization_id = ? ORDER BY rbac_roles.name ASC
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00045s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.033s ago] (3, 2, 4, 1)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.organization_id = ? AND lower(departments.name) = lower(?)
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00045s] (1, 'General', 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO departments (organization_id, name, color, created_at) VALUES (?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00047s] (1, 'General', 'primary', '2026-01-13 06:49:51.940241')
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.email = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.958s ago] ('invited@example.com', 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO users (email, password_hash, first_name, last_name, title, mobile_number, time_zone, full_name, email_verified, welcome_email_sent_at, terms_accepted_at, password_changed_at, avatar_blob_name, avatar_content_type, role, is_active, created_at, organization_id, last_login_at, last_failed_login_at, failed_login_count, locked_until, session_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00051s] ('invited@example.com', None, None, None, None, None, None, None, 0, None, None, None, None, None, 'User', 1, '2026-01-13 06:49:55.279629', 1, None, None, 0, None, 1)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.organization_id = ? AND organization_memberships.user_id = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00044s] (1, 2, 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO organization_memberships (organization_id, user_id, department_id, role, role_id, is_active, created_at, invited_at, invited_by_user_id, invite_last_sent_at, invite_send_count, invite_accepted_at, invite_revoked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00047s] (1, 2, 1, 'User', 4, 1, '2026-01-13 06:49:51.933923', '2026-01-13 06:49:55.285710', 1, '2026-01-13 06:49:55.285710', 1, None, None)
+INFO     sqlalchemy.engine.Engine:base.py:2708 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.042s ago] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organizations.id AS organizations_id, organizations.name AS organizations_name, organizations.trading_name AS organizations_trading_name, organizations.abn AS organizations_abn, organizations.organization_type AS organizations_organization_type, organizations.contact_email AS organizations_contact_email, organizations.address AS organizations_address, organizations.industry AS organizations_industry, organizations.billing_email AS organizations_billing_email, organizations.billing_address AS organizations_billing_address, organizations.logo_blob_name AS organizations_logo_blob_name, organizations.logo_content_type AS organizations_logo_content_type, organizations.subscription_tier AS organizations_subscription_tier, organizations.operates_in_australia AS organizations_operates_in_australia, organizations.declarations_accepted_at AS organizations_declarations_accepted_at, organizations.declarations_accepted_by_user_id AS organizations_declarations_accepted_by_user_id, organizations.data_processing_ack_at AS organizations_data_processing_ack_at, organizations.data_processing_ack_by_user_id AS organizations_data_processing_ack_by_user_id, organizations.created_at AS organizations_created_at 
+FROM organizations 
+WHERE organizations.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.049s ago] (1,)
+WARNING  app:routes.py:204 SendGrid API failed (No module named 'sendgrid'), falling back to SMTP
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.email = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 2.482s ago] ('invited@example.com', 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ?
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00076s] (2, 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.637s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00082s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.638s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:2705 ROLLBACK
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.first_name AS users_first_name, users.last_name AS users_last_name, users.title AS users_title, users.mobile_number AS users_mobile_number, users.time_zone AS users_time_zone, users.full_name AS users_full_name, users.email_verified AS users_email_verified, users.welcome_email_sent_at AS users_welcome_email_sent_at, users.terms_accepted_at AS users_terms_accepted_at, users.password_changed_at AS users_password_changed_at, users.avatar_blob_name AS users_avatar_blob_name, users.avatar_content_type AS users_avatar_content_type, users.role AS users_role, users.is_active AS users_is_active, users.created_at AS users_created_at, users.organization_id AS users_organization_id, users.last_login_at AS users_last_login_at, users.last_failed_login_at AS users_last_failed_login_at, users.failed_login_count AS users_failed_login_count, users.locked_until AS users_locked_until, users.session_version AS users_session_version 
+FROM users 
+WHERE users.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 2.568s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ? AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.656s ago] (1, 1, 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.656s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.653s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 2.578s ago] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 2.559s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_permissions, rbac_role_permissions 
+WHERE ? = rbac_role_permissions.role_id AND rbac_permissions.id = rbac_role_permissions.permission_id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 2.642s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles, rbac_role_inherits 
+WHERE rbac_role_inherits.role_id = ? AND rbac_role_inherits.inherited_role_id = rbac_roles.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 2.63s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00071s] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00089s] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.686s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.04794s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.684s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE organization_memberships SET invite_last_sent_at=? WHERE organization_memberships.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00049s] ('2026-01-13 06:39:56.867378', 2)
+INFO     sqlalchemy.engine.Engine:base.py:2708 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.user_id = ? AND organization_memberships.organization_id = ? AND organization_memberships.is_active = 1
+ LIMIT ? OFFSET ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.711s ago] (1, 1, 1, 0)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.711s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.707s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:2702 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT organization_memberships.id AS organization_memberships_id, organization_memberships.organization_id AS organization_memberships_organization_id, organization_memberships.user_id AS organization_memberships_user_id, organization_memberships.department_id AS organization_memberships_department_id, organization_memberships.role AS organization_memberships_role, organization_memberships.role_id AS organization_memberships_role_id, organization_memberships.is_active AS organization_memberships_is_active, organization_memberships.created_at AS organization_memberships_created_at, organization_memberships.invited_at AS organization_memberships_invited_at, organization_memberships.invited_by_user_id AS organization_memberships_invited_by_user_id, organization_memberships.invite_last_sent_at AS organization_memberships_invite_last_sent_at, organization_memberships.invite_send_count AS organization_memberships_invite_send_count, organization_memberships.invite_accepted_at AS organization_memberships_invite_accepted_at, organization_memberships.invite_revoked_at AS organization_memberships_invite_revoked_at 
+FROM organization_memberships 
+WHERE organization_memberships.id = ?
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.03788s ago] (2,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles.id AS rbac_roles_id, rbac_roles.organization_id AS rbac_roles_organization_id, rbac_roles.name AS rbac_roles_name, rbac_roles.description AS rbac_roles_description, rbac_roles.is_system AS rbac_roles_is_system, rbac_roles.created_at AS rbac_roles_created_at 
+FROM rbac_roles 
+WHERE rbac_roles.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.723s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT departments.id AS departments_id, departments.organization_id AS departments_organization_id, departments.name AS departments_name, departments.color AS departments_color, departments.created_at AS departments_created_at 
+FROM departments 
+WHERE departments.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.08432s ago] (1,)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT rbac_roles_1.id AS rbac_roles_1_id, rbac_permissions.id AS rbac_permissions_id, rbac_permissions.code AS rbac_permissions_code, rbac_permissions.description AS rbac_permissions_description 
+FROM rbac_roles AS rbac_roles_1 JOIN rbac_role_permissions AS rbac_role_permissions_1 ON rbac_roles_1.id = rbac_role_permissions_1.role_id JOIN rbac_permissions ON rbac_permissions.id = rbac_role_permissions_1.permission_id 
+WHERE rbac_roles_1.id IN (?)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 1.721s ago] (4,)
+INFO     sqlalchemy.engine.Engine:base.py:2705 ROLLBACK
+-------------------------- Captured stdout teardown ---------------------------
+2026-01-13 11:49:57,673 INFO sqlalchemy.engine.Engine ROLLBACK
+---------------------------- Captured log teardown ----------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2705 ROLLBACK
+=========================== short test summary info ===========================
+FAILED tests/test_security_features.py::test_pending_invites_resend_cooldown_and_revoke
+============================== 1 failed in 9.69s ==============================

@@ -748,11 +748,22 @@
                       </li>
                     {% elif m.is_active and (m.user.id != current_user.id) %}
                       <li>
-                        <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Remove this member from the organization?');">
+                        <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Disable this member? They can be re-enabled later.');">
                           {{ member_action_form.csrf_token }}
                           {{ member_action_form.membership_id(value=m.id) }}
+                          {{ member_action_form.action(value='disable') }}
+                          <button type="submit" class="dropdown-item text-warning">
+                            <i class="bi bi-pause-circle me-2"></i>Disable member
+                          </button>
+                        </form>
+                      </li>
+                      <li>
+                        <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Permanently delete this member? This action cannot be undone!');">
+                          {{ member_action_form.csrf_token }}
+                          {{ member_action_form.membership_id(value=m.id) }}
+                          {{ member_action_form.action(value='delete') }}
                           <button type="submit" class="dropdown-item text-danger">
-                            <i class="bi bi-person-dash me-2"></i>Remove member
+                            <i class="bi bi-trash me-2"></i>Delete permanently
                           </button>
                         </form>
                       </li>
@@ -762,6 +773,7 @@
                           <form method="post" action="{{ url_for('main.org_admin_remove_member') }}" class="d-inline" onsubmit="return confirm('Leave this organization? You will lose access to its data.');">
                             {{ member_action_form.csrf_token }}
                             {{ member_action_form.membership_id(value=m.id) }}
+                            {{ member_action_form.action(value='delete') }}
                             <button type="submit" class="dropdown-item text-danger">
                               <i class="bi bi-box-arrow-right me-2"></i>Leave organization
                             </button>

@@ -778,5 +778,92 @@ def create_app(config_name=None):
             raise click.ClickException(f'Failed resetting org state: {e}')
 
         click.echo('Organization state reset. Users/memberships were not changed.')
+
+    @app.cli.command('purge-users')
+    @click.option(
+        '--email',
+        'emails',
+        multiple=True,
+        required=True,
+        help='Email address to purge. Can be provided multiple times.',
+    )
+    @click.option('--yes', is_flag=True, help='Skip confirmation prompt.')
+    @click.option(
+        '--force',
+        is_flag=True,
+        help='Allow running even when DEBUG is false (requires ALLOW_DATA_WIPE=1).',
+    )
+    def purge_users(emails: tuple[str, ...], yes: bool, force: bool):
+        """Delete users by email and remove their related data.
+
+        This is intended for development/testing so you can re-run invite/login flows
+        using the same email addresses without wiping the whole database.
+
+        Deletes:
+        - the User row
+        - OrganizationMembership rows (via SQLAlchemy cascade)
+        - Document rows uploaded by the user
+        - LoginEvent rows for that user
+        """
+
+        from app.models import User, Document, LoginEvent
+
+        is_debug = bool(app.config.get('DEBUG'))
+        allow_force = (os.environ.get('ALLOW_DATA_WIPE') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+        if not is_debug:
+            if not (force and allow_force):
+                raise click.ClickException(
+                    'Refusing to purge users because DEBUG is false. '
+                    'Use a dev database, or run with --force and set ALLOW_DATA_WIPE=1.'
+                )
+
+        normalized = sorted({(e or '').strip().lower() for e in emails if (e or '').strip()})
+        if not normalized:
+            raise click.ClickException('No valid --email values provided.')
+
+        uri = app.config.get('SQLALCHEMY_DATABASE_URI')
+        dialect = db.engine.dialect.name
+
+        if not yes:
+            click.echo('This will permanently delete users and their related data:')
+            for e in normalized:
+                click.echo(f'- {e}')
+            click.echo(f'Database: {dialect} ({uri})')
+            if not click.confirm('Continue?', default=False):
+                click.echo('Aborted.')
+                return
+
+        deleted_users = 0
+        for email in normalized:
+            user = User.query.filter_by(email=email).first()
+            if not user:
+                click.echo(f'Not found: {email}')
+                continue
+
+            uid = int(user.id)
+
+            try:
+                # Delete documents uploaded by this user.
+                Document.query.filter(Document.uploaded_by == uid).delete(synchronize_session=False)
+
+                # Delete login events for this user (or matching email fallback).
+                LoginEvent.query.filter((LoginEvent.user_id == uid) | (LoginEvent.email == email)).delete(synchronize_session=False)
+
+                # Delete user (memberships cascade via relationship).
+                db.session.delete(user)
+                db.session.flush()
+                deleted_users += 1
+                click.echo(f'Purged: {email}')
+            except Exception as e:
+                db.session.rollback()
+                raise click.ClickException(f'Failed purging {email}: {e}')
+
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Failed committing purge: {e}')
+
+        click.echo(f'Done. Purged users: {deleted_users}')
     
     return app

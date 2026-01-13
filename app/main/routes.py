@@ -231,7 +231,6 @@ def _is_pending_org_invite(membership: OrganizationMembership, user: User) -> bo
     # the membership is actually invite-tracked.
     return bool(
         membership
-        and membership.is_active
         and user
         and membership.invited_at is not None
         and membership.invite_accepted_at is None
@@ -660,14 +659,9 @@ def org_admin_invite_member():
             .first()
         )
         
-        # Determine if this is a pending invite (user has no password yet)
-        # When adding a member, always start as inactive pending invite
-        # They must accept the invitation to become active
-        is_pending_invite = True
-        
         if membership:
             # Re-adding a previously removed member - treat as new invite
-            membership.is_active = False
+            membership.is_active = True
             membership.role_id = selected_role_id
             membership.department_id = int(department.id) if department else None
             # Reset invite acceptance tracking
@@ -677,8 +671,7 @@ def org_admin_invite_member():
                 organization_id=int(org_id),
                 user_id=int(user.id),
                 role_id=selected_role_id,
-                # All new invites start as inactive until accepted
-                is_active=False,
+                is_active=True,
                 department_id=(int(department.id) if department else None),
             )
             db.session.add(membership)

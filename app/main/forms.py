@@ -223,6 +223,7 @@ class InviteMemberForm(FlaskForm):
 
 class MembershipActionForm(FlaskForm):
     membership_id = HiddenField(validators=[DataRequired()])
+    action = HiddenField(validators=[DataRequired()])  # 'disable' or 'delete'
 
     submit = SubmitField(
         'Remove',
