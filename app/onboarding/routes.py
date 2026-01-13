@@ -32,17 +32,15 @@ def _send_welcome_email(user: User, dashboard_url: str) -> bool:
         )
         return False
 
-    msg = Message(
-        subject='Welcome to CCM',
-        recipients=[user.email],
-        body=(
-            'Welcome to CCM. Your organization setup is complete.\n\n'
-            f'Dashboard: {dashboard_url}\n\n'
-            'You can now upload documents and start managing your compliance evidence.\n'
-        ),
+    subject = 'Welcome to CCM'
+    body = (
+        'Welcome to CCM. Your organization setup is complete.\n\n'
+        f'Dashboard: {dashboard_url}\n\n'
+        'You can now upload documents and start managing your compliance evidence.\n'
     )
     try:
-        mail.send(msg)
+        from app.auth.routes import _send_email
+        _send_email(user.email, subject, body)
     except Exception:
         current_app.logger.exception('Failed to send welcome email to %s', user.email)
         raise

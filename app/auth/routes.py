@@ -1239,7 +1239,8 @@ def verify_email_status():
         return jsonify({'authenticated': False, 'verified': False, 'next_url': None})
 
     verified = bool(getattr(current_user, 'email_verified', False))
-    next_url = url_for('auth.verify_email_request') if verified else None
+    # When verified, advance to wherever _after_login_redirect would send them
+    next_url = url_for('main.dashboard') if verified else None
     return jsonify({'authenticated': True, 'verified': verified, 'next_url': next_url})
 
 @bp.route('/logout', methods=['POST'])

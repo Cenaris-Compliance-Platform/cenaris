@@ -209,17 +209,15 @@ def _send_invite_email(user: User, reset_url: str, organization: Organization) -
         current_app.logger.warning('MAIL not configured; invite reset URL: %s', reset_url)
         return
 
-    msg = Message(
-        subject=f"You're invited to {organization.name}",
-        recipients=[user.email],
-        body=(
-            f"You've been invited to join {organization.name} on Cenaris.\n\n"
-            f"Set your password here: {reset_url}\n\n"
-            "If you weren't expecting this invite, you can ignore this email."
-        ),
+    subject = f"You're invited to {organization.name}"
+    body = (
+        f"You've been invited to join {organization.name} on Cenaris.\n\n"
+        f"Set your password here: {reset_url}\n\n"
+        "If you weren't expecting this invite, you can ignore this email."
     )
     try:
-        mail.send(msg)
+        from app.auth.routes import _send_email
+        _send_email(user.email, subject, body)
     except Exception:
         current_app.logger.exception('Failed to send invite email to %s (org_id=%s)', user.email, getattr(organization, 'id', None))
         raise
