@@ -659,16 +659,26 @@ def org_admin_invite_member():
             .filter_by(organization_id=int(org_id), user_id=int(user.id))
             .first()
         )
+        
+        # Determine if this is a pending invite (user has no password yet)
+        # When adding a member, always start as inactive pending invite
+        # They must accept the invitation to become active
+        is_pending_invite = True
+        
         if membership:
-            membership.is_active = True
+            # Re-adding a previously removed member - treat as new invite
+            membership.is_active = False
             membership.role_id = selected_role_id
             membership.department_id = int(department.id) if department else None
+            # Reset invite acceptance tracking
+            membership.invite_accepted_at = None
         else:
             membership = OrganizationMembership(
                 organization_id=int(org_id),
                 user_id=int(user.id),
                 role_id=selected_role_id,
-                is_active=True,
+                # All new invites start as inactive until accepted
+                is_active=False,
                 department_id=(int(department.id) if department else None),
             )
             db.session.add(membership)
@@ -684,18 +694,16 @@ def org_admin_invite_member():
         except Exception:
             membership.role = membership.role or 'User'
 
-        # Track invites only for "pending" invited users (no password set yet).
-        if not bool(user.password_hash):
-            now = datetime.now(timezone.utc)
-            membership.invited_at = membership.invited_at or now
-            membership.invited_by_user_id = int(getattr(current_user, 'id', 0) or 0) or None
-            membership.invite_last_sent_at = now
-            membership.invite_send_count = int(membership.invite_send_count or 0) + 1
-            membership.invite_revoked_at = None
+        # Track invite details - send to all newly added/re-added members
+        now = datetime.now(timezone.utc)
+        membership.invited_at = membership.invited_at or now
+        membership.invited_by_user_id = int(getattr(current_user, 'id', 0) or 0) or None
+        membership.invite_last_sent_at = now
+        membership.invite_send_count = int(membership.invite_send_count or 0) + 1
+        membership.invite_revoked_at = None
 
-        # Only set a default active org for the user if they don't have one.
-        if not getattr(user, 'organization_id', None):
-            user.organization_id = int(org_id)
+        # Set the user's active organization to the one they're being invited to
+        user.organization_id = int(org_id)
 
         db.session.commit()
     except Exception:
@@ -704,17 +712,17 @@ def org_admin_invite_member():
         current_app.logger.exception('Failed inviting member')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    # Send invite email with password-set link (only meaningful for "pending" invited users).
+    # Send invite email - for users without password, they set it via reset link
+    # For users with existing password, they can use their existing password to login
     email_sent = False
-    if not bool(user.password_hash):
-        try:
-            token = _password_reset_token(user)
-            reset_url = url_for('auth.reset_password', token=token, _external=True)
-            _send_invite_email(user, reset_url, organization)
-            email_sent = True
-        except Exception as e:
-            current_app.logger.exception('Failed to send invite email')
-            flash(f'User invited but email could not be sent. Error: {str(e)}. Please configure email settings.', 'warning')
+    try:
+        token = _password_reset_token(user)
+        reset_url = url_for('auth.reset_password', token=token, _external=True)
+        _send_invite_email(user, reset_url, organization)
+        email_sent = True
+    except Exception as e:
+        current_app.logger.exception('Failed to send invite email')
+        flash(f'User invited but email could not be sent. Error: {str(e)}. Please configure email settings.', 'warning')
 
     if created_user:
         if email_sent:
@@ -1008,7 +1016,7 @@ def org_admin_revoke_invite():
 @bp.route('/org/admin/members/remove', methods=['POST'])
 @login_required
 def org_admin_remove_member():
-    """Remove a user's membership from the active organization."""
+    """Remove or disable a user's membership from the active organization."""
     maybe = _require_org_admin()
     if maybe is not None:
         return maybe
@@ -1022,8 +1030,14 @@ def org_admin_remove_member():
         return redirect(url_for('main.org_admin_dashboard'))
 
     membership_id_raw = (form.membership_id.data or '').strip()
+    action = (form.action.data or '').strip().lower()
+    
     if not membership_id_raw.isdigit():
         flash('Invalid membership.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+    
+    if action not in ('disable', 'delete'):
+        flash('Invalid action.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
     membership_id = int(membership_id_raw)
@@ -1032,7 +1046,7 @@ def org_admin_remove_member():
         flash('Membership not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
-    # Guard: do not remove the last active user-manager.
+    # Guard: do not remove/disable the last active user-manager.
     is_admin = _membership_has_permission(membership, 'users.manage')
     if is_admin and membership.is_active:
         active_memberships = (
@@ -1059,9 +1073,16 @@ def org_admin_remove_member():
                 return redirect(url_for('main.org_admin_dashboard'))
 
     try:
-        membership.is_active = False
-        db.session.commit()
-        flash('Member removed from the organization.', 'success')
+        if action == 'delete':
+            # Completely delete the membership
+            db.session.delete(membership)
+            db.session.commit()
+            flash('Member permanently removed from the organization.', 'success')
+        else:  # disable
+            # Just deactivate
+            membership.is_active = False
+            db.session.commit()
+            flash('Member disabled. You can re-enable them later if needed.', 'success')
     except Exception:
         db.session.rollback()
         flash('Failed to remove member. Please try again.', 'error')

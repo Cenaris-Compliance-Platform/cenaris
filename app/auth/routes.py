@@ -104,9 +104,8 @@ def _after_login_redirect():
     if not org_id:
         return redirect(url_for('onboarding.organization'))
 
-    org = db.session.get(Organization, int(org_id))
-    if not org or not org.onboarding_complete():
-        return redirect(url_for('onboarding.organization'))
+    # User has an organization - go to dashboard
+    # (invited users should go to the org they were invited to, even if onboarding incomplete)
     return redirect(url_for('main.dashboard'))
 
 
@@ -729,19 +728,20 @@ def reset_password(token):
         user.set_password(form.password.data)
         try:
             # If this was the user's first password set (common for org invites),
-            # mark any pending invites as accepted.
+            # mark any pending invites as accepted and activate membership.
             if not had_password:
                 try:
                     now = datetime.now(timezone.utc)
                     pending_memberships = (
                         OrganizationMembership.query
-                        .filter_by(user_id=int(user.id), is_active=True)
+                        .filter_by(user_id=int(user.id))
                         .filter(OrganizationMembership.invited_at.isnot(None))
                         .filter(OrganizationMembership.invite_accepted_at.is_(None))
                         .all()
                     )
                     for m in pending_memberships:
                         m.invite_accepted_at = now
+                        m.is_active = True  # Activate membership when user accepts invite
                 except Exception:
                     current_app.logger.exception('Failed to mark invite accepted')
 
@@ -1108,7 +1108,7 @@ def oauth_callback(provider):
 
         pending_memberships = (
             OrganizationMembership.query
-            .filter_by(user_id=int(user.id), is_active=True)
+            .filter_by(user_id=int(user.id))
             .filter(OrganizationMembership.invited_at.isnot(None))
             .filter(OrganizationMembership.invite_accepted_at.is_(None))
             .filter(OrganizationMembership.invite_revoked_at.is_(None))
@@ -1116,6 +1116,7 @@ def oauth_callback(provider):
         )
         for m in pending_memberships:
             m.invite_accepted_at = now
+            m.is_active = True  # Activate membership when OAuth user accepts invite
 
         db.session.commit()
         try:
