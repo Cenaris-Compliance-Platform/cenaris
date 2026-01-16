@@ -53,8 +53,41 @@ def ensure_rbac_seeded_for_org(org_id: int) -> None:
     if not org_id:
         return
 
+    # Fast exit: if the four system roles already exist, assume seeding is done.
+    # This avoids expensive permission table scans on every request.
+    try:
+        wanted = [
+            BUILTIN_ROLE_KEYS.ORG_ADMIN,
+            BUILTIN_ROLE_KEYS.COMPLIANCE_MANAGER,
+            BUILTIN_ROLE_KEYS.AUDITOR,
+            BUILTIN_ROLE_KEYS.MEMBER,
+        ]
+        existing_count = (
+            RBACRole.query
+            .filter(
+                RBACRole.organization_id == int(org_id),
+                RBACRole.name.in_(wanted),
+            )
+            .count()
+        )
+        if existing_count >= 4:
+            return
+    except Exception:
+        # If anything goes wrong, fall back to full seeding logic.
+        pass
+
     # Permissions (global)
-    existing_perm_codes = {p.code for p in RBACPermission.query.all()}
+    # Only load the codes we care about (avoid scanning the full table).
+    wanted_codes = list(PERMISSIONS.keys())
+    existing_perm_codes = {
+        (row[0] or '').strip()
+        for row in (
+            RBACPermission.query
+            .with_entities(RBACPermission.code)
+            .filter(RBACPermission.code.in_(wanted_codes))
+            .all()
+        )
+    }
     for code, desc in PERMISSIONS.items():
         if code in existing_perm_codes:
             continue
@@ -83,7 +116,12 @@ def ensure_rbac_seeded_for_org(org_id: int) -> None:
     auditor = get_or_create_role(BUILTIN_ROLE_KEYS.AUDITOR, 'Read-only access for audits and evidence review.')
     member = get_or_create_role(BUILTIN_ROLE_KEYS.MEMBER, 'Standard member access.')
 
-    perm_by_code = {p.code: p for p in RBACPermission.query.all()}
+    perms = (
+        RBACPermission.query
+        .filter(RBACPermission.code.in_(wanted_codes))
+        .all()
+    )
+    perm_by_code = {p.code: p for p in perms if getattr(p, 'code', None)}
 
     def grant(role: RBACRole, codes: Iterable[str]) -> None:
         for code in codes:

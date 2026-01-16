@@ -177,9 +177,7 @@ def create_app(config_name=None):
                 if elapsed > 1.0:
                     endpoint = request.endpoint or 'unknown'
                     method = request.method
-                    current_app.logger.warning(
-                        f'SLOW REQUEST: {method} {endpoint} took {elapsed:.2f}s'
-                    )
+                    logger.warning(f'SLOW REQUEST: {method} {endpoint} took {elapsed:.2f}s')
         except Exception:
             pass
         return response
@@ -410,17 +408,6 @@ def create_app(config_name=None):
 
     from app.onboarding import bp as onboarding_bp
     app.register_blueprint(onboarding_bp, url_prefix='/onboarding')
-    
-    # Add security headers
-    @app.after_request
-    def add_security_headers(response):
-        """Add security headers to all responses."""
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['X-Frame-Options'] = 'DENY'
-        response.headers['X-XSS-Protection'] = '1; mode=block'
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        return response
     
     # Add CSP header for production
     if not app.debug:

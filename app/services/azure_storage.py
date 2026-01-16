@@ -17,6 +17,7 @@ class AzureBlobStorageService:
         self.container_name = None
         self.blob_service_client = None
         self.datalake_service_client = None
+        self._container_checked = False
         self._initialize()
     
     def _initialize(self):
@@ -37,9 +38,12 @@ class AzureBlobStorageService:
             except Exception as e:
                 self.datalake_service_client = None
                 logger.warning(f"DataLakeServiceClient init failed; continuing with Blob-only mode: {e}")
-            
-            # Ensure container/file system exists
-            self._ensure_container_exists()
+
+            # IMPORTANT: Do NOT call Azure to check/create containers here.
+            # This class is sometimes instantiated during page renders just to
+            # check configuration. Network calls here can add seconds of latency.
+            # We defer container existence checks until the first upload.
+            self._container_checked = False
             
         except Exception as e:
             logger.error(f"Failed to initialize Azure Storage client: {e}")
@@ -87,6 +91,13 @@ class AzureBlobStorageService:
     def is_configured(self):
         """Check if Azure Data Lake Storage is properly configured."""
         return (self.connection_string is not None and self.blob_service_client is not None)
+
+    def _ensure_container_exists_once(self):
+        """Ensure container/file system exists once per service instance."""
+        if self._container_checked:
+            return
+        self._ensure_container_exists()
+        self._container_checked = True
     
     def generate_blob_name(self, original_filename, user_id, organization_id=None):
         """Generate a unique file path for ADLS Gen2."""
@@ -136,6 +147,9 @@ class AzureBlobStorageService:
             }
         
         try:
+            # Only now do we pay the network cost of ensuring the container exists.
+            self._ensure_container_exists_once()
+
             # Try ADLS Gen2 upload first (if available)
             if self.datalake_service_client is not None:
                 try:
