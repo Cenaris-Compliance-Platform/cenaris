@@ -6,9 +6,9 @@ from wtforms.validators import DataRequired, Email, Length, Optional
 
 class OnboardingOrganizationForm(FlaskForm):
     organization_name = StringField(
-        'Legal Organization Name',
+        'Legal Organisation Name',
         validators=[DataRequired(), Length(min=2, max=100)],
-        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'Your organization name'},
+        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'Your organisation name'},
     )
 
     trading_name = StringField(
@@ -24,7 +24,7 @@ class OnboardingOrganizationForm(FlaskForm):
     )
 
     organization_type = SelectField(
-        'Organization Type',
+        'Organisation Type',
         choices=[
             ('', 'Select...'),
             ('sole_trader', 'Sole trader'),

@@ -8,11 +8,11 @@ class OrganizationProfileSettingsForm(FlaskForm):
     form_name = HiddenField(default='profile')
 
     name = StringField(
-        'Organization Name',
+        'Organisation Name',
         validators=[DataRequired(), Length(min=2, max=100)],
         render_kw={
             'class': 'form-control form-control-lg',
-            'placeholder': 'Organization name'
+            'placeholder': 'Organisation name'
         },
     )
 

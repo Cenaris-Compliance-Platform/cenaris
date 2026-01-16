@@ -33,12 +33,12 @@ class LoginForm(FlaskForm):
 class RegisterForm(FlaskForm):
     """Registration form (creates org workspace + admin)."""
 
-    organization_name = StringField('Legal Organization Name', validators=[
-        DataRequired(message='Organization name is required.'),
-        Length(min=2, max=100, message='Organization name must be between 2 and 100 characters.')
+    organization_name = StringField('Legal Organisation Name', validators=[
+        DataRequired(message='Organisation name is required.'),
+        Length(min=2, max=100, message='Organisation name must be between 2 and 100 characters.')
     ], render_kw={
         'class': 'form-control form-control-lg',
-        'placeholder': 'Legal organization name',
+        'placeholder': 'Legal organisation name',
         'autocomplete': 'organization'
     })
 

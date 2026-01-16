@@ -64,7 +64,7 @@ def permission_required(*permission_codes: str, any_of: bool = False):
 
             org_id = getattr(current_user, 'organization_id', None)
             if not org_id:
-                flash('Please select an organization to continue.', 'info')
+                flash('Please select an organisation to continue.', 'info')
                 return redirect(url_for('onboarding.organization'))
 
             if not required:

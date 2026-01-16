@@ -204,7 +204,7 @@ def organization():
             return redirect(url_for('onboarding.billing'))
         except Exception:
             db.session.rollback()
-            flash('Failed to create organization. Please try again.', 'error')
+            flash('Failed to create organisation. Please try again.', 'error')
 
     return render_template('onboarding/organization.html', title='Setup Organization', form=form)
 
@@ -332,13 +332,13 @@ def theme():
     
     # Ensure onboarding steps are complete before allowing theme selection
     if not organization.onboarding_complete():
-        flash('Please complete your organization setup first.', 'info')
+        flash('Please complete your organisation setup first.', 'info')
         return redirect(url_for('onboarding.organization'))
 
     form = OnboardingThemeForm()
 
     if request.method == 'POST' and request.form.get('skip') == '1':
-        flash('You can change the theme later in Organization Settings.', 'info')
+        flash('You can change the theme later in Organisation Settings.', 'info')
         _maybe_send_welcome_email(int(current_user.id))
         return redirect(url_for('main.dashboard'))
 

@@ -6,8 +6,8 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h1 class="h2 fw-bold mb-1"><i class="bi bi-building me-2"></i>Organization Profile</h1>
-          <p class="text-body-secondary mb-0">Manage your organization details, logo, and billing information</p>
+          <h1 class="h2 fw-bold mb-1"><i class="bi bi-building me-2"></i>Organisation Profile</h1>
+          <p class="text-body-secondary mb-0">Manage your organisation details, logo, and billing information</p>
         </div>
         <div class="d-none d-md-block">
           <a href="{{ url_for('main.org_admin_dashboard') }}" class="btn btn-outline-primary">
@@ -23,7 +23,7 @@
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
-            <i class="bi bi-gear me-2 text-primary"></i>Organization Profile
+            <i class="bi bi-gear me-2 text-primary"></i>Organisation Profile
           </h5>
         </div>
         <div class="card-body p-4">
@@ -128,7 +128,7 @@
           {% if organization.logo_blob_name %}
             <img
               src="{{ url_for('main.organization_logo') }}"
-              alt="Organization logo"
+              alt="Organisation logo"
               class="img-fluid rounded border bg-body-tertiary p-2"
               style="max-height: 140px; object-fit: contain;"
             />

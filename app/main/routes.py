@@ -138,7 +138,7 @@ def _active_org_id() -> int | None:
 def _require_active_org():
     org_id = _active_org_id()
     if not org_id:
-        flash('Please select an organization to continue.', 'info')
+        flash('Please select an organisation to continue.', 'info')
         return redirect(url_for('onboarding.organization'))
 
     membership = (
@@ -147,7 +147,7 @@ def _require_active_org():
         .first()
     )
     if not membership:
-        flash('You do not have access to that organization.', 'error')
+        flash('You do not have access to that organisation.', 'error')
         return redirect(url_for('onboarding.organization'))
     return None
 
@@ -297,7 +297,7 @@ def switch_organization():
     """Switch the active organization for the current user."""
     org_id_raw = (request.form.get('organization_id') or '').strip()
     if not org_id_raw.isdigit():
-        flash('Invalid organization.', 'error')
+        flash('Invalid organisation.', 'error')
         return redirect(url_for('main.dashboard'))
 
     org_id = int(org_id_raw)
@@ -314,7 +314,7 @@ def switch_organization():
     user = db.session.get(User, int(current_user.id))
     user.organization_id = org_id
     db.session.commit()
-    flash('Organization switched.', 'success')
+    flash('Organisation switched.', 'success')
     return redirect(request.referrer or url_for('main.dashboard'))
 
 
@@ -496,6 +496,52 @@ def org_admin_update_member_role():
         # Keep legacy string role in sync during transition.
         membership.role = 'Admin' if new_admin else 'User'
         db.session.commit()
+        
+        # Send email notification to user about role change
+        try:
+            from app.auth.routes import _mail_configured
+            if _mail_configured():
+                from sendgrid import SendGridAPIClient
+                from sendgrid.helpers.mail import Mail
+                
+                user = membership.user
+                role_name = target_role.name
+                admin_name = current_user.display_name()
+                
+                message = Mail(
+                    from_email=current_app.config['MAIL_DEFAULT_SENDER'],
+                    to_emails=user.email,
+                    subject=f'Your role has been updated in {organization.name}',
+                    html_content=f'''
+                    <html>
+                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                                <h2 style="color: #0d6efd;">Role Updated</h2>
+                                <p>Hello {user.display_name()},</p>
+                                <p>Your role in <strong>{organization.name}</strong> has been updated by {admin_name}.</p>
+                                <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #0d6efd; margin: 20px 0;">
+                                    <p style="margin: 0;"><strong>New Role:</strong> {role_name}</p>
+                                </div>
+                                <p>This change may affect your permissions and access within the organization.</p>
+                                <p>
+                                    <a href="{request.url_root}dashboard" style="display: inline-block; padding: 10px 20px; background-color: #0d6efd; color: white; text-decoration: none; border-radius: 5px;">View Dashboard</a>
+                                </p>
+                                <p style="color: #6c757d; font-size: 0.9em; margin-top: 30px;">
+                                    If you have any questions about this change, please contact your organization administrator.
+                                </p>
+                            </div>
+                        </body>
+                    </html>
+                    '''
+                )
+                
+                sg = SendGridAPIClient(current_app.config['SENDGRID_API_KEY'])
+                sg.send(message)
+                current_app.logger.info(f"Role change notification sent to {user.email}")
+        except Exception as e:
+            current_app.logger.error(f"Failed to send role change notification: {e}")
+            # Don't fail the role update if email fails
+        
         flash('Role updated.', 'success')
     except Exception:
         db.session.rollback()
@@ -726,7 +772,7 @@ def org_admin_invite_member():
         if email_sent:
             flash(f'User re-invited to the organization. Invitation email sent to {email}.', 'success')
         else:
-            flash('User added to the organization.', 'success')
+            flash('User added to the organisation.', 'success')
     return redirect(url_for('main.org_admin_dashboard'))
 
 
@@ -1062,7 +1108,7 @@ def org_admin_remove_member():
             )
             active_admins = sum(1 for m in active_memberships if _membership_has_permission(m, 'users.manage'))
             if active_admins <= 1:
-                flash('You are the only admin. Promote another admin before leaving the organization.', 'error')
+                flash('You are the only admin. Promote another admin before leaving the organisation.', 'error')
                 return redirect(url_for('main.org_admin_dashboard'))
 
     try:
@@ -1070,7 +1116,7 @@ def org_admin_remove_member():
             # Completely delete the membership
             db.session.delete(membership)
             db.session.commit()
-            flash('Member permanently removed from the organization.', 'success')
+            flash('Member permanently removed from the organisation.', 'success')
         else:  # disable
             # Just deactivate
             membership.is_active = False
@@ -1476,7 +1522,7 @@ def organization_settings():
         return maybe
 
     if not getattr(current_user, 'organization_id', None):
-        flash('No organization is associated with this account.', 'error')
+        flash('No organisation is associated with this account.', 'error')
         return redirect(url_for('main.dashboard'))
 
     organization = db.session.get(Organization, int(current_user.organization_id))

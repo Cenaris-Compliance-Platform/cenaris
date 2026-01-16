@@ -538,7 +538,7 @@
 
                 {% if user_organizations and (user_organizations|length) > 1 %}
                 <li><hr class="dropdown-divider" /></li>
-                <li class="px-3 py-1 text-body-secondary small">Switch organization</li>
+                <li class="px-3 py-1 text-body-secondary small">Switch organisation</li>
                 {% for org_info in user_organizations_with_logos %}
                 <li>
                   <form method="POST" action="{{ url_for('main.switch_organization') }}" class="d-inline">
@@ -580,7 +580,7 @@
                 {% if can_manage_org %}
                 <li>
                   <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
-                    <i class="bi bi-building me-2"></i>Organization Profile
+                    <i class="bi bi-building me-2"></i>Organisation Profile
                   </a>
                 </li>
                 {% endif %}
@@ -720,7 +720,7 @@
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-              Please add your name so your organization can identify you.
+                Please add your name so your organisation can identify you.
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Later</button>
@@ -899,7 +899,7 @@
                   {% endfor %}
                 </select>
                 <div class="form-text">
-                  Choose the user's access level for this organization.
+                  Choose the user's access level for this organisation.
                 </div>
               </div>
 
