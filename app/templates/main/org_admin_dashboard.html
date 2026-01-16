@@ -710,19 +710,23 @@
                   <button class="btn btn-sm btn-link text-body-secondary p-0" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Actions">
                     <i class="bi bi-three-dots-vertical"></i>
                   </button>
-                  <ul class="dropdown-menu dropdown-menu-end" style="position: absolute;">
+                  <ul class="dropdown-menu dropdown-menu-end shadow" style="position: fixed; z-index: 1050;">
                     {% if can_manage_roles and m.is_active and available_roles %}
-                      <li class="px-3 py-2" style="min-width: 220px;">
-                        <div class="text-body-secondary small mb-1">Change role</div>
-                        <form method="post" action="{{ url_for('main.org_admin_update_member_role') }}" class="d-grid gap-2">
+                      <li class="px-3 py-2" style="min-width: 250px;">
+                        <div class="text-body-secondary small mb-2 fw-semibold">Change role</div>
+                        <form method="post" action="{{ url_for('main.org_admin_update_member_role') }}" class="role-change-form">
                           {{ update_role_form.csrf_token }}
                           <input type="hidden" name="membership_id" value="{{ m.id }}" />
-                          <select name="role_id" class="form-select form-select-sm">
-                            {% for r in available_roles %}
-                              <option value="{{ r.id }}" {% if m.role_id and (r.id == m.role_id) %}selected{% endif %}>{{ r.name }}</option>
-                            {% endfor %}
-                          </select>
-                          <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                          <div class="mb-2">
+                            <select name="role_id" class="form-select form-select-sm">
+                              {% for r in available_roles %}
+                                <option value="{{ r.id }}" {% if m.role_id and (r.id == m.role_id) %}selected{% endif %}>{{ r.name }}</option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                          <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-check2 me-1"></i>Update Role
+                          </button>
                         </form>
                       </li>
                       <li><hr class="dropdown-divider" /></li>

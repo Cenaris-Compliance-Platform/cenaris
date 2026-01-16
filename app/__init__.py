@@ -27,6 +27,31 @@ _ORG_SWITCHER_CONTEXT_CACHE: dict[tuple[int, int | None], tuple[float, dict]] = 
 _ORG_SWITCHER_CONTEXT_CACHE_LOCK = threading.Lock()
 
 
+def invalidate_org_switcher_context_cache(user_id: int, org_id: int | None = None) -> None:
+    """Invalidate cached org switcher/template context for a user.
+
+    The org switcher context is intentionally cached (perf), but some actions
+    (like role changes) must reflect immediately in the UI.
+    """
+    try:
+        user_id_int = int(user_id)
+    except Exception:
+        return
+
+    try:
+        org_id_int = int(org_id) if org_id is not None else None
+    except Exception:
+        org_id_int = None
+
+    with _ORG_SWITCHER_CONTEXT_CACHE_LOCK:
+        if org_id_int is not None:
+            _ORG_SWITCHER_CONTEXT_CACHE.pop((user_id_int, org_id_int), None)
+        # Also clear any other cached entries for this user (multi-org, None key, etc.)
+        keys_to_delete = [k for k in _ORG_SWITCHER_CONTEXT_CACHE.keys() if k[0] == user_id_int]
+        for k in keys_to_delete:
+            _ORG_SWITCHER_CONTEXT_CACHE.pop(k, None)
+
+
 def _maybe_enable_system_cert_store() -> None:
     """Use OS certificate store when available.
 

@@ -393,6 +393,7 @@ def org_admin_dashboard():
     pending_invite_revoke_form = PendingInviteRevokeForm()
 
     # Populate role choices for role-update form.
+    available_roles = []
     try:
         from app.models import RBACRole
 
@@ -402,6 +403,7 @@ def org_admin_dashboard():
             .order_by(RBACRole.name.asc())
             .all()
         )
+        available_roles = roles
         update_role_form.role_id.choices = [(str(r.id), r.name) for r in roles]
     except Exception:
         update_role_form.role_id.choices = []
@@ -422,6 +424,7 @@ def org_admin_dashboard():
         pending_invite_resend_form=pending_invite_resend_form,
         pending_invite_revoke_form=pending_invite_revoke_form,
         departments=departments,
+        available_roles=available_roles,
     )
 
 
@@ -437,6 +440,10 @@ def org_admin_update_member_role():
     from app.models import RBACRole
 
     org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        flash('Organisation not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
 
     form = UpdateMemberRoleForm()
 
@@ -496,10 +503,27 @@ def org_admin_update_member_role():
         # Keep legacy string role in sync during transition.
         membership.role = 'Admin' if new_admin else 'User'
         db.session.commit()
+
+        # Invalidate cached navigation context (role badge/permissions) so the
+        # change is reflected immediately for the affected user.
+        try:
+            from app import invalidate_org_switcher_context_cache
+            invalidate_org_switcher_context_cache(membership.user_id, membership.organization_id)
+            invalidate_org_switcher_context_cache(current_user.id, membership.organization_id)
+        except Exception:
+            pass
+        
+        # Force SQLAlchemy to reload the rbac_role relationship from database
+        # This ensures display_role_name shows the correct new role
+        db.session.expire(membership, ['rbac_role'])
+        db.session.refresh(membership)
         
         # Send email notification to user about role change
         try:
             from app.auth.routes import _mail_configured
+            from flask import request
+            import datetime
+            
             if _mail_configured():
                 from sendgrid import SendGridAPIClient
                 from sendgrid.helpers.mail import Mail
@@ -507,27 +531,34 @@ def org_admin_update_member_role():
                 user = membership.user
                 role_name = target_role.name
                 admin_name = current_user.display_name()
+                org_name = organization.name
+                dashboard_url = request.url_root.rstrip('/') + url_for('main.dashboard')
+                
+                # Log start time
+                start_time = datetime.datetime.now()
+                current_app.logger.info(f"[ROLE CHANGE] Starting email send to {user.email} at {start_time.strftime('%H:%M:%S.%f')}")
+                current_app.logger.info(f"[ROLE CHANGE] New role: {role_name} (ID: {target_role.id})")
                 
                 message = Mail(
                     from_email=current_app.config['MAIL_DEFAULT_SENDER'],
                     to_emails=user.email,
-                    subject=f'Your role has been updated in {organization.name}',
+                    subject=f'Your role has been updated in {org_name}',
                     html_content=f'''
                     <html>
                         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                                 <h2 style="color: #0d6efd;">Role Updated</h2>
                                 <p>Hello {user.display_name()},</p>
-                                <p>Your role in <strong>{organization.name}</strong> has been updated by {admin_name}.</p>
+                                <p>Your role in <strong>{org_name}</strong> has been updated by {admin_name}.</p>
                                 <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #0d6efd; margin: 20px 0;">
                                     <p style="margin: 0;"><strong>New Role:</strong> {role_name}</p>
                                 </div>
-                                <p>This change may affect your permissions and access within the organization.</p>
+                                <p>This change may affect your permissions and access within the organisation.</p>
                                 <p>
-                                    <a href="{request.url_root}dashboard" style="display: inline-block; padding: 10px 20px; background-color: #0d6efd; color: white; text-decoration: none; border-radius: 5px;">View Dashboard</a>
+                                    <a href="{dashboard_url}" style="display: inline-block; padding: 10px 20px; background-color: #0d6efd; color: white; text-decoration: none; border-radius: 5px;">View Dashboard</a>
                                 </p>
                                 <p style="color: #6c757d; font-size: 0.9em; margin-top: 30px;">
-                                    If you have any questions about this change, please contact your organization administrator.
+                                    If you have any questions about this change, please contact your organisation administrator.
                                 </p>
                             </div>
                         </body>
@@ -536,10 +567,13 @@ def org_admin_update_member_role():
                 )
                 
                 sg = SendGridAPIClient(current_app.config['SENDGRID_API_KEY'])
-                sg.send(message)
-                current_app.logger.info(f"Role change notification sent to {user.email}")
+                response = sg.send(message)
+                end_time = datetime.datetime.now()
+                duration = (end_time - start_time).total_seconds()
+                current_app.logger.info(f"[ROLE CHANGE] Email API call completed in {duration:.3f} seconds, status: {response.status_code}")
+                current_app.logger.info(f"[ROLE CHANGE] Email sent to {user.email} with role: {role_name}")
         except Exception as e:
-            current_app.logger.error(f"Failed to send role change notification: {e}")
+            current_app.logger.error(f"[ROLE CHANGE] Failed to send role change notification: {e}", exc_info=True)
             # Don't fail the role update if email fails
         
         flash('Role updated.', 'success')
@@ -962,6 +996,13 @@ def org_admin_resend_invite():
     if not membership or int(membership.organization_id) != int(org_id):
         flash('Invite not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
+
+    # Ensure we are reading the latest invite tracking fields in case this row
+    # was updated in another session/process (or earlier request).
+    try:
+        db.session.refresh(membership)
+    except Exception:
+        pass
 
     user = db.session.get(User, int(membership.user_id)) if membership else None
     if not _is_pending_org_invite(membership, user):
