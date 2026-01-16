@@ -7,6 +7,7 @@ import os
 import logging
 import threading
 import time
+import contextlib
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -166,6 +167,8 @@ def create_app(config_name=None):
     def _start_request_timer():
         """Start timing the request for performance debugging."""
         g.request_start_time = time.time()
+        g.sql_query_count = 0
+        g.sql_query_time_s = 0.0
 
     @app.after_request
     def _log_slow_requests(response):
@@ -177,7 +180,23 @@ def create_app(config_name=None):
                 if elapsed > 1.0:
                     endpoint = request.endpoint or 'unknown'
                     method = request.method
-                    logger.warning(f'SLOW REQUEST: {method} {endpoint} took {elapsed:.2f}s')
+                    extra = ''
+                    try:
+                        qn = int(getattr(g, 'sql_query_count', 0) or 0)
+                        qt = float(getattr(g, 'sql_query_time_s', 0.0) or 0.0)
+                        extra = f' | sql: {qn} queries, {qt:.3f}s'
+                    except Exception:
+                        extra = ''
+                    logger.warning(f'SLOW REQUEST: {method} {endpoint} took {elapsed:.2f}s{extra}')
+
+                # Optional: always log SQL timing when explicitly enabled.
+                perf_flag = (os.environ.get('PERF_SQL_LOG') or '0').strip().lower()
+                if perf_flag in {'1', 'true', 'yes', 'on'}:
+                    endpoint = request.endpoint or 'unknown'
+                    method = request.method
+                    qn = int(getattr(g, 'sql_query_count', 0) or 0)
+                    qt = float(getattr(g, 'sql_query_time_s', 0.0) or 0.0)
+                    logger.info(f'PERF SQL: {method} {endpoint} | {qn} queries, {qt:.3f}s')
         except Exception:
             pass
         return response
@@ -185,6 +204,42 @@ def create_app(config_name=None):
     # Initialize database extensions
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # ---- Optional SQL performance instrumentation ----
+    # This is extremely useful for diagnosing 2-3s page loads (DB vs template vs network).
+    # It is lightweight, but we still keep it "quiet" unless PERF_SQL_LOG=1 or the request is slow.
+    try:
+        from sqlalchemy import event
+
+        if not getattr(app, '_perf_sql_listeners_installed', False):
+            with app.app_context():
+                engine = db.engine
+
+            @event.listens_for(engine, 'before_cursor_execute')
+            def _perf_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+                try:
+                    conn.info['__perf_query_start_time'] = time.perf_counter()
+                except Exception:
+                    pass
+
+            @event.listens_for(engine, 'after_cursor_execute')
+            def _perf_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+                try:
+                    start = conn.info.pop('__perf_query_start_time', None)
+                    if start is None:
+                        return
+                    duration = time.perf_counter() - float(start)
+                    # Only count if we're in a request context.
+                    with contextlib.suppress(Exception):
+                        g.sql_query_count = int(getattr(g, 'sql_query_count', 0) or 0) + 1
+                        g.sql_query_time_s = float(getattr(g, 'sql_query_time_s', 0.0) or 0.0) + float(duration)
+                except Exception:
+                    pass
+
+            app._perf_sql_listeners_installed = True
+    except Exception:
+        # Don't ever break app startup due to perf tooling.
+        pass
 
     # Initialize OAuth + Mail
     oauth.init_app(app)
