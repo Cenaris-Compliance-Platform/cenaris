@@ -436,12 +436,19 @@ def org_admin_update_member_role():
     if maybe is not None:
         return maybe
 
+    from flask import request, jsonify
+
+    def _wants_json() -> bool:
+        return (request.headers.get('X-Requested-With') == 'fetch') or (request.accept_mimetypes.best == 'application/json')
+
     from app.main.forms import UpdateMemberRoleForm
     from app.models import RBACRole
 
     org_id = _active_org_id()
     organization = db.session.get(Organization, int(org_id))
     if not organization:
+        if _wants_json():
+            return jsonify(success=False, error='Organisation not found.'), 404
         flash('Organisation not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
@@ -460,6 +467,8 @@ def org_admin_update_member_role():
         form.role_id.choices = []
 
     if not form.validate_on_submit():
+        if _wants_json():
+            return jsonify(success=False, error='Invalid request.'), 400
         flash('Invalid request.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
@@ -467,16 +476,22 @@ def org_admin_update_member_role():
     role_id_raw = (form.role_id.data or '').strip()
 
     if not membership_id_raw.isdigit() or not role_id_raw.isdigit():
+        if _wants_json():
+            return jsonify(success=False, error='Invalid request.'), 400
         flash('Invalid request.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
     membership = db.session.get(OrganizationMembership, int(membership_id_raw))
     if not membership or int(membership.organization_id) != int(org_id):
+        if _wants_json():
+            return jsonify(success=False, error='Membership not found.'), 404
         flash('Membership not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
     target_role = db.session.get(RBACRole, int(role_id_raw))
     if not target_role or int(target_role.organization_id) != int(org_id):
+        if _wants_json():
+            return jsonify(success=False, error='Role not found.'), 404
         flash('Role not found.', 'error')
         return redirect(url_for('main.org_admin_dashboard'))
 
@@ -495,6 +510,8 @@ def org_admin_update_member_role():
         )
         active_admins = sum(1 for m in active_memberships if _membership_has_permission(m, 'users.manage'))
         if active_admins <= 1:
+            if _wants_json():
+                return jsonify(success=False, error='Cannot change role: you would remove the last admin.'), 400
             flash('Cannot change role: you would remove the last admin.', 'error')
             return redirect(url_for('main.org_admin_dashboard'))
 
@@ -517,69 +534,23 @@ def org_admin_update_member_role():
         # This ensures display_role_name shows the correct new role
         db.session.expire(membership, ['rbac_role'])
         db.session.refresh(membership)
-        
-        # Send email notification to user about role change
-        try:
-            from app.auth.routes import _mail_configured
-            from flask import request
-            import datetime
-            
-            if _mail_configured():
-                from sendgrid import SendGridAPIClient
-                from sendgrid.helpers.mail import Mail
-                
-                user = membership.user
-                role_name = target_role.name
-                admin_name = current_user.display_name()
-                org_name = organization.name
-                dashboard_url = request.url_root.rstrip('/') + url_for('main.dashboard')
-                
-                # Log start time
-                start_time = datetime.datetime.now()
-                current_app.logger.info(f"[ROLE CHANGE] Starting email send to {user.email} at {start_time.strftime('%H:%M:%S.%f')}")
-                current_app.logger.info(f"[ROLE CHANGE] New role: {role_name} (ID: {target_role.id})")
-                
-                message = Mail(
-                    from_email=current_app.config['MAIL_DEFAULT_SENDER'],
-                    to_emails=user.email,
-                    subject=f'Your role has been updated in {org_name}',
-                    html_content=f'''
-                    <html>
-                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                                <h2 style="color: #0d6efd;">Role Updated</h2>
-                                <p>Hello {user.display_name()},</p>
-                                <p>Your role in <strong>{org_name}</strong> has been updated by {admin_name}.</p>
-                                <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #0d6efd; margin: 20px 0;">
-                                    <p style="margin: 0;"><strong>New Role:</strong> {role_name}</p>
-                                </div>
-                                <p>This change may affect your permissions and access within the organisation.</p>
-                                <p>
-                                    <a href="{dashboard_url}" style="display: inline-block; padding: 10px 20px; background-color: #0d6efd; color: white; text-decoration: none; border-radius: 5px;">View Dashboard</a>
-                                </p>
-                                <p style="color: #6c757d; font-size: 0.9em; margin-top: 30px;">
-                                    If you have any questions about this change, please contact your organisation administrator.
-                                </p>
-                            </div>
-                        </body>
-                    </html>
-                    '''
-                )
-                
-                sg = SendGridAPIClient(current_app.config['SENDGRID_API_KEY'])
-                response = sg.send(message)
-                end_time = datetime.datetime.now()
-                duration = (end_time - start_time).total_seconds()
-                current_app.logger.info(f"[ROLE CHANGE] Email API call completed in {duration:.3f} seconds, status: {response.status_code}")
-                current_app.logger.info(f"[ROLE CHANGE] Email sent to {user.email} with role: {role_name}")
-        except Exception as e:
-            current_app.logger.error(f"[ROLE CHANGE] Failed to send role change notification: {e}", exc_info=True)
-            # Don't fail the role update if email fails
-        
+        role_name = target_role.name
+        if _wants_json():
+            return jsonify(
+                success=True,
+                membership_id=int(membership.id),
+                user_id=int(membership.user_id),
+                new_role_name=role_name,
+                is_current_user=(int(membership.user_id) == int(current_user.id)),
+            )
+
         flash('Role updated.', 'success')
     except Exception:
         db.session.rollback()
         current_app.logger.exception('Failed updating member role')
+        if _wants_json():
+            return jsonify(success=False, error='Failed to update role. Please try again.'), 500
+
         flash('Failed to update role. Please try again.', 'error')
 
     return redirect(url_for('main.org_admin_dashboard'))

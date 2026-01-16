@@ -526,7 +526,7 @@
                   {{ _org_name.strip() if _org_name.strip() else current_user.email }}
                 </span>
                 {% if active_role_name %}
-                <span class="badge bg-primary ms-2">{{ active_role_name }}</span>
+                <span class="badge bg-primary ms-2" id="activeRoleBadge">{{ active_role_name }}</span>
                 {% endif %}
               </a>
               <ul class="dropdown-menu">

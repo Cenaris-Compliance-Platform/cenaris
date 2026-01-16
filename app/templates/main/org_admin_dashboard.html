@@ -655,6 +655,75 @@
               });
           });
         });
+
+        // === ROLE CHANGE (no reload) ===
+        document.addEventListener('DOMContentLoaded', () => {
+          document.querySelectorAll('form.role-change-form').forEach((formEl) => {
+            formEl.addEventListener('submit', (e) => {
+              e.preventDefault();
+
+              const submitBtn = formEl.querySelector('button[type="submit"]');
+              const originalHtml = submitBtn ? submitBtn.innerHTML : null;
+              if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
+              }
+
+              const fd = new FormData(formEl);
+
+              fetch(formEl.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: {
+                  'X-Requested-With': 'fetch',
+                  'Accept': 'application/json',
+                },
+              })
+                .then((r) => r.json().then((j) => ({ ok: r.ok, json: j })))
+                .then(({ ok, json }) => {
+                  if (!ok || !json?.success) {
+                    alert(json?.error || 'Failed to update role');
+                    return;
+                  }
+
+                  const membershipId = String(json.membership_id);
+                  const row = document.querySelector(`tr[data-membership-id="${membershipId}"]`);
+                  const roleCell = row?.querySelector('.member-role-cell');
+                  if (roleCell && json.new_role_name) {
+                    roleCell.textContent = json.new_role_name;
+                  }
+
+                  if (json.is_current_user && json.new_role_name) {
+                    const roleBadge = document.getElementById('activeRoleBadge');
+                    if (roleBadge) {
+                      roleBadge.textContent = json.new_role_name;
+                    }
+                  }
+
+                  const dropdownToggle = row?.querySelector('[data-bs-toggle="dropdown"]');
+                  if (dropdownToggle) {
+                    try {
+                      const dd = bootstrap.Dropdown.getInstance(dropdownToggle) || new bootstrap.Dropdown(dropdownToggle);
+                      dd.hide();
+                    } catch (err) {
+                      // ignore
+                    }
+                  }
+                })
+                .catch((err) => {
+                  console.error('Role update error:', err);
+                  alert('Network error. Please try again.');
+                })
+                .finally(() => {
+                  if (submitBtn) {
+                    submitBtn.disabled = false;
+                    if (originalHtml !== null) submitBtn.innerHTML = originalHtml;
+                  }
+                });
+            });
+          });
+        });
       })();
     </script>
 
@@ -673,14 +742,14 @@
           </thead>
           <tbody>
             {% for m in members %}
-            <tr>
+            <tr data-membership-id="{{ m.id }}" data-user-id="{{ m.user_id }}">
               <td class="px-3">
                 {{ m.user.email }}
                 {% if m.user.full_name %}
                 <div class="text-body-secondary small">{{ m.user.full_name }}</div>
                 {% endif %}
               </td>
-              <td>{{ m.display_role_name }}</td>
+              <td class="member-role-cell">{{ m.display_role_name }}</td>
               <td>
                 {% if m.department %}
                   <span class="badge bg-{{ m.department.color }}">{{ m.department.name }}</span>
