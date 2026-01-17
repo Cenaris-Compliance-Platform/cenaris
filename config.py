@@ -29,7 +29,9 @@ class Config:
     # SQLAlchemy (Milestone 1)
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ECHO = True  # Set to True temporarily to log all SQL queries for debugging
+    # SQL logging is expensive and can add noticeable latency (especially with remote DBs).
+    # Enable only when debugging.
+    SQLALCHEMY_ECHO = (os.environ.get('SQLALCHEMY_ECHO') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
     
     # Database Connection Pooling (Production)
     SQLALCHEMY_ENGINE_OPTIONS = {

@@ -1,8 +1,27 @@
 from datetime import datetime, timezone
+import threading
+import time
 from flask import g
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
+
+
+_RBAC_EFFECTIVE_PERMS_CACHE: dict[int, tuple[float, set[str]]] = {}
+_RBAC_EFFECTIVE_PERMS_CACHE_LOCK = threading.Lock()
+
+
+def _rbac_effective_perms_cache_ttl_seconds() -> int:
+    # Keep small to reduce risk of stale permissions after edits.
+    # Roles/permissions do not change frequently in typical usage.
+    try:
+        # Optional env override (seconds)
+        import os
+
+        v = int(os.environ.get('RBAC_PERMS_CACHE_SECONDS') or 60)
+        return max(0, v)
+    except Exception:
+        return 60
 
 
 class OrganizationMembership(db.Model):
@@ -27,6 +46,9 @@ class OrganizationMembership(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('organization_id', 'user_id', name='uq_org_membership_org_user'),
+        db.Index('ix_org_memberships_org_active', 'organization_id', 'is_active'),
+        db.Index('ix_org_memberships_user_active', 'user_id', 'is_active'),
+        db.Index('ix_org_memberships_user_org_active', 'user_id', 'organization_id', 'is_active'),
     )
 
     # Avoid large JOINs on every membership lookup; load related rows only when needed.
@@ -253,6 +275,10 @@ class Document(db.Model):
 
     uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='select')
 
+    __table_args__ = (
+        db.Index('ix_documents_org_active_uploaded_at', 'organization_id', 'is_active', 'uploaded_at'),
+    )
+
 
 rbac_role_permissions = db.Table(
     'rbac_role_permissions',
@@ -303,6 +329,22 @@ class RBACRole(db.Model):
 
     def effective_permission_codes(self) -> set[str]:
         """Return direct + inherited permission codes (cycle-safe)."""
+        try:
+            rid = int(getattr(self, 'id', 0) or 0)
+        except Exception:
+            rid = 0
+
+        ttl = _rbac_effective_perms_cache_ttl_seconds()
+        if rid and ttl > 0:
+            now = time.monotonic()
+            with _RBAC_EFFECTIVE_PERMS_CACHE_LOCK:
+                cached = _RBAC_EFFECTIVE_PERMS_CACHE.get(rid)
+            if cached:
+                expires_at, codes = cached
+                if now < expires_at:
+                    # Return a copy to avoid accidental mutation of cached set.
+                    return set(codes)
+
         seen_role_ids: set[int] = set()
         codes: set[str] = set()
 
@@ -323,6 +365,14 @@ class RBACRole(db.Model):
                 walk(inherited)
 
         walk(self)
+
+        if rid and ttl > 0:
+            try:
+                expires_at = time.monotonic() + max(1, ttl)
+                with _RBAC_EFFECTIVE_PERMS_CACHE_LOCK:
+                    _RBAC_EFFECTIVE_PERMS_CACHE[rid] = (expires_at, set(codes))
+            except Exception:
+                pass
         return codes
 
 
