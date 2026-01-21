@@ -7,8 +7,8 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h1 class="h2 fw-bold mb-1">AI Evidence Analysis</h1>
-                    <p class="text-body-secondary mb-0">AI-powered document analysis and compliance evidence extraction</p>
+                    <h1 class="h2 fw-bold mb-1">Upload Evidence</h1>
+                    <p class="text-body-secondary mb-0">Upload documents and extract compliance evidence</p>
                 </div>
                 <div class="d-none d-md-block">
                     <i class="bi bi-robot text-primary" style="font-size: 2.5rem;"></i>
@@ -30,7 +30,7 @@
                         </div>
                         <div class="flex-grow-1 ms-3">
                             <div class="fw-bold h4 mb-0">{{ ai_evidence_entries|length }}</div>
-                            <div class="text-body-secondary small">AI Analyzed</div>
+                            <div class="text-body-secondary small">Documents Analysed</div>
                         </div>
                     </div>
                 </div>
@@ -101,7 +101,7 @@
         </div>
     </div>
     
-    <!-- AI Evidence List -->
+    <!-- Evidence List -->
     <div class="row">
         <div class="col-12">
             <div class="card border-0 shadow-sm">
@@ -109,15 +109,15 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">
                             <i class="bi bi-robot me-2 text-primary"></i>
-                            AI Evidence Entries
+                            Evidence Entries
                         </h5>
                         <div class="d-flex gap-2">
                             <button class="btn btn-sm btn-outline-secondary" onclick="toggleView()">
                                 <i class="bi bi-grid-3x3-gap" id="viewToggleIcon"></i>
                             </button>
-                            <button class="btn btn-sm btn-primary" disabled>
-                                <i class="bi bi-plus-lg me-1"></i>Analyze New
-                            </button>
+                            <a class="btn btn-sm btn-primary" href="{{ url_for('main.dashboard', _anchor='upload-documents', open_upload=1) }}">
+                                <i class="bi bi-plus-lg me-1"></i>Upload New
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -204,8 +204,8 @@
                                                             </li>
                                                             <li><hr class="dropdown-divider"></li>
                                                             <li>
-                                                                <a class="dropdown-item" href="#" onclick="showComingSoon('Re-analyze')">
-                                                                    <i class="bi bi-arrow-clockwise me-2"></i>Re-analyze
+                                                                <a class="dropdown-item" href="#" onclick="showComingSoon('Re-analyse')">
+                                                                    <i class="bi bi-arrow-clockwise me-2"></i>Re-analyse
                                                                 </a>
                                                             </li>
                                                         </ul>
@@ -260,7 +260,7 @@
                             <div class="mb-4">
                                 <i class="bi bi-robot text-body-secondary" style="font-size: 5rem; opacity: 0.3;"></i>
                             </div>
-                            <h5 class="fw-bold text-body-secondary mb-3">No AI Evidence Found</h5>
+                            <h5 class="fw-bold text-body-secondary mb-3">No Evidence Found</h5>
                             <p class="text-body-secondary mb-4">
                                 Upload documents to start AI-powered compliance analysis. 
                                 Our AI will automatically extract evidence and assess compliance.

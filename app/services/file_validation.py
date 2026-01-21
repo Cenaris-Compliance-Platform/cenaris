@@ -13,7 +13,10 @@ class FileValidationService:
     ALLOWED_EXTENSIONS = {
         '.pdf': 'application/pdf',
         '.doc': 'application/msword',
-        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
     }
     
     # Maximum file size (16MB)
@@ -158,6 +161,24 @@ class FileValidationService:
                         'success': False,
                         'error': 'File does not appear to be a valid DOC document',
                         'error_code': 'INVALID_DOC'
+                    }
+
+            elif expected_content_type == 'image/png':
+                # PNG signature: 89 50 4E 47 0D 0A 1A 0A
+                if header[:8] != b'\x89PNG\r\n\x1a\n':
+                    return {
+                        'success': False,
+                        'error': 'File does not appear to be a valid PNG image',
+                        'error_code': 'INVALID_PNG'
+                    }
+
+            elif expected_content_type == 'image/jpeg':
+                # JPEG files start with FF D8 FF
+                if header[:3] != b'\xFF\xD8\xFF':
+                    return {
+                        'success': False,
+                        'error': 'File does not appear to be a valid JPEG image',
+                        'error_code': 'INVALID_JPEG'
                     }
             
             return {

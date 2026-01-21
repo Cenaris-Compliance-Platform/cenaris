@@ -11,7 +11,7 @@
                     <p class="text-body-secondary mb-0">Manage and view your uploaded compliance documents</p>
                 </div>
                 <div class="d-flex gap-2">
-                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary">
+                    <a href="{{ url_for('main.dashboard', _anchor='upload-documents', open_upload=1) }}" class="btn btn-outline-primary">
                         <i class="bi bi-plus-lg me-2"></i>Upload New
                     </a>
                 </div>
@@ -31,6 +31,12 @@
                         </h5>
                         {% if documents %}
                             <div class="d-flex gap-2">
+                                <div class="input-group input-group-sm" style="max-width: 260px;">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-search"></i>
+                                    </span>
+                                    <input type="search" class="form-control" id="docSearch" placeholder="Search documents" aria-label="Search documents" />
+                                </div>
                                 <button class="btn btn-sm btn-outline-secondary" onclick="toggleView()">
                                     <i class="bi bi-grid-3x3-gap" id="viewToggleIcon"></i>
                                 </button>
@@ -68,15 +74,19 @@
                                                         <div class="flex-shrink-0 me-3">
                                                             {% if document.content_type == 'application/pdf' %}
                                                                 <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 1.5rem;"></i>
+                                                            {% elif document.content_type and document.content_type.startswith('image/') %}
+                                                                <i class="bi bi-file-earmark-image text-success" style="font-size: 1.5rem;"></i>
                                                             {% else %}
                                                                 <i class="bi bi-file-earmark-word text-primary" style="font-size: 1.5rem;"></i>
                                                             {% endif %}
                                                         </div>
                                                         <div class="flex-grow-1 min-w-0">
-                                                            <div class="fw-medium text-truncate">{{ document.filename }}</div>
+                                                            <div class="fw-medium text-truncate" data-doc-filename>{{ document.filename }}</div>
                                                             <small class="text-body-secondary">
                                                                 {% if document.content_type == 'application/pdf' %}
                                                                     PDF Document
+                                                                {% elif document.content_type and document.content_type.startswith('image/') %}
+                                                                    Image
                                                                 {% else %}
                                                                     Word Document
                                                                 {% endif %}
@@ -99,7 +109,7 @@
                                                                 type="button" data-bs-toggle="dropdown" data-doc-actions-dropdown>
                                                             <i class="bi bi-three-dots"></i>
                                                         </button>
-                                                        <ul class="dropdown-menu">
+                                                        <ul class="dropdown-menu dropdown-menu-end">
                                                             <li>
                                                                 <a class="dropdown-item" href="{{ url_for('main.download_document', doc_id=document.id) }}">
                                                                     <i class="bi bi-download me-2"></i>Download
@@ -131,11 +141,13 @@
                             <div class="row g-3">
                                 {% for document in documents %}
                                     <div class="col-md-6 col-lg-4 col-xl-3">
-                                        <div class="card h-100 border shadow-sm">
+                                        <div class="card h-100 border shadow-sm" data-doc-card>
                                             <div class="card-body text-center">
                                                 <div class="mb-3">
                                                     {% if document.content_type == 'application/pdf' %}
                                                         <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 3rem;"></i>
+                                                    {% elif document.content_type and document.content_type.startswith('image/') %}
+                                                        <i class="bi bi-file-earmark-image text-success" style="font-size: 3rem;"></i>
                                                     {% else %}
                                                         <i class="bi bi-file-earmark-word text-primary" style="font-size: 3rem;"></i>
                                                     {% endif %}
@@ -190,7 +202,7 @@
                                 You haven't uploaded any documents yet. Start building your compliance repository 
                                 by uploading your first document.
                             </p>
-                            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg">
+                            <a href="{{ url_for('main.dashboard', _anchor='upload-documents', open_upload=1) }}" class="btn btn-primary btn-lg">
                                 <i class="bi bi-plus-lg me-2"></i>Upload Your First Document
                             </a>
                         </div>
@@ -207,14 +219,14 @@
                 <div class="card border-0 shadow-sm">
                     <div class="card-body">
                         <div class="row text-center">
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="mb-2">
                                     <i class="bi bi-files text-primary" style="font-size: 1.5rem;"></i>
                                 </div>
                                 <div class="fw-bold h5 mb-0">{{ documents|length }}</div>
                                 <small class="text-body-secondary">Total Documents</small>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="mb-2">
                                     <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 1.5rem;"></i>
                                 </div>
@@ -223,21 +235,14 @@
                                 </div>
                                 <small class="text-body-secondary">PDF Files</small>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="mb-2">
                                     <i class="bi bi-file-earmark-word text-primary" style="font-size: 1.5rem;"></i>
                                 </div>
                                 <div class="fw-bold h5 mb-0">
                                     {{ documents|rejectattr('content_type', 'equalto', 'application/pdf')|list|length }}
                                 </div>
-                                <small class="text-body-secondary">Word Files</small>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="mb-2">
-                                    <i class="bi bi-shield-check text-success" style="font-size: 1.5rem;"></i>
-                                </div>
-                                <div class="fw-bold h5 mb-0">100%</div>
-                                <small class="text-body-secondary">Secure</small>
+                                <small class="text-body-secondary">Other Files</small>
                             </div>
                         </div>
                     </div>
@@ -251,6 +256,24 @@
 {% block extra_js %}
 <script>
     let isGridView = false;
+
+    function applySearchFilter(queryRaw) {
+        const q = (queryRaw || '').toLowerCase().trim();
+
+        // Table view rows
+        document.querySelectorAll('#tableView tbody tr').forEach((row) => {
+            const nameEl = row.querySelector('[data-doc-filename]');
+            const name = (nameEl?.textContent || '').toLowerCase();
+            row.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
+
+        // Grid view cards
+        document.querySelectorAll('#gridView [data-doc-card]').forEach((card) => {
+            const titleEl = card.querySelector('.card-title');
+            const name = (titleEl?.textContent || '').toLowerCase();
+            card.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
+    }
     
     function toggleView() {
         const tableView = document.getElementById('tableView');
@@ -332,6 +355,11 @@
 
     // Prevent dropdown menus from being clipped inside scroll/overflow containers.
     document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.getElementById('docSearch');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => applySearchFilter(e.target.value));
+        }
+
         document.querySelectorAll('[data-doc-actions-dropdown]').forEach((toggle) => {
             try {
                 bootstrap.Dropdown.getOrCreateInstance(toggle, {

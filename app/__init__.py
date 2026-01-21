@@ -578,8 +578,8 @@ def create_app(config_name=None):
                     can_manage_roles = current_user.has_permission('roles.manage', org_id=int(active_org_id))
                     is_org_admin_active = bool(can_manage_team)
 
-                    # ONLY load roles/departments if the user needs the invite modal (admin pages).
-                    if can_invite_member and request.endpoint and 'admin' in request.endpoint:
+                    # Load roles/departments if the user has invite permissions (for the floating invite modal).
+                    if can_invite_member:
                         try:
                             from app.models import RBACRole, Department
 

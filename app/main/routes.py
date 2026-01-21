@@ -360,7 +360,7 @@ def org_admin_dashboard():
     if maybe is not None:
         return maybe
 
-    from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm, UpdateMemberRoleForm
+    from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm, UpdateMemberRoleForm, UpdateMemberDepartmentForm
     from app.models import Department
 
     org_id = _active_org_id()
@@ -423,6 +423,7 @@ def org_admin_dashboard():
     ]
     member_action_form = MembershipActionForm()
     update_role_form = UpdateMemberRoleForm()
+    update_department_form = UpdateMemberDepartmentForm()
     pending_invite_resend_form = PendingInviteResendForm()
     pending_invite_revoke_form = PendingInviteRevokeForm()
 
@@ -456,11 +457,109 @@ def org_admin_dashboard():
         invite_form=invite_form,
         member_action_form=member_action_form,
         update_role_form=update_role_form,
+        update_department_form=update_department_form,
         pending_invite_resend_form=pending_invite_resend_form,
         pending_invite_revoke_form=pending_invite_revoke_form,
         departments=departments,
         available_roles=available_roles,
     )
+
+
+@bp.route('/org/admin/members/department', methods=['POST'])
+@login_required
+def org_admin_update_member_department():
+    """Update a member's department assignment."""
+    maybe = _require_org_permission('users.manage')
+    if maybe is not None:
+        return maybe
+
+    from flask import request, jsonify
+    from app.main.forms import UpdateMemberDepartmentForm
+    from app.models import Department
+
+    def _wants_json() -> bool:
+        return (request.headers.get('X-Requested-With') == 'fetch') or (request.accept_mimetypes.best == 'application/json')
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        if _wants_json():
+            return jsonify(success=False, error='Organisation not found.'), 404
+        flash('Organisation not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    form = UpdateMemberDepartmentForm()
+
+    # Populate choices so WTForms validates the selection.
+    departments = (
+        Department.query
+        .filter_by(organization_id=int(org_id))
+        .order_by(Department.name.asc())
+        .all()
+    )
+    form.department_id.choices = [('', 'Unassigned')] + [(str(d.id), d.name) for d in departments]
+
+    if not form.validate_on_submit():
+        if _wants_json():
+            return jsonify(success=False, error='Invalid request.'), 400
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership_id_raw = (form.membership_id.data or '').strip()
+    dept_id_raw = (form.department_id.data or '').strip()
+
+    if not membership_id_raw.isdigit():
+        if _wants_json():
+            return jsonify(success=False, error='Invalid request.'), 400
+        flash('Invalid request.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    membership = db.session.get(OrganizationMembership, int(membership_id_raw))
+    if not membership or int(membership.organization_id) != int(org_id):
+        if _wants_json():
+            return jsonify(success=False, error='Membership not found.'), 404
+        flash('Membership not found.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    new_dept = None
+    if dept_id_raw:
+        if not dept_id_raw.isdigit():
+            if _wants_json():
+                return jsonify(success=False, error='Invalid department.'), 400
+            flash('Invalid department.', 'error')
+            return redirect(url_for('main.org_admin_dashboard'))
+
+        new_dept = db.session.get(Department, int(dept_id_raw))
+        if not new_dept or int(new_dept.organization_id) != int(org_id):
+            if _wants_json():
+                return jsonify(success=False, error='Department not found.'), 404
+            flash('Department not found.', 'error')
+            return redirect(url_for('main.org_admin_dashboard'))
+
+    try:
+        membership.department_id = int(new_dept.id) if new_dept else None
+        db.session.commit()
+
+        if _wants_json():
+            return jsonify(
+                success=True,
+                membership_id=int(membership.id),
+                department={
+                    'id': int(new_dept.id),
+                    'name': new_dept.name,
+                    'color': new_dept.color,
+                } if new_dept else None,
+            )
+
+        flash('Department updated.', 'success')
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed updating member department')
+        if _wants_json():
+            return jsonify(success=False, error='Failed to update department. Please try again.'), 500
+        flash('Failed to update department. Please try again.', 'error')
+
+    return redirect(url_for('main.org_admin_dashboard'))
 
 
 @bp.route('/org/admin/members/role', methods=['POST'])
@@ -1559,9 +1658,11 @@ def ai_evidence():
                     'summary': f"Compliance score: {framework_data['score']}% - Status: {framework_data['status']}"
                 })
     
-    return render_template('main/ai_evidence.html', 
-                         title='AI Evidence',
-                         ai_evidence_entries=ai_evidence_entries)
+    return render_template(
+        'main/ai_evidence.html',
+        title='Upload Evidence',
+        ai_evidence_entries=ai_evidence_entries,
+    )
 
 
 @bp.route('/organization/settings', methods=['GET', 'POST'])
@@ -1592,6 +1693,8 @@ def organization_settings():
             if profile_form.validate_on_submit():
                 organization.name = profile_form.name.data.strip()
                 organization.abn = (profile_form.abn.data or '').strip() or None
+                organization.acn = (profile_form.acn.data or '').strip() or None
+                organization.contact_number = (profile_form.contact_number.data or '').strip() or None
                 organization.address = (profile_form.address.data or '').strip() or None
                 organization.contact_email = (profile_form.contact_email.data or '').strip().lower() or None
 

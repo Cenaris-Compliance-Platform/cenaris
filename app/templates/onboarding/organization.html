@@ -143,6 +143,20 @@
                   {% endif %}
                 </div>
                 <div class="col-md-6 mb-3">
+                  {{ form.acn.label(class="form-label") }}
+                  {{ form.acn() }}
+                  {% if form.acn.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.acn.errors %}
+                        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</small>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6 mb-3">
                   {{ form.organization_type.label(class="form-label") }}
                   {% set _org_type_val = (form.organization_type.data or '') %}
                   <input type="hidden" name="{{ form.organization_type.name }}" id="org-type-value" value="{{ _org_type_val }}" />
@@ -189,9 +203,6 @@
                     </div>
                   {% endif %}
                 </div>
-              </div>
-
-              <div class="row">
                 <div class="col-md-6 mb-3">
                   {{ form.industry.label(class="form-label") }}
                   {% set _industry_val = (form.industry.data or '') %}

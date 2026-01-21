@@ -411,7 +411,7 @@
               <div>
                 <h6 class="mb-1 fw-semibold">We use cookies</h6>
                 <p class="mb-0 small">
-                  We use essential cookies to make our site work. With your consent, we may also use non-essential cookies to improve user experience and analyze website traffic. By clicking "Accept All", you agree to our website's cookie use as described in our <a href="{{ url_for('main.privacy') }}" class="link-primary">Privacy Policy</a>.
+                  We use essential cookies to make our site work. With your consent, we may also use non-essential cookies to improve user experience and analyse website traffic. By clicking "Accept All", you agree to our website's cookie use as described in our <a href="{{ url_for('main.privacy') }}" class="link-primary">Privacy Policy</a>.
                 </p>
               </div>
             </div>
@@ -438,7 +438,7 @@
           <img
             src="{{ url_for('static', filename=_brand_logo) }}"
             alt="Cenaris"
-            style="height: 40px; width: auto;"
+            style="height: 54px; width: auto;"
           />
           <span class="visually-hidden">Cenaris</span>
         </a>
@@ -476,7 +476,7 @@
                 class="nav-link nav-btn {% if request.endpoint == 'main.ai_evidence' %}active{% endif %}"
                 href="{{ url_for('main.ai_evidence') }}"
               >
-                <i class="bi bi-robot me-1"></i>AI Evidence
+                <i class="bi bi-robot me-1"></i>Upload Evidence
               </a>
             </li>
             <li class="nav-item">
@@ -617,7 +617,14 @@
             {% endif %}
 
             <li class="nav-item d-flex align-items-center">
-              <form method="POST" action="{{ url_for('main.set_theme') }}" class="d-inline">
+              <form
+                id="themeToggleForm"
+                method="POST"
+                action="{{ url_for('main.set_theme') }}"
+                class="d-inline"
+                data-theme-toggle="1"
+                data-skip-loading="1"
+              >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 <input
                   type="hidden"
@@ -631,11 +638,10 @@
                   title="Toggle theme"
                   aria-label="Toggle theme"
                 >
-                  {% if _theme == 'dark' %}
-                  <i class="bi bi-sun-fill"></i>
-                  {% else %}
-                  <i class="bi bi-moon-stars-fill"></i>
-                  {% endif %}
+                  <i
+                    id="themeToggleIcon"
+                    class="bi {% if _theme == 'dark' %}bi-sun-fill{% else %}bi-moon-stars-fill{% endif %}"
+                  ></i>
                 </button>
               </form>
             </li>
@@ -762,12 +768,67 @@
         const forms = document.querySelectorAll("form");
         forms.forEach(function (form) {
           form.addEventListener("submit", function () {
+            if ((form.dataset && form.dataset.skipLoading) || form.getAttribute('data-skip-loading')) {
+              return;
+            }
             const submitBtn = form.querySelector('button[type="submit"]');
             if (submitBtn) {
               submitBtn.classList.add("loading");
               submitBtn.disabled = true;
             }
           });
+        });
+      });
+
+      // Theme toggle (client-side): avoids full page reload so users don't lose typed input.
+      document.addEventListener("DOMContentLoaded", function () {
+        const form = document.getElementById('themeToggleForm');
+        if (!form) return;
+
+        const themeInput = form.querySelector('input[name="theme"]');
+        const icon = document.getElementById('themeToggleIcon');
+
+        function applyTheme(theme) {
+          const t = (theme === 'dark') ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-bs-theme', t);
+
+          // Some components (like the navbar) set their own data-bs-theme.
+          document.querySelectorAll('[data-bs-theme]').forEach((el) => {
+            if (el.tagName && el.tagName.toLowerCase() === 'nav') {
+              el.setAttribute('data-bs-theme', t);
+            }
+          });
+
+          if (icon) {
+            icon.classList.remove('bi-sun-fill', 'bi-moon-stars-fill');
+            icon.classList.add(t === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars-fill');
+          }
+
+          try {
+            const meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', t === 'dark' ? '#0b0f19' : '#ffffff');
+          } catch (e) {
+            // Ignore
+          }
+        }
+
+        function setThemeCookie(theme) {
+          const t = (theme === 'dark') ? 'dark' : 'light';
+          const maxAge = 60 * 60 * 24 * 365; // 1 year
+          const secure = (window.location && window.location.protocol === 'https:') ? '; Secure' : '';
+          document.cookie = `theme=${t}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+        }
+
+        form.addEventListener('submit', function (e) {
+          // If JS is available, toggle immediately without reload.
+          e.preventDefault();
+          const nextTheme = (themeInput && themeInput.value) ? themeInput.value : 'light';
+          applyTheme(nextTheme);
+          setThemeCookie(nextTheme);
+
+          if (themeInput) {
+            themeInput.value = (nextTheme === 'dark') ? 'light' : 'dark';
+          }
         });
       });
 
@@ -893,9 +954,9 @@
               
               <div class="mb-3">
                 <label for="inviteRole" class="form-label">Role</label>
-                <select class="form-select" id="inviteRole" name="role" required>
+                <select class="form-select" id="inviteRole" name="role" required style="max-height: 200px; overflow-y: auto;">
                   {% for r in available_roles %}
-                    <option value="{{ r.id }}">{{ r.name }}</option>
+                    <option value="{{ r.id if r.id is defined else r['id'] }}">{{ r.name if r.name is defined else r['name'] }}</option>
                   {% endfor %}
                 </select>
                 <div class="form-text">

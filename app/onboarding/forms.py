@@ -18,19 +18,27 @@ class OnboardingOrganizationForm(FlaskForm):
     )
 
     abn = StringField(
-        'ABN / ACN',
+        'ABN (required)',
         validators=[DataRequired(), Length(max=20)],
-        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'ABN / ACN'},
+        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'ABN'},
+    )
+
+    acn = StringField(
+        'ACN (optional)',
+        validators=[Optional(), Length(max=20)],
+        render_kw={'class': 'form-control form-control-lg', 'placeholder': 'ACN (optional)'},
     )
 
     organization_type = SelectField(
         'Organisation Type',
         choices=[
             ('', 'Select...'),
-            ('sole_trader', 'Sole trader'),
+            ('sole_trader', 'Sole Trader'),
             ('company', 'Company'),
-            ('not_for_profit', 'Not-for-profit'),
-            ('trust_partnership', 'Trust / partnership'),
+            ('not_for_profit', 'Not-for-Profit'),
+            ('partnership', 'Partnership'),
+            ('trust', 'Trust'),
+            ('government', 'Government / Public Sector'),
         ],
         validators=[DataRequired()],
         render_kw={'class': 'form-select minimal-select'},

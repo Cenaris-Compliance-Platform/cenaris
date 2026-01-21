@@ -6,7 +6,7 @@
     <nav aria-label="breadcrumb" class="mb-4">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{{ url_for('main.ai_evidence') }}">AI Evidence</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('main.ai_evidence') }}">Upload Evidence</a></li>
             <li class="breadcrumb-item active">{{ entry.document_title[:50] }}{% if entry.document_title|length > 50 %}...{% endif %}</li>
         </ol>
     </nav>
@@ -43,8 +43,8 @@
                                 <i class="bi bi-file-earmark-pdf me-2"></i>Export PDF
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="#" onclick="showComingSoon('Re-analyze')">
-                                <i class="bi bi-arrow-clockwise me-2"></i>Re-analyze
+                            <li><a class="dropdown-item" href="#" onclick="showComingSoon('Re-analyse')">
+                                <i class="bi bi-arrow-clockwise me-2"></i>Re-analyse
                             </a></li>
                         </ul>
                     </div>

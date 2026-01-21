@@ -1,0 +1,107 @@
+
+
+--- page 1 ---
+Sign in/Log in Page 
+- The design of the page looks great. I’m very happy with it. 
+- Australian English (UK) doesn’t use z in organisation, in most cases we use “s” . Can 
+that be changed.  
+- Cenaris Logo needs to feature in the welcome banner. 
+- Cenaris logo needs to be larger on the top banner (the one in the top left) 
+- Change the button from “get started” to “Sign up” 
+ 
+Create Account 
+- Remove the z in organisation.  
+- If I fill in the data fields, then click “toggle theme” (black/white) – I lose the data in 
+the fields. Can this be changed so that you don’t lose the data.  
+- Continue with Microsoft doesn’t work says “not configured yet” 
+- can we have the mobile number and work phone as a compulsory field.  For “work 
+phone” we can have a tick box “same as mobile” 
+Organisation Setup 
+- Have the following options for “organisation type” 
+o Sole Trader 
+o Company 
+o Not-for-Profit 
+o Partnership 
+o Trust 
+o Government / Public Sector 
+- Payment window we  need to link in with stripe. (We will need to plan how that will 
+work!) 
+- Separate “ABN/ACN”. ABN compulsory, ACN optional    
+ 
+ 
+Dashboard/Homepage 
+- Change the tiles to provide an overview of  
+o Overall readiness (Combined readiness of subscribed frameworks) 
+o Active Deadlines  
+o Uploaded Documents (total uploaded) 
+o Below is an example of something that’d work well!  
+
+--- page 2 ---
+ 
+- Remove Upload Documents 
+o Replace with “compliance readiness” 
+o Have each subscribed Framework and it’s current compliance percentage. 
+ 
+- Keep “recent documents” 
+- Include/insert “upcoming deadlines” 
+o Maybe divide the page into thirds “Compliance Readiness” , “Recent 
+Documents” and “upcoming deadlines” 
+-  
+Evidence Repository 
+- Drag and drop function doesn’t work – fix so users can drag and drop 
+- Add another option “Photos” 
+- Remove “100% secure”  
+- Can we include a search function? And a filter option for each subscribed 
+framework? 
+- Can we view documents within the app? Keeps users in the app without having to 
+download 
+
+
+--- page 3 ---
+- Future state: we can generate an AI summary of the document. Compliance 
+confidence (%) and which standard(s) it is relevant for.  
+- Clicking “upload new” and “Upload your first document” takes me back to the 
+homepage – can we have it directly prompt the file upload?  
+- The formatting is not allowing me to see all the options when I click “actions” . I have 
+to scroll down to view them. Can we fix that we don’t have to scroll.  
+ 
+AI Evidence 
+- Change AI Evidence to “Upload Evidence” 
+- Can we include a safeguard where the individual confirms/rejects the document’s 
+alignment to the framework competcy/section? 
+- It would be cool to have a future version where we can connect to the user’s 
+cloud/file storage and automatically detect and organise their documents for audit.  
+- Analyse has no z  
+- Change “AI Analysed” to “Documents Analysed” 
+- The buttons to upload documents either don’t work, or redirect me to the 
+Dashboard. 
+Compliance Gap Analysis (FEEDBACK FROM 
+MVP) 
+- Love it! 
+Audit Export (FEEDBACK FROM MVP) 
+- Have a button for Audit Pack Report 
+- Need options for various functions 
+o Deadline report 
+o Expired documents 
+o Framework changes (new feature we haven’t discussed) 
+o Document lists by framework etc.  
+- It’d be good to have an ability to “share report” and that can email or invite another 
+user to review.  
+My profile 
+- Should we have a secondary email address (for account security) 
+- Can we collect Phone number (mobile) as a compulsory field and allow it to be 
+changed here. (if numbers changes) 
+
+--- page 4 ---
+Team management 
+- I cant assign myself to a department.  
+Organisation Profile 
+- Nowhere to change billing details 
+- No contact number  
+- ACN needs it’s own box.  
+ 
+Quick add in the corner isn’t working properly with drop downs and the options etc.  
+ 
+We will also need a button to increase/improve subscription – we can talk about this  
+ 
+ 

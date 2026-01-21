@@ -386,7 +386,7 @@
 
         // Role select hover descriptions
         const ROLE_DESCRIPTIONS = {
-          'Organization Admin': 'Full access to organisation settings, users, roles, and documents.',
+          'Organisation Admin': 'Full access to organisation settings, users, roles, and documents.',
           'Compliance Manager': 'Manage documents and export audits; cannot manage org settings/users.',
           'Auditor': 'Read-only access for audits and evidence review.',
           'Member': 'Standard member access (view and upload documents).',
@@ -725,6 +725,81 @@
             });
           });
         });
+
+        // === DEPARTMENT CHANGE (no reload) ===
+        document.addEventListener('DOMContentLoaded', () => {
+          document.querySelectorAll('form.department-change-form').forEach((formEl) => {
+            formEl.addEventListener('submit', (e) => {
+              e.preventDefault();
+
+              const submitBtn = formEl.querySelector('button[type="submit"]');
+              const originalHtml = submitBtn ? submitBtn.innerHTML : null;
+              if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
+              }
+
+              const fd = new FormData(formEl);
+
+              fetch(formEl.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: {
+                  'X-Requested-With': 'fetch',
+                  'Accept': 'application/json',
+                },
+              })
+                .then((r) => r.json().then((j) => ({ ok: r.ok, json: j })))
+                .then(({ ok, json }) => {
+                  if (!ok || !json?.success) {
+                    alert(json?.error || 'Failed to update department');
+                    return;
+                  }
+
+                  const membershipId = String(json.membership_id);
+                  const row = document.querySelector(`tr[data-membership-id="${membershipId}"]`);
+                  const deptCell = row?.querySelector('.member-department-cell');
+                  if (deptCell) {
+                    deptCell.innerHTML = '';
+                    const dept = json.department;
+                    if (dept?.name) {
+                      const color = (dept.color || 'primary').replace(/[^a-z]/g, '') || 'primary';
+                      const badge = document.createElement('span');
+                      badge.className = `badge bg-${color}`;
+                      badge.textContent = dept.name;
+                      deptCell.appendChild(badge);
+                    } else {
+                      const dash = document.createElement('span');
+                      dash.className = 'text-body-secondary';
+                      dash.textContent = '—';
+                      deptCell.appendChild(dash);
+                    }
+                  }
+
+                  const dropdownToggle = row?.querySelector('[data-bs-toggle="dropdown"]');
+                  if (dropdownToggle) {
+                    try {
+                      const dd = bootstrap.Dropdown.getInstance(dropdownToggle) || new bootstrap.Dropdown(dropdownToggle);
+                      dd.hide();
+                    } catch (err) {
+                      // ignore
+                    }
+                  }
+                })
+                .catch((err) => {
+                  console.error('Department update error:', err);
+                  alert('Network error. Please try again.');
+                })
+                .finally(() => {
+                  if (submitBtn) {
+                    submitBtn.disabled = false;
+                    if (originalHtml !== null) submitBtn.innerHTML = originalHtml;
+                  }
+                });
+            });
+          });
+        });
       })();
     </script>
 
@@ -751,7 +826,7 @@
                 {% endif %}
               </td>
               <td class="member-role-cell">{{ m.display_role_name }}</td>
-              <td>
+              <td class="member-department-cell">
                 {% if m.department %}
                   <span class="badge bg-{{ m.department.color }}">{{ m.department.name }}</span>
                 {% else %}
@@ -801,6 +876,29 @@
                       </li>
                       <li><hr class="dropdown-divider" /></li>
                     {% endif %}
+
+                    {% if m.is_active and departments %}
+                      <li class="px-3 py-2" style="min-width: 250px;">
+                        <div class="text-body-secondary small mb-2 fw-semibold">Change department</div>
+                        <form method="post" action="{{ url_for('main.org_admin_update_member_department') }}" class="department-change-form">
+                          {{ update_department_form.csrf_token }}
+                          <input type="hidden" name="membership_id" value="{{ m.id }}" />
+                          <div class="mb-2">
+                            <select name="department_id" class="form-select form-select-sm">
+                              <option value="" {% if not m.department_id %}selected{% endif %}>Unassigned</option>
+                              {% for d in departments %}
+                                <option value="{{ d.id }}" {% if m.department_id and (d.id == m.department_id) %}selected{% endif %}>{{ d.name }}</option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                          <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-check2 me-1"></i>Update Department
+                          </button>
+                        </form>
+                      </li>
+                      <li><hr class="dropdown-divider" /></li>
+                    {% endif %}
+
                     {% if m.id in _pending_ids %}
                       <li>
                         <form method="post" action="{{ url_for('main.org_admin_resend_invite') }}" class="d-inline">

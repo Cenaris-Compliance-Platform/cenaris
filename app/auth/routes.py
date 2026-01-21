@@ -588,10 +588,12 @@ def signup():
 
         org_name = form.organization_name.data.strip()
         abn = (form.abn.data or '').strip()
+        acn = (form.acn.data or '').strip() or None
         first_name = (form.first_name.data or '').strip()
         last_name = (form.last_name.data or '').strip()
         title = (form.title.data or '').strip()
         mobile_number = (form.mobile_number.data or '').strip() or None
+        work_phone = (form.work_phone.data or '').strip() or None
         time_zone = (form.time_zone.data or '').strip() or 'Australia/Sydney'
         email = form.email.data.lower().strip()
         password = form.password.data
@@ -600,6 +602,7 @@ def signup():
             organization = Organization(
                 name=org_name,
                 abn=abn,
+                acn=acn,
                 contact_email=email,
             )
             db.session.add(organization)
@@ -633,6 +636,7 @@ def signup():
                 last_name=last_name,
                 title=title,
                 mobile_number=mobile_number,
+                work_phone=work_phone,
                 time_zone=time_zone,
                 full_name=(f"{first_name} {last_name}").strip(),
                 organization_id=organization.id,

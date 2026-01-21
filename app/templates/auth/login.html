@@ -39,12 +39,28 @@
 
                             <!-- SSO Buttons -->
                             <div class="d-grid gap-2 mb-4">
-                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='google') }}">
-                                    <i class="bi bi-google me-2"></i>Continue with Google
-                                </a>
-                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='microsoft') }}">
-                                    <i class="bi bi-microsoft me-2"></i>Continue with Microsoft
-                                </a>
+                                                                {% set google_configured = config.get('GOOGLE_CLIENT_ID') and config.get('GOOGLE_CLIENT_SECRET') %}
+                                                                {% set microsoft_configured = config.get('MICROSOFT_CLIENT_ID') and config.get('MICROSOFT_CLIENT_SECRET') %}
+
+                                                                {% if google_configured %}
+                                                                    <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='google') }}">
+                                                                            <i class="bi bi-google me-2"></i>Continue with Google
+                                                                    </a>
+                                                                {% else %}
+                                                                    <a class="btn btn-outline-primary btn-lg disabled" href="#" tabindex="-1" aria-disabled="true" title="Google sign-in is not configured yet.">
+                                                                            <i class="bi bi-google me-2"></i>Continue with Google <span class="badge bg-body-tertiary text-body border ms-2">Not configured</span>
+                                                                    </a>
+                                                                {% endif %}
+
+                                                                {% if microsoft_configured %}
+                                                                    <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='microsoft') }}">
+                                                                            <i class="bi bi-microsoft me-2"></i>Continue with Microsoft
+                                                                    </a>
+                                                                {% else %}
+                                                                    <a class="btn btn-outline-primary btn-lg disabled" href="#" tabindex="-1" aria-disabled="true" title="Microsoft sign-in is not configured yet.">
+                                                                            <i class="bi bi-microsoft me-2"></i>Continue with Microsoft <span class="badge bg-body-tertiary text-body border ms-2">Not configured</span>
+                                                                    </a>
+                                                                {% endif %}
                             </div>
 
                             <div class="text-center mb-4">
@@ -158,8 +174,30 @@
             firstInput.focus();
         }
 
-        const forgotLink = document.getElementById('forgot-password-link');
+        // Preserve email across reloads (e.g., theme toggle)
+        const formEl = document.querySelector('form[method="POST"]');
         const emailInput = document.querySelector('input[type="email"]');
+        if (formEl && emailInput && window.sessionStorage) {
+            const STORAGE_KEY = 'loginFormDraft_v1';
+
+            try {
+                const raw = sessionStorage.getItem(STORAGE_KEY);
+                const saved = raw ? JSON.parse(raw) : null;
+                if (saved && typeof saved.email === 'string' && !(emailInput.value || '').trim()) {
+                    emailInput.value = saved.email;
+                }
+            } catch (e) { /* ignore */ }
+
+            const persist = () => {
+                try {
+                    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ email: emailInput.value }));
+                } catch (e) { /* ignore */ }
+            };
+            emailInput.addEventListener('input', persist);
+            emailInput.addEventListener('change', persist);
+        }
+
+        const forgotLink = document.getElementById('forgot-password-link');
         if (forgotLink && emailInput) {
             const baseHref = forgotLink.getAttribute('href');
             const updateHref = () => {

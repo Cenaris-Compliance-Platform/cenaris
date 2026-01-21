@@ -9,7 +9,7 @@ from app.models import OrganizationMembership
 
 @dataclass(frozen=True)
 class BuiltinRoleKeys:
-    ORG_ADMIN: str = 'Organization Admin'
+    ORG_ADMIN: str = 'Organisation Admin'
     COMPLIANCE_MANAGER: str = 'Compliance Manager'
     AUDITOR: str = 'Auditor'
     MEMBER: str = 'Member'

@@ -48,8 +48,19 @@
                 {{ profile_form.abn() }}
               </div>
               <div class="col-md-6 mb-3">
+                {{ profile_form.acn.label(class="form-label") }}
+                {{ profile_form.acn() }}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
                 {{ profile_form.contact_email.label(class="form-label") }}
                 {{ profile_form.contact_email() }}
+              </div>
+              <div class="col-md-6 mb-3">
+                {{ profile_form.contact_number.label(class="form-label") }}
+                {{ profile_form.contact_number() }}
               </div>
             </div>
 

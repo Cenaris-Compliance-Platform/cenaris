@@ -162,6 +162,7 @@ def organization():
         form.organization_name.data = organization.name
         form.trading_name.data = getattr(organization, 'trading_name', None)
         form.abn.data = organization.abn
+        form.acn.data = getattr(organization, 'acn', None)
         form.organization_type.data = getattr(organization, 'organization_type', '') or ''
         form.contact_email.data = organization.contact_email or (current_user.email or '').strip().lower()
         form.address.data = organization.address
@@ -182,6 +183,7 @@ def organization():
             organization.name = form.organization_name.data.strip()
             organization.trading_name = (form.trading_name.data or '').strip() or None
             organization.abn = (form.abn.data or '').strip() or None
+            organization.acn = (form.acn.data or '').strip() or None
             organization.organization_type = (form.organization_type.data or '').strip() or None
             organization.industry = (form.industry.data or '').strip() or None
             organization.address = (form.address.data or '').strip() or None

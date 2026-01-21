@@ -39,12 +39,28 @@
 
                             <!-- SSO Buttons -->
                             <div class="d-grid gap-2 mb-4">
-                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='google') }}">
-                                    <i class="bi bi-google me-2"></i>Continue with Google
-                                </a>
-                                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='microsoft') }}">
-                                    <i class="bi bi-microsoft me-2"></i>Continue with Microsoft
-                                </a>
+                                                                {% set google_configured = config.get('GOOGLE_CLIENT_ID') and config.get('GOOGLE_CLIENT_SECRET') %}
+                                                                {% set microsoft_configured = config.get('MICROSOFT_CLIENT_ID') and config.get('MICROSOFT_CLIENT_SECRET') %}
+
+                                                                {% if google_configured %}
+                                                                    <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='google', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='google') }}">
+                                                                            <i class="bi bi-google me-2"></i>Continue with Google
+                                                                    </a>
+                                                                {% else %}
+                                                                    <a class="btn btn-outline-primary btn-lg disabled" href="#" tabindex="-1" aria-disabled="true" title="Google sign-in is not configured yet.">
+                                                                            <i class="bi bi-google me-2"></i>Continue with Google <span class="badge bg-body-tertiary text-body border ms-2">Not configured</span>
+                                                                    </a>
+                                                                {% endif %}
+
+                                                                {% if microsoft_configured %}
+                                                                    <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.oauth_login', provider='microsoft', force_logout=request.args.get('force_logout')) if request.args.get('force_logout') else url_for('auth.oauth_login', provider='microsoft') }}">
+                                                                            <i class="bi bi-microsoft me-2"></i>Continue with Microsoft
+                                                                    </a>
+                                                                {% else %}
+                                                                    <a class="btn btn-outline-primary btn-lg disabled" href="#" tabindex="-1" aria-disabled="true" title="Microsoft sign-in is not configured yet.">
+                                                                            <i class="bi bi-microsoft me-2"></i>Continue with Microsoft <span class="badge bg-body-tertiary text-body border ms-2">Not configured</span>
+                                                                    </a>
+                                                                {% endif %}
                             </div>
 
                             <div class="text-center mb-4">
@@ -70,18 +86,33 @@
                                 {% endif %}
                             </div>
 
-                            <div class="mb-3">
-                                {{ form.abn.label(class="form-label") }}
-                                {{ form.abn() }}
-                                {% if form.abn.errors %}
-                                    <div class="invalid-feedback d-block">
-                                        {% for error in form.abn.errors %}
-                                            <small class="text-danger">
-                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
-                                            </small>
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form.abn.label(class="form-label") }}
+                                    {{ form.abn() }}
+                                    {% if form.abn.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.abn.errors %}
+                                                <small class="text-danger">
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                </small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form.acn.label(class="form-label") }}
+                                    {{ form.acn() }}
+                                    {% if form.acn.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.acn.errors %}
+                                                <small class="text-danger">
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                </small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
                             </div>
 
                             <div class="row">
@@ -149,6 +180,31 @@
                                     {% if form.mobile_number.errors %}
                                         <div class="invalid-feedback d-block">
                                             {% for error in form.mobile_number.errors %}
+                                                <small class="text-danger">
+                                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                                </small>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form.work_phone.label(class="form-label") }}
+                                    <div class="mb-2">
+                                        <div class="form-check">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input"
+                                                id="sameAsMobile"
+                                            />
+                                            <label class="form-check-label small text-body-secondary" for="sameAsMobile">
+                                                Same as mobile
+                                            </label>
+                                        </div>
+                                    </div>
+                                    {{ form.work_phone() }}
+                                    {% if form.work_phone.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.work_phone.errors %}
                                                 <small class="text-danger">
                                                     <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
                                                 </small>
@@ -358,6 +414,72 @@
             passwordField.addEventListener('input', function() {
                 checkPasswordStrength(this.value);
             });
+        }
+
+        // "Same as mobile" checkbox handler
+        const mobileField = document.getElementById('mobile_number');
+        const workPhoneField = document.getElementById('work_phone');
+        const sameAsMobileCheckbox = document.getElementById('sameAsMobile');
+
+        if (sameAsMobileCheckbox && mobileField && workPhoneField) {
+            sameAsMobileCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    workPhoneField.value = mobileField.value;
+                    workPhoneField.disabled = true;
+                } else {
+                    workPhoneField.disabled = false;
+                }
+            });
+
+            mobileField.addEventListener('input', function() {
+                if (sameAsMobileCheckbox.checked) {
+                    workPhoneField.value = this.value;
+                }
+            });
+        }
+
+        // Preserve form fields across reloads (e.g., theme toggle)
+        const formEl = document.querySelector('form[method="POST"]');
+        if (formEl && window.sessionStorage) {
+            const STORAGE_KEY = 'signupFormDraft_v1';
+
+            // Restore (only fill empty fields so we don't override server-rendered values)
+            try {
+                const raw = sessionStorage.getItem(STORAGE_KEY);
+                const saved = raw ? JSON.parse(raw) : null;
+                if (saved && typeof saved === 'object') {
+                    formEl.querySelectorAll('input, select, textarea').forEach((el) => {
+                        const name = el.getAttribute('name');
+                        if (!name || name === 'csrf_token') return;
+                        if (el.type === 'password') return;
+                        if (el.type === 'checkbox' || el.type === 'radio') return;
+
+                        const currentValue = (el.value || '').trim();
+                        if (currentValue) return;
+
+                        const nextValue = saved[name];
+                        if (typeof nextValue === 'string' && nextValue) {
+                            el.value = nextValue;
+                        }
+                    });
+                }
+            } catch (e) { /* ignore */ }
+
+            // Save on input
+            const persist = () => {
+                const data = {};
+                formEl.querySelectorAll('input, select, textarea').forEach((el) => {
+                    const name = el.getAttribute('name');
+                    if (!name || name === 'csrf_token') return;
+                    if (el.type === 'password') return;
+                    if (el.type === 'checkbox' || el.type === 'radio') return;
+                    data[name] = el.value;
+                });
+                try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
+            };
+
+            formEl.addEventListener('input', persist);
+            formEl.addEventListener('change', persist);
         }
     });
 </script>

@@ -25,6 +25,24 @@ class OrganizationProfileSettingsForm(FlaskForm):
         },
     )
 
+    acn = StringField(
+        'ACN',
+        validators=[Optional(), Length(max=20)],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'placeholder': 'ACN (optional)'
+        },
+    )
+
+    contact_number = StringField(
+        'Contact Number',
+        validators=[Optional(), Length(max=40)],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'placeholder': 'Contact number (optional)'
+        },
+    )
+
     address = StringField(
         'Address',
         validators=[Optional(), Length(max=255)],
@@ -243,6 +261,22 @@ class UpdateMemberRoleForm(FlaskForm):
 
     submit = SubmitField(
         'Update role',
+        render_kw={'class': 'btn btn-sm btn-primary'},
+    )
+
+
+class UpdateMemberDepartmentForm(FlaskForm):
+    membership_id = HiddenField(validators=[DataRequired()])
+    department_id = SelectField(
+        'Department',
+        choices=[('', 'Unassigned')],
+        validators=[Optional()],
+        render_kw={'class': 'form-select form-select-sm'},
+        default='',
+    )
+
+    submit = SubmitField(
+        'Update department',
         render_kw={'class': 'btn btn-sm btn-primary'},
     )
 
