@@ -18,9 +18,37 @@ import json
 
 _RESEND_ORG_INVITE_COOLDOWN_SECONDS = 60 * 5
 
+_ORG_INVITE_TOKEN_SALT = 'org-invite'
+
 
 _ORG_LOGO_CACHE: dict[tuple[int, str], tuple[float, bytes, str | None]] = {}
 _ORG_LOGO_CACHE_LOCK = threading.Lock()
+
+
+def _safe_int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name) or default)
+    except Exception:
+        return default
+
+
+def _org_invite_token_ttl_seconds() -> int:
+    # Keep in sync with auth.routes._org_invite_token_ttl_seconds
+    return max(60, _safe_int_env('ORG_INVITE_TOKEN_TTL_SECONDS', 60 * 60 * 24))
+
+
+def _format_duration_seconds(seconds: int) -> str:
+    seconds = int(seconds or 0)
+    if seconds <= 0:
+        return 'a short time'
+    if seconds % (60 * 60 * 24) == 0:
+        days = seconds // (60 * 60 * 24)
+        return f'{days} day' if days == 1 else f'{days} days'
+    if seconds % (60 * 60) == 0:
+        hours = seconds // (60 * 60)
+        return f'{hours} hour' if hours == 1 else f'{hours} hours'
+    minutes = max(1, seconds // 60)
+    return f'{minutes} minute' if minutes == 1 else f'{minutes} minutes'
 
 
 def _etag_matches_if_none_match(if_none_match: str | None, etag: str) -> bool:
@@ -204,6 +232,11 @@ def _password_reset_token(user: User) -> str:
     return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt='password-reset')
 
 
+def _org_invite_token(user: User) -> str:
+    # Must match the implementation in auth/routes.py
+    return _serializer().dumps({'user_id': user.id, 'email': user.email}, salt=_ORG_INVITE_TOKEN_SALT)
+
+
 def _send_invite_email(user: User, reset_url: str, organization: Organization) -> None:
     if not _mail_configured():
         current_app.logger.warning('MAIL not configured; invite reset URL: %s', reset_url)
@@ -213,6 +246,7 @@ def _send_invite_email(user: User, reset_url: str, organization: Organization) -
     body = (
         f"You've been invited to join {organization.name} on Cenaris.\n\n"
         f"Set your password here: {reset_url}\n\n"
+        f"This link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.\n\n"
         "If you weren't expecting this invite, you can ignore this email."
     )
     try:
@@ -418,6 +452,7 @@ def org_admin_dashboard():
         can_current_user_leave_org=can_current_user_leave_org,
         user_count=user_count,
         document_count=document_count,
+        invite_expires_in=_format_duration_seconds(_org_invite_token_ttl_seconds()),
         invite_form=invite_form,
         member_action_form=member_action_form,
         update_role_form=update_role_form,
@@ -760,7 +795,7 @@ def org_admin_invite_member():
     # For users with existing password, they can use their existing password to login
     email_sent = False
     try:
-        token = _password_reset_token(user)
+        token = _org_invite_token(user)
         reset_url = url_for('auth.reset_password', token=token, _external=True)
         _send_invite_email(user, reset_url, organization)
         email_sent = True
@@ -770,12 +805,18 @@ def org_admin_invite_member():
 
     if created_user:
         if email_sent:
-            flash(f'Invitation sent to {email}! They will receive an email to set their password and join.', 'success')
+            flash(
+                f'Invitation sent to {email}! The link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.',
+                'success',
+            )
         else:
             flash(f'User created but email not configured. Share this invite link manually with {email}.', 'warning')
     else:
         if email_sent:
-            flash(f'User re-invited to the organization. Invitation email sent to {email}.', 'success')
+            flash(
+                f'User re-invited. The link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.',
+                'success',
+            )
         else:
             flash('User added to the organisation.', 'success')
     return redirect(url_for('main.org_admin_dashboard'))
@@ -1002,13 +1043,13 @@ def org_admin_resend_invite():
         return redirect(url_for('main.org_admin_dashboard'))
 
     try:
-        token = _password_reset_token(user)
+        token = _org_invite_token(user)
         reset_url = url_for('auth.reset_password', token=token, _external=True)
         _send_invite_email(user, reset_url, organization)
     except Exception:
         current_app.logger.exception('Failed to send invite email')
 
-    flash('Invite resent (or logged if mail not configured).', 'success')
+    flash(f'Invite resent. The link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.', 'success')
     return redirect(url_for('main.org_admin_dashboard'))
 
 

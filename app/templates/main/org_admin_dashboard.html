@@ -150,6 +150,7 @@
         <div class="col-12 col-md-4">
           <label class="form-label mb-1">Email</label>
           {{ invite_form.email() }}
+          <div class="form-text">Invitation link expires in {{ invite_expires_in }}.</div>
           {% if invite_form.email.errors %}
           <div class="text-danger small mt-1">{{ invite_form.email.errors[0] }}</div>
           {% endif %}

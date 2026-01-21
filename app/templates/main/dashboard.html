@@ -1,4 +1,28 @@
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+  /* Upload drop-zone: theme-aware (light/dark) */
+  #dropZone.upload-dropzone {
+    border: 2px dashed var(--bs-border-color);
+    background-color: var(--bs-tertiary-bg);
+    transition: border-color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+    cursor: pointer;
+  }
+
+  #dropZone.upload-dropzone.dropzone-active {
+    border-color: var(--bs-primary);
+    background-color: rgba(var(--bs-primary-rgb), 0.08);
+  }
+
+  #dropZone .upload-file-pill {
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
 <div class="fade-in">
   <!-- Welcome Header -->
   <div class="row mb-4">
@@ -157,7 +181,7 @@
               />
 
               <!-- Drag and Drop Zone -->
-              <div id="dropZone" class="mb-4 p-5 border-2 border-dashed rounded" style="border-color: #dee2e6; background-color: #f8f9fa; transition: all 0.3s; cursor: pointer;">
+              <div id="dropZone" class="upload-dropzone mb-4 p-5 rounded">
                 <div class="text-center">
                   <i class="bi bi-cloud-arrow-up text-primary mb-3" style="font-size: 3rem; opacity: 0.6;"></i>
                   <p class="fw-semibold mb-2">Drag & Drop your file here</p>
@@ -489,13 +513,11 @@
   });
 
   function highlight() {
-    dropZone.style.borderColor = '#0d6efd';
-    dropZone.style.backgroundColor = '#e7f1ff';
+    dropZone.classList.add('dropzone-active');
   }
 
   function unhighlight() {
-    dropZone.style.borderColor = '#dee2e6';
-    dropZone.style.backgroundColor = '#f8f9fa';
+    dropZone.classList.remove('dropzone-active');
   }
 
   // Handle dropped files
@@ -552,6 +574,16 @@
 
     // Display the file
     displayFileList([file]);
+
+    // IMPORTANT: If the file came from drag & drop, it won't automatically populate the
+    // hidden <input type="file">. Without this, the form submits with no file.
+    try {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      fileInput.files = dataTransfer.files;
+    } catch (err) {
+      console.warn('Could not set file input from dropped file:', err);
+    }
     
     // Enable upload button
     console.log('Enabling upload button for file:', file.name);
@@ -596,12 +628,12 @@
     const sizeKB = (file.size / 1024).toFixed(1);
     const html = `
       <div class="text-start">
-        <div class="d-flex align-items-center justify-content-between mb-2 p-2 bg-white rounded border">
+        <div class="upload-file-pill d-flex align-items-center justify-content-between mb-2 p-2 rounded">
           <div class="d-flex align-items-center">
             <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
             <div>
               <div class="small fw-medium">${escapeHtml(file.name)}</div>
-              <div class="text-muted" style="font-size: 0.75rem;">${sizeKB} KB</div>
+              <div class="text-body-secondary" style="font-size: 0.75rem;">${sizeKB} KB</div>
             </div>
           </div>
           <i class="bi bi-check-circle-fill text-success"></i>
