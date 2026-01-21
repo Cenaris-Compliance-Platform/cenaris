@@ -2039,6 +2039,7 @@ def help():
 def profile():
     """User profile route."""
     from app.main.forms import UserProfileForm
+    from app.models import Department
 
     form = UserProfileForm(obj=current_user)
 
@@ -2060,7 +2061,105 @@ def profile():
             flash('Profile update failed. Please try again.', 'error')
             current_app.logger.error(f"Profile update failed for user {current_user.id}: {e}")
 
-    return render_template('main/profile.html', title='My Profile', form=form)
+    # Get current membership and departments for self-assignment
+    current_membership = None
+    departments = []
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        current_membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+            .first()
+        )
+        departments = (
+            Department.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(Department.name.asc())
+            .all()
+        )
+
+    # Get current membership and departments for self-assignment
+    current_membership = None
+    departments = []
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        current_membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+            .first()
+        )
+        departments = (
+            Department.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(Department.name.asc())
+            .all()
+        )
+
+    return render_template(
+        'main/profile.html',
+        title='My Profile',
+        form=form,
+        current_membership=current_membership,
+        departments=departments
+    )
+
+
+@bp.route('/profile/department', methods=['POST'])
+@login_required
+def profile_update_department():
+    """Allow user to assign themselves to a department."""
+    from app.models import Department
+
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        flash('No organisation associated with your account.', 'error')
+        return redirect(url_for('main.profile'))
+
+    membership = (
+        OrganizationMembership.query
+        .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+        .first()
+    )
+    if not membership:
+        flash('Membership not found.', 'error')
+        return redirect(url_for('main.profile'))
+
+    dept_id_str = (request.form.get('department_id') or '').strip()
+    
+    if not dept_id_str:
+        # Unassign department
+        membership.department_id = None
+        try:
+            db.session.commit()
+            flash('Department unassigned.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash('Failed to update department.', 'error')
+            current_app.logger.error(f"Failed to unassign department for user {current_user.id}: {e}")
+        return redirect(url_for('main.profile'))
+
+    try:
+        dept_id = int(dept_id_str)
+    except ValueError:
+        flash('Invalid department selected.', 'error')
+        return redirect(url_for('main.profile'))
+
+    # Verify department belongs to the same organization
+    department = db.session.get(Department, dept_id)
+    if not department or department.organization_id != int(org_id):
+        flash('Invalid department selected.', 'error')
+        return redirect(url_for('main.profile'))
+
+    membership.department_id = dept_id
+    try:
+        db.session.commit()
+        flash(f'Department updated to "{department.name}".', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Failed to update department.', 'error')
+        current_app.logger.error(f"Failed to update department for user {current_user.id}: {e}")
+
+    return redirect(url_for('main.profile'))
 
 
 @bp.route('/profile/avatar')

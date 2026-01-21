@@ -115,9 +115,9 @@
                             <button class="btn btn-sm btn-outline-secondary" onclick="toggleView()">
                                 <i class="bi bi-grid-3x3-gap" id="viewToggleIcon"></i>
                             </button>
-                            <a class="btn btn-sm btn-primary" href="{{ url_for('main.dashboard', _anchor='upload-documents', open_upload=1) }}">
+                            <button class="btn btn-sm btn-primary" onclick="document.getElementById('quickUploadInput').click()">
                                 <i class="bi bi-plus-lg me-1"></i>Upload New
-                            </a>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -275,6 +275,13 @@
         </div>
     </div>
 </div>
+
+<!-- Hidden Upload Form -->
+<form id="quickUploadForm" action="{{ url_for('upload.upload_file') }}" method="post" enctype="multipart/form-data" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <input type="file" id="quickUploadInput" name="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onchange="if(this.files.length > 0) document.getElementById('quickUploadForm').submit();" />
+</form>
+
 {% endblock %}
 
 {% block extra_js %}

@@ -93,7 +93,29 @@
             </div>
           </form>
 
-          <div class="form-check">
+          {% if current_membership and departments %}
+          <hr class="my-4" />
+
+          <h6 class="fw-semibold mb-3"><i class="bi bi-diagram-3 me-2 text-primary"></i>Department</h6>
+          <form method="post" action="{{ url_for('main.profile_update_department') }}" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <div class="mb-3">
+              <label class="form-label">My Department</label>
+              <select name="department_id" class="form-select form-select-lg">
+                <option value="">No department assigned</option>
+                {% for dept in departments %}
+                  <option value="{{ dept.id }}" {% if current_membership.department_id == dept.id %}selected{% endif %}>
+                    {{ dept.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Select the department you belong to in your organisation.</div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg">Update Department</button>
+          </form>
+          {% endif %}
+
+          <hr class="my-4" />
             <input class="form-check-input" type="checkbox" value="1" id="toggleProfilePhoto" checked>
             <label class="form-check-label" for="toggleProfilePhoto">
               Show my Google profile photo on this page

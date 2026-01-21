@@ -59,6 +59,9 @@ def get_versioned_filename(original_filename, organization_id):
 def upload_file():
     """Handle file upload to Azure Blob Storage."""
     try:
+        # Remember where user came from to redirect back after upload
+        referrer = request.referrer or url_for('main.dashboard')
+        
         org_id = getattr(current_user, 'organization_id', None)
         if not org_id:
             flash('Please select an organisation before uploading.', 'info')
@@ -66,7 +69,7 @@ def upload_file():
 
         if not current_user.has_permission('documents.upload', org_id=int(org_id)):
             flash('You do not have permission to upload documents.', 'error')
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
 
         membership = (
             OrganizationMembership.query
@@ -90,21 +93,21 @@ def upload_file():
         # Check if file is present in request
         if 'file' not in request.files:
             flash('No file selected. Please choose a file to upload.', 'error')
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         file = request.files['file']
         
         # Check if file was actually selected
         if file.filename == '':
             flash('No file selected. Please choose a file to upload.', 'error')
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         # Validate the file
         validation_result = FileValidationService.validate_file(file.stream, file.filename)
         
         if not validation_result['success']:
             flash(f"File validation failed: {validation_result['error']}", 'error')
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         # Check for duplicate filename and generate versioned name if needed
         versioned_filename = get_versioned_filename(validation_result['original_filename'], int(org_id))
@@ -115,7 +118,7 @@ def upload_file():
         if not storage_service.is_configured():
             flash('File upload is currently unavailable. Azure Storage is not configured.', 'error')
             logger.error("Azure Storage not configured for file upload")
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         # Generate unique file path for ADLS
         file_path = storage_service.generate_blob_name(
@@ -146,7 +149,7 @@ def upload_file():
         if not upload_result['success']:
             flash(f"Upload failed: {upload_result['error']}", 'error')
             logger.error(f"Azure upload failed for user {current_user.id}: {upload_result['error']}")
-            return redirect(url_for('main.dashboard'))
+            return redirect(referrer)
         
         # Save document metadata to database
         try:
@@ -184,12 +187,12 @@ def upload_file():
             flash('Upload failed: Database error occurred.', 'error')
             logger.error(f"Database error during file upload: {e}")
         
-        return redirect(url_for('main.dashboard'))
+        return redirect(referrer)
     
     except Exception as e:
         flash('An unexpected error occurred during upload. Please try again.', 'error')
         logger.error(f"Unexpected error in file upload: {e}")
-        return redirect(url_for('main.dashboard'))
+        return redirect(referrer if 'referrer' in locals() else url_for('main.dashboard'))
 
 @bp.route('/upload/validate', methods=['POST'])
 @login_required
