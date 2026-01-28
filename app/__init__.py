@@ -204,6 +204,10 @@ def create_app(config_name=None):
     # Initialize database extensions
     db.init_app(app)
     migrate.init_app(app, db)
+    
+    # Initialize logging system (Milestone 2)
+    from app.services.logging_service import app_logger
+    app_logger.init_app(app)
 
     # ---- Optional SQL performance instrumentation ----
     # This is extremely useful for diagnosing 2-3s page loads (DB vs template vs network).

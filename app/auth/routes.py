@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import User, Organization, OrganizationMembership, LoginEvent, SuspiciousIP
 from app import db, oauth, mail, limiter
+from app.services.logging_service import log_security_event
 
 
 _RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS = 60
@@ -532,6 +533,10 @@ def login():
                 pass
             _clear_ip_failures_on_success(now)
             _log_login_event(email=email, user=user, provider='password', success=True)
+            
+            # Log security event
+            log_security_event('LOGIN_SUCCESS', details={'email': email, 'provider': 'password'})
+            
             flash('Welcome back! You have been successfully signed in.', 'success')
             
             # Redirect to next page or dashboard
@@ -1297,6 +1302,9 @@ def verify_email_status():
 def logout():
     """User logout route."""
     if current_user.is_authenticated:
+        # Log security event before logout
+        log_security_event('LOGOUT', details={'email': current_user.email})
+        
         logout_user()
         session.clear()
         flash('You have been successfully signed out.', 'info')

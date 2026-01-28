@@ -2488,3 +2488,84 @@ def generate_report(report_type):
         import traceback
         traceback.print_exc()
         return f"Error generating report: {str(e)}", 500
+
+
+@bp.route('/system-logs')
+@login_required
+def system_logs():
+    """System logs viewing interface (organization admin only)."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    
+    # Check if user is admin or has org.settings permission
+    from app.models import OrganizationMembership
+    org_member = OrganizationMembership.query.filter_by(
+        user_id=current_user.id,
+        organization_id=org_id
+    ).first()
+    
+    # Allow if user is org admin or has explicit org.settings permission
+    if not (org_member and (org_member.role == 'Admin' or current_user.has_permission('org.settings', org_id=int(org_id)))):
+        flash('You must be an organization administrator to view system logs.', 'error')
+        return redirect(url_for('main.dashboard'))
+    
+    # Get filter parameters
+    log_type = request.args.get('log_type', 'all')
+    event_type = request.args.get('event_type', '')
+    time_range = request.args.get('time_range', '24h')
+    user_id_filter = request.args.get('user_id', '')
+    
+    # Parse time range
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    time_ranges = {
+        '1h': timedelta(hours=1),
+        '24h': timedelta(hours=24),
+        '7d': timedelta(days=7),
+        '30d': timedelta(days=30),
+    }
+    time_delta = time_ranges.get(time_range, timedelta(hours=24))
+    start_time = now - time_delta
+    
+    # Mock log data (in production, this would query Application Insights or a log database)
+    # For now, we'll show a placeholder interface
+    logs = []
+    
+    # Example log entries (replace with real data from Application Insights)
+    if log_type in ['all', 'security']:
+        logs.append({
+            'timestamp': now.strftime('%Y-%m-%d %H:%M:%S'),
+            'log_type': 'security',
+            'event_type': 'LOGIN_SUCCESS',
+            'event_description': 'User logged in successfully',
+            'user_id': current_user.id,
+            'user_name': current_user.display_name(),
+            'user_email': current_user.email,
+            'organization_id': org_id,
+            'ip_address': request.remote_addr,
+            'details': {'email': current_user.email, 'provider': 'password', 'session': 'active'}
+        })
+    
+    # Statistics
+    total_logs = len(logs)
+    security_events = len([l for l in logs if l['log_type'] == 'security'])
+    error_count = len([l for l in logs if l['log_type'] == 'error'])
+    failed_logins = 0  # Count from logs
+    
+    appinsights_enabled = current_app.config.get('APPINSIGHTS_ENABLED', False)
+    
+    return render_template('main/system_logs.html',
+                         title='System Logs',
+                         logs=logs,
+                         log_type=log_type,
+                         event_type=event_type,
+                         time_range=time_range,
+                         user_id=user_id_filter,
+                         total_logs=total_logs,
+                         security_events=security_events,
+                         error_count=error_count,
+                         failed_logins=failed_logins,
+                         appinsights_enabled=appinsights_enabled)

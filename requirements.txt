@@ -40,3 +40,7 @@ psycopg2-binary==2.9.11
 # PDF Report Generation
 reportlab==4.4.4
 pillow>=10.0.0
+
+# Azure Application Insights (Milestone 2: System Logging)
+# Using Azure Monitor Exporter directly (Python 3.13 compatible)
+azure-monitor-opentelemetry-exporter==1.0.0b28
