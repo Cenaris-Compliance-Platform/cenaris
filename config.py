@@ -106,6 +106,10 @@ class Config:
     LOG_SECURITY_EVENTS = True   # Always log security events
     LOG_ACCESS_EVENTS = True     # Re-enabled with OpenTelemetry SDK (Python 3.13 compatible)
     
+    # Alert Configuration (Free code-based alerts - Milestone 2)
+    ALERTS_ENABLED = (os.environ.get('ALERTS_ENABLED') or 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
+    ALERT_EMAILS = os.environ.get('ALERT_EMAILS') or ''  # Comma-separated list of emails
+    
     @staticmethod
     def init_app(app):
         pass

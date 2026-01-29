@@ -208,6 +208,14 @@ def create_app(config_name=None):
     # Initialize logging system (Milestone 2)
     from app.services.logging_service import app_logger
     app_logger.init_app(app)
+    
+    # Initialize enhanced monitoring service (System Monitoring)
+    from app.services.monitoring_service import monitoring_service
+    monitoring_service.init_app(app)
+    
+    # Initialize alert service (Free code-based alerts)
+    from app.services.alert_service import alert_service
+    alert_service.init_app(app, mail)
 
     # ---- Optional SQL performance instrumentation ----
     # This is extremely useful for diagnosing 2-3s page loads (DB vs template vs network).

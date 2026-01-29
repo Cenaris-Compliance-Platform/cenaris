@@ -44,3 +44,9 @@ pillow>=10.0.0
 # Azure Application Insights (Milestone 2: System Logging)
 # Using Azure Monitor Exporter directly (Python 3.13 compatible)
 azure-monitor-opentelemetry-exporter==1.0.0b28
+opentelemetry-api==1.28.2
+opentelemetry-sdk==1.28.2
+opentelemetry-instrumentation-flask==0.49b2
+opentelemetry-instrumentation-requests==0.49b2
+opentelemetry-instrumentation-sqlalchemy==0.49b2
+psutil>=5.9,<6.0  # For system metrics (CPU, memory, disk) - compatible with Azure Monitor

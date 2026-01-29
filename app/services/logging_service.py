@@ -310,8 +310,29 @@ class ErrorLogger:
                 error_data['context'] = context
             
             self.logger.error(json.dumps(error_data), exc_info=isinstance(error, Exception))
+            
+            # Send alert for critical errors (database, service failures, etc.)
+            if self._is_critical_error(error):
+                try:
+                    from app.services.alert_service import alert_critical_error
+                    alert_critical_error(error, error_data)
+                except Exception as alert_error:
+                    # Don't let alert failures break error logging
+                    print(f"[WARNING] Failed to send error alert: {alert_error}")
+                    
         except Exception as e:
             print(f"[ERROR] Failed to log error: {str(e)}")
+    
+    def _is_critical_error(self, error):
+        """Determine if error is critical enough for immediate alert"""
+        critical_errors = [
+            'OperationalError',      # Database errors
+            'ConnectionError',       # Network/service connectivity
+            'TimeoutError',          # Service timeouts
+            'MemoryError',          # Out of memory
+            'SystemError',          # System-level errors
+        ]
+        return type(error).__name__ in critical_errors
 
 
 class ApplicationLogger:
