@@ -1,0 +1,31 @@
+[flake8]
+# Exclude backup files and common directories
+exclude =
+    *_backup.py
+    __pycache__
+    .git
+    .pytest_cache
+    .venv
+    venv
+    env
+    migrations/versions
+    instance
+    backups
+    *.pyc
+    .env
+    node_modules
+
+# Max line length
+max-line-length = 120
+
+# Ignore specific error codes if needed
+ignore =
+    E203,  # whitespace before ':'
+    W503,  # line break before binary operator (deprecated)
+    E501   # line too long (we set max-line-length instead)
+
+# Show source code for errors
+show-source = True
+
+# Count errors
+count = True
