@@ -272,8 +272,20 @@ class MonitoringService:
                         span.record_exception(error)
                 except Exception:
                     pass
-            
-            # Re-raise the exception for Flask's default error handling
+
+            # IMPORTANT:
+            # Do not re-raise HTTP exceptions (404/429/400/etc). Flask can convert them
+            # into proper responses, and tests expect `client.get/post` to return a Response.
+            try:
+                from werkzeug.exceptions import HTTPException
+
+                if isinstance(error, HTTPException):
+                    return error
+            except Exception:
+                pass
+
+            # For non-HTTP exceptions, allow Flask to render its default 500 page.
+            # Returning the error here lets Flask handle it consistently.
             raise error
 
     def _start_system_monitoring(self):

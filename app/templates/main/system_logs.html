@@ -132,7 +132,7 @@
                                 {% for log in logs %}
                                 <tr>
                                     <td>
-                                        <small class="text-body-secondary">{{ log.timestamp }}</small>
+                                        <small class="text-body-secondary">{{ log.timestamp or '—' }}</small>
                                     </td>
                                     <td>
                                         {% if log.log_type == 'security' %}

@@ -190,7 +190,7 @@ class AccessLogger:
         
         @self.app.before_request
         def before_request():
-            g.request_start_time = datetime.now(timezone.utc)
+            g.request_start_time = time.time()
         
         @self.app.after_request
         def after_request(response):

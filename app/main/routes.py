@@ -2530,30 +2530,76 @@ def system_logs():
     time_delta = time_ranges.get(time_range, timedelta(hours=24))
     start_time = now - time_delta
     
-    # Mock log data (in production, this would query Application Insights or a log database)
-    # For now, we'll show a placeholder interface
     logs = []
-    
-    # Example log entries (replace with real data from Application Insights)
+
+    # NOTE: We currently back System Logs with persisted DB events.
+    # `LoginEvent` captures login success/failure, and we scope to the active organisation
+    # by selecting events for users who are members of that organisation.
     if log_type in ['all', 'security']:
-        logs.append({
-            'timestamp': now.strftime('%Y-%m-%d %H:%M:%S'),
-            'log_type': 'security',
-            'event_type': 'LOGIN_SUCCESS',
-            'event_description': 'User logged in successfully',
-            'user_id': current_user.id,
-            'user_name': current_user.display_name(),
-            'user_email': current_user.email,
-            'organization_id': org_id,
-            'ip_address': request.remote_addr,
-            'details': {'email': current_user.email, 'provider': 'password', 'session': 'active'}
-        })
+        from app.models import LoginEvent
+        from sqlalchemy import desc
+
+        member_ids = [m.user_id for m in OrganizationMembership.query.filter_by(organization_id=org_id).all()]
+
+        if member_ids:
+            q = LoginEvent.query.filter(LoginEvent.user_id.in_(member_ids))
+            if start_time is not None:
+                q = q.filter(LoginEvent.created_at >= start_time)
+
+            if (user_id_filter or '').strip():
+                try:
+                    q = q.filter(LoginEvent.user_id == int(user_id_filter))
+                except Exception:
+                    pass
+
+            if (event_type or '').strip() == 'LOGIN_SUCCESS':
+                q = q.filter(LoginEvent.success.is_(True))
+            elif (event_type or '').strip() == 'LOGIN_FAILURE':
+                q = q.filter(LoginEvent.success.is_(False))
+
+            events = q.order_by(desc(LoginEvent.created_at)).limit(500).all()
+            for evt in events:
+                created_at = evt.created_at
+                if created_at and getattr(created_at, 'tzinfo', None) is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+
+                is_success = bool(evt.success)
+                derived_event_type = 'LOGIN_SUCCESS' if is_success else 'LOGIN_FAILURE'
+                derived_description = 'User logged in successfully' if is_success else 'Failed login attempt'
+
+                user_name = None
+                user_email = None
+                if getattr(evt, 'user', None) is not None:
+                    try:
+                        user_name = evt.user.display_name()
+                    except Exception:
+                        user_name = None
+                    user_email = getattr(evt.user, 'email', None)
+
+                logs.append({
+                    'timestamp': created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else None,
+                    'log_type': 'security',
+                    'event_type': derived_event_type,
+                    'event_description': derived_description,
+                    'user_id': evt.user_id,
+                    'user_name': user_name,
+                    'user_email': user_email or evt.email,
+                    'organization_id': org_id,
+                    'ip_address': evt.ip_address,
+                    'details': {
+                        'email': evt.email,
+                        'provider': evt.provider,
+                        'success': is_success,
+                        'reason': evt.reason,
+                        'user_agent': evt.user_agent,
+                    }
+                })
     
     # Statistics
     total_logs = len(logs)
-    security_events = len([l for l in logs if l['log_type'] == 'security'])
-    error_count = len([l for l in logs if l['log_type'] == 'error'])
-    failed_logins = 0  # Count from logs
+    security_events = len([l for l in logs if l.get('log_type') == 'security'])
+    error_count = len([l for l in logs if l.get('log_type') == 'error'])
+    failed_logins = len([l for l in logs if l.get('event_type') == 'LOGIN_FAILURE'])
     
     appinsights_enabled = current_app.config.get('APPINSIGHTS_ENABLED', False)
     
