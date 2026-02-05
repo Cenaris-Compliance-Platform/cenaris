@@ -165,7 +165,9 @@
                                     <td>
                                         {% if log.details %}
                                         <button class="btn btn-sm btn-outline-secondary" 
-                                                onclick="showLogDetails({{ log.details | tojson | safe }})">
+                                                type="button"
+                                                data-details="{{ log.details | tojson | forceescape }}"
+                                                onclick="showLogDetails(this)">
                                             <i class="bi bi-eye"></i> View
                                         </button>
                                         {% else %}
@@ -198,7 +200,16 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <pre id="logDetailsContent" class="bg-body-secondary p-3 rounded"></pre>
+                <div class="d-flex justify-content-end mb-2">
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Log details view">
+                        <button id="logDetailsPrettyBtn" type="button" class="btn btn-outline-secondary active" onclick="setLogDetailsView('pretty')">Pretty</button>
+                        <button id="logDetailsRawBtn" type="button" class="btn btn-outline-secondary" onclick="setLogDetailsView('raw')">Raw</button>
+                    </div>
+                </div>
+
+                <div id="logDetailsPretty" class="border rounded bg-body-tertiary" style="max-height: 400px; overflow:auto;"></div>
+
+                <pre id="logDetailsRaw" class="bg-body-secondary p-3 rounded mb-0" style="display:none;max-height: 400px; overflow-y: auto; white-space: pre; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 13px; line-height: 1.5; color: #1f2937;"></pre>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -212,11 +223,83 @@ function refreshLogs() {
     window.location.reload();
 }
 
-function showLogDetails(details) {
-    const content = JSON.stringify(details, null, 2);
-    document.getElementById('logDetailsContent').textContent = content;
-    const modal = new bootstrap.Modal(document.getElementById('logDetailsModal'));
-    modal.show();
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function renderPrettyDetails(details) {
+    const container = document.getElementById('logDetailsPretty');
+    if (details === null || details === undefined) {
+        container.innerHTML = '<div class="p-3 text-body-secondary">No details available.</div>';
+        return;
+    }
+
+    const isObject = typeof details === 'object' && !Array.isArray(details);
+    if (!isObject) {
+        container.innerHTML = '<div class="p-3"><code>' + escapeHtml(details) + '</code></div>';
+        return;
+    }
+
+    const keys = Object.keys(details);
+    if (keys.length === 0) {
+        container.innerHTML = '<div class="p-3 text-body-secondary">No details available.</div>';
+        return;
+    }
+
+    let html = '<table class="table table-sm mb-0"><tbody>';
+    for (const key of keys) {
+        const value = details[key];
+        let rendered;
+        if (value === null || value === undefined) {
+            rendered = '<span class="text-body-secondary">—</span>';
+        } else if (typeof value === 'object') {
+            rendered = '<pre class="m-0 p-2 bg-body-secondary rounded" style="white-space:pre;overflow:auto;max-width:100%;">' +
+                escapeHtml(JSON.stringify(value, null, 2)) +
+                '</pre>';
+        } else {
+            rendered = '<code>' + escapeHtml(value) + '</code>';
+        }
+
+        html += '<tr>' +
+            '<th class="text-nowrap" style="width: 180px;">' + escapeHtml(key) + '</th>' +
+            '<td>' + rendered + '</td>' +
+            '</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function setLogDetailsView(mode) {
+    const pretty = document.getElementById('logDetailsPretty');
+    const raw = document.getElementById('logDetailsRaw');
+    const prettyBtn = document.getElementById('logDetailsPrettyBtn');
+    const rawBtn = document.getElementById('logDetailsRawBtn');
+
+    const showPretty = mode === 'pretty';
+    pretty.style.display = showPretty ? '' : 'none';
+    raw.style.display = showPretty ? 'none' : '';
+    prettyBtn.classList.toggle('active', showPretty);
+    rawBtn.classList.toggle('active', !showPretty);
+}
+
+function showLogDetails(button) {
+    try {
+        const detailsJson = button.getAttribute('data-details');
+        const details = JSON.parse(detailsJson);
+        document.getElementById('logDetailsRaw').textContent = JSON.stringify(details, null, 2);
+        renderPrettyDetails(details);
+        setLogDetailsView('pretty');
+        const modal = new bootstrap.Modal(document.getElementById('logDetailsModal'));
+        modal.show();
+    } catch (error) {
+        console.error('Error showing log details:', error);
+        alert('Error displaying log details. Please check the console for more information.');
+    }
 }
 </script>
 {% endblock %}

@@ -355,7 +355,7 @@ def switch_organization():
 @bp.route('/org/admin')
 @login_required
 def org_admin_dashboard():
-    """Organization admin overview."""
+    """Organisation admin overview."""
     maybe = _require_org_admin()
     if maybe is not None:
         return maybe
@@ -2493,7 +2493,7 @@ def generate_report(report_type):
 @bp.route('/system-logs')
 @login_required
 def system_logs():
-    """System logs viewing interface (organization admin only)."""
+    """System logs viewing interface (organisation admin only)."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -2509,7 +2509,7 @@ def system_logs():
     
     # Allow if user is org admin or has explicit org.settings permission
     if not (org_member and (org_member.role == 'Admin' or current_user.has_permission('org.settings', org_id=int(org_id)))):
-        flash('You must be an organization administrator to view system logs.', 'error')
+        flash('You must be an organisation administrator to view system logs.', 'error')
         return redirect(url_for('main.dashboard'))
     
     # Get filter parameters

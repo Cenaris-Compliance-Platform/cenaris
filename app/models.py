@@ -57,9 +57,18 @@ class OrganizationMembership(db.Model):
 
     @property
     def display_role_name(self) -> str:
+        name = None
         if self.rbac_role and (self.rbac_role.name or '').strip():
-            return (self.rbac_role.name or '').strip()
-        return (self.role or 'User').strip() or 'User'
+            name = (self.rbac_role.name or '').strip()
+        else:
+            name = (self.role or 'User').strip() or 'User'
+
+        # UI spelling normalisation (AU English).
+        # Some databases may still contain legacy US spelling for seeded roles.
+        if (name or '').strip().lower() in {'organization admin', 'organization administrator'}:
+            return 'Organisation Admin'
+
+        return name
 
 
 class Department(db.Model):

@@ -206,15 +206,30 @@ def _send_email_verification_email(user: User, verify_url: str) -> None:
         current_app.logger.warning('MAIL not configured; verify-email URL: %s', verify_url)
         return
 
-    subject = 'Verify your email'
+    subject = 'Verify your email - Cenaris'
+    
+    # Plain text version
     body = (
-        'Welcome to CCM. Please verify your email address to activate your account.\n\n'
+        f'Welcome to Cenaris!\n\n'
+        f'Thank you for creating an account. Please verify your email address ({user.email}) to get started.\n\n'
         f'Verify link: {verify_url}\n\n'
-        'If you did not create this account, you can ignore this email.'
+        'If you didn\'t create this account, you can safely ignore this email.\n\n'
+        '---\n'
+        'Cenaris Compliance Management System'
     )
     
+    # HTML version with template
     try:
-        _send_email(user.email, subject, body)
+        from flask import render_template
+        html = render_template('email/verify_email.html', user=user, verify_url=verify_url)
+    except Exception:
+        html = None
+    
+    try:
+        if html:
+            _send_email_html(user.email, subject, body, html)
+        else:
+            _send_email(user.email, subject, body)
     except Exception:
         current_app.logger.exception('Failed to send verification email to %s', user.email)
         raise
@@ -901,7 +916,13 @@ def oauth_callback(provider):
         OAuthError = None  # type: ignore
 
     try:
-        token = client.authorize_access_token()
+        # Authlib validates OIDC `iss` during `authorize_access_token()` when an `id_token` is present.
+        # Microsoft Entra ID's multi-tenant discovery (e.g. `common`) can yield an issuer that doesn't
+        # match the token's tenant-specific `iss`. Disable `iss` validation for Microsoft only.
+        if (provider or '').lower() == 'microsoft':
+            token = client.authorize_access_token(claims_options={'iss': {'essential': False}})
+        else:
+            token = client.authorize_access_token()
     except Exception as e:
         if MismatchingStateError is not None and isinstance(e, MismatchingStateError):
             current_app.logger.warning('OAuth callback failed: mismatching_state (host=%s)', request.host, exc_info=True)
@@ -948,17 +969,14 @@ def oauth_callback(provider):
         else:
             flash('OAuth sign-in failed. Please try again.', 'error')
         return redirect(url_for('auth.login'))
-    userinfo = None
-
-    # Prefer ID token claims when present.
-    try:
-        userinfo = client.parse_id_token(token)
-    except Exception:
-        userinfo = None
-
+    # Authlib puts parsed userinfo into token['userinfo'] when an id_token is present.
+    userinfo = token.get('userinfo')
     if not userinfo:
-        # Fallback to userinfo endpoint.
-        userinfo = token.get('userinfo')
+        # Best-effort fallback to userinfo endpoint.
+        try:
+            userinfo = client.userinfo()
+        except Exception:
+            userinfo = None
 
     email = (userinfo.get('email') if isinstance(userinfo, dict) else None) or ''
     email = email.lower().strip()

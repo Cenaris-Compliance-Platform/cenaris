@@ -130,7 +130,7 @@ def test_user_cannot_access_other_org_documents(client, app):
 
 
 def test_user_cannot_see_other_org_members(client, app):
-    """Test that organization admin can only see their own org members."""
+    """Test that organisation admin can only see their own org members."""
     with app.app_context():
         # Create two organizations
         org1 = Organization(name='Org 1', contact_email='org1@test.com')

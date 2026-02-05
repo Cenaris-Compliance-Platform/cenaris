@@ -99,7 +99,7 @@ def upgrade():
                 RETURNING id
                 """
             ),
-            {'org_id': org_id, 'name': 'Organization Admin', 'desc': 'Full administrative access for this organization.'},
+            {'org_id': org_id, 'name': 'Organisation Admin', 'desc': 'Full administrative access for this organisation.'},
         ).scalar()
 
         manager_role_id = conn.execute(
@@ -157,7 +157,7 @@ def upgrade():
         grant(manager_role_id, ['documents.view', 'documents.upload', 'documents.delete', 'audits.export'])
         grant(admin_role_id, ['org.manage', 'departments.manage', 'users.invite', 'users.manage', 'roles.manage'])
 
-        # Backfill memberships: Admins -> Organization Admin; everyone else -> Member
+        # Backfill memberships: Admins -> Organisation Admin; everyone else -> Member
         conn.execute(
             sa.text(
                 """

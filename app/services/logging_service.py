@@ -6,6 +6,7 @@ Integrates with Azure Application Insights for cloud-based log management.
 import logging
 import os
 import json
+import time
 from datetime import datetime, timezone
 from functools import wraps
 from flask import request, g
@@ -208,7 +209,7 @@ class AccessLogger:
         try:
             duration = None
             if hasattr(g, 'request_start_time'):
-                duration = (datetime.now(timezone.utc) - g.request_start_time).total_seconds()
+                duration = time.time() - g.request_start_time
             
             log_data = {
                 'method': request.method,
