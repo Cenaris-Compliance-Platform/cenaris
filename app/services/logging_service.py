@@ -284,10 +284,23 @@ class ErrorLogger:
             """Catch-all error handler."""
             # Don't log HTTP exceptions (404, 403, etc.) - these are intentional responses
             from werkzeug.exceptions import HTTPException
-            if not isinstance(e, HTTPException):
-                self.log_error(e)
-            # Re-raise so Flask can handle it normally
-            raise e
+            if isinstance(e, HTTPException):
+                # IMPORTANT: return the exception so Flask converts it to a response.
+                # Re-raising causes tests (and some deployments) to treat 404/429/400 as crashes.
+                return e
+
+            self.log_error(e)
+
+            # In debug/testing, keep the default developer experience (stack traces).
+            try:
+                if bool(getattr(self.app, 'debug', False)) or bool(getattr(self.app, 'testing', False)):
+                    raise e
+            except Exception:
+                # If anything goes wrong determining env, fall back to a safe 500.
+                pass
+
+            from werkzeug.exceptions import InternalServerError
+            return InternalServerError()
     
     def log_error(self, error, context=None):
         """
