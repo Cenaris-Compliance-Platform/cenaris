@@ -20,13 +20,20 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+try:
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor  # type: ignore
+except Exception:  # pragma: no cover
+    SQLAlchemyInstrumentor = None  # type: ignore
 
-# Azure Monitor exporters
-from azure.monitor.opentelemetry.exporter import (
-    AzureMonitorTraceExporter,
-    AzureMonitorMetricExporter,
-)
+# Azure Monitor exporters (optional; do not fail app startup/tests if unavailable)
+try:  # pragma: no cover
+    from azure.monitor.opentelemetry.exporter import (
+        AzureMonitorTraceExporter,  # type: ignore
+        AzureMonitorMetricExporter,  # type: ignore
+    )
+except Exception:  # pragma: no cover
+    AzureMonitorTraceExporter = None  # type: ignore
+    AzureMonitorMetricExporter = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +85,10 @@ class MonitoringService:
         if not self.connection_string:
             logger.warning('[MONITORING] No Application Insights connection string configured')
             print('[DEBUG] No connection string, returning early')
+            return
+
+        if AzureMonitorTraceExporter is None or AzureMonitorMetricExporter is None:
+            logger.warning('[MONITORING] Azure Monitor exporter not available; monitoring disabled')
             return
         
         try:
@@ -202,17 +213,22 @@ class MonitoringService:
             RequestsInstrumentor().instrument()
             logger.info('[MONITORING] Requests auto-instrumentation enabled')
             
-            # Instrument SQLAlchemy for database query tracking (within app context)
-            try:
-                with app.app_context():
-                    from app import db
-                    SQLAlchemyInstrumentor().instrument(
-                        engine=db.engine,
-                        enable_commenter=True,  # Add trace context to SQL comments
-                    )
-                    logger.info('[MONITORING] SQLAlchemy auto-instrumentation enabled')
-            except Exception as e:
-                logger.warning(f'[MONITORING] SQLAlchemy instrumentation failed: {e}')
+            # Instrument SQLAlchemy for database query tracking (within app context).
+            # Optional dependency: do not fail app startup/tests if missing.
+            if SQLAlchemyInstrumentor is None:
+                logger.info('[MONITORING] SQLAlchemy auto-instrumentation not available (missing dependency)')
+            else:
+                try:
+                    with app.app_context():
+                        from app import db
+
+                        SQLAlchemyInstrumentor().instrument(
+                            engine=db.engine,
+                            enable_commenter=True,  # Add trace context to SQL comments
+                        )
+                        logger.info('[MONITORING] SQLAlchemy auto-instrumentation enabled')
+                except Exception as e:
+                    logger.warning(f'[MONITORING] SQLAlchemy instrumentation failed: {e}')
             
         except Exception as e:
             logger.warning(f'[MONITORING] Auto-instrumentation partial failure: {e}')

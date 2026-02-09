@@ -857,7 +857,40 @@ def oauth_login(provider):
             pass
 
     redirect_uri = url_for('auth.oauth_callback', provider=provider, _external=True)
-    if current_app.debug:
+
+    # Microsoft Entra validates redirect_uri strictly (scheme/host/path must match exactly).
+    # When running behind a reverse proxy, forwarded headers may be missing/misread and Flask
+    # can generate an http:// redirect_uri even though the site is accessed via https://.
+    # Force https for *public* hosts (non-localhost) to avoid Entra redirect_uri mismatch.
+    if (provider or '').lower() == 'microsoft':
+        try:
+            if isinstance(redirect_uri, str) and redirect_uri.startswith('http://'):
+                from urllib.parse import urlsplit
+
+                host = (urlsplit(redirect_uri).hostname or '').strip().lower()
+                is_local = host in {'localhost', '127.0.0.1', '0.0.0.0'}
+                if not is_local:
+                    redirect_uri = url_for('auth.oauth_callback', provider=provider, _external=True, _scheme='https')
+        except Exception:
+            pass
+
+    if (provider or '').lower() == 'microsoft':
+        try:
+            ms_client_id = (current_app.config.get('MICROSOFT_CLIENT_ID') or '').strip()
+            ms_client_id_hint = (ms_client_id[-6:] if ms_client_id else '')
+            current_app.logger.info(
+                '[OAUTH] microsoft authorize_redirect redirect_uri=%s | scheme=%s host=%s xf_proto=%s xf_host=%s xf_port=%s client_id_endswith=%s',
+                redirect_uri,
+                request.scheme,
+                request.host,
+                request.headers.get('X-Forwarded-Proto'),
+                request.headers.get('X-Forwarded-Host'),
+                request.headers.get('X-Forwarded-Port'),
+                ms_client_id_hint,
+            )
+        except Exception:
+            pass
+    elif current_app.debug:
         current_app.logger.info('[OAUTH DEBUG] Provider=%s RedirectURI=%s', provider, redirect_uri)
     try:
         return client.authorize_redirect(redirect_uri)
