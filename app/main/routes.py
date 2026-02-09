@@ -2521,6 +2521,21 @@ def system_logs():
     # Parse time range
     from datetime import datetime, timezone, timedelta
     now = datetime.now(timezone.utc)
+
+    # Display timestamps in the user's preferred timezone.
+    # Source timestamps are stored in UTC in the database.
+    display_tz_name = (getattr(current_user, 'time_zone', None) or 'Australia/Sydney').strip() or 'Australia/Sydney'
+    display_tz = timezone.utc
+    display_tz_label = 'UTC'
+    try:
+        from zoneinfo import ZoneInfo  # py>=3.9
+
+        display_tz = ZoneInfo(display_tz_name)
+        # Use current time to derive a readable label (handles DST).
+        display_tz_label = (now.astimezone(display_tz).tzname() or display_tz_name)
+    except Exception:
+        display_tz = timezone.utc
+        display_tz_label = 'UTC'
     time_ranges = {
         '1h': timedelta(hours=1),
         '24h': timedelta(hours=24),
@@ -2563,6 +2578,12 @@ def system_logs():
                 if created_at and getattr(created_at, 'tzinfo', None) is None:
                     created_at = created_at.replace(tzinfo=timezone.utc)
 
+                created_at_local = None
+                try:
+                    created_at_local = created_at.astimezone(display_tz) if created_at else None
+                except Exception:
+                    created_at_local = created_at
+
                 is_success = bool(evt.success)
                 derived_event_type = 'LOGIN_SUCCESS' if is_success else 'LOGIN_FAILURE'
                 derived_description = 'User logged in successfully' if is_success else 'Failed login attempt'
@@ -2577,7 +2598,7 @@ def system_logs():
                     user_email = getattr(evt.user, 'email', None)
 
                 logs.append({
-                    'timestamp': created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else None,
+                    'timestamp': created_at_local.strftime('%Y-%m-%d %H:%M:%S %Z') if created_at_local else None,
                     'log_type': 'security',
                     'event_type': derived_event_type,
                     'event_description': derived_description,
@@ -2614,4 +2635,5 @@ def system_logs():
                          security_events=security_events,
                          error_count=error_count,
                          failed_logins=failed_logins,
+                         display_tz_label=display_tz_label,
                          appinsights_enabled=appinsights_enabled)

@@ -120,7 +120,7 @@
                         <table class="table table-hover mb-0">
                             <thead>
                                 <tr>
-                                    <th class="border-0">Timestamp</th>
+                                    <th class="border-0">Timestamp{% if display_tz_label %} ({{ display_tz_label }}){% endif %}</th>
                                     <th class="border-0">Type</th>
                                     <th class="border-0">Event</th>
                                     <th class="border-0">User</th>
@@ -133,7 +133,7 @@
                                 <tr>
                                     <td>
                                         <small class="text-body-secondary">{{ log.timestamp or '—' }}</small>
-                                    </td>
+                                            <th class="border-0">Timestamp{% if display_tz_label %} ({{ display_tz_label }}){% endif %}</th>
                                     <td>
                                         {% if log.log_type == 'security' %}
                                         <span class="badge bg-success">Security</span>
