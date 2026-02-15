@@ -20,20 +20,13 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
-try:
-    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor  # type: ignore
-except Exception:  # pragma: no cover
-    SQLAlchemyInstrumentor = None  # type: ignore
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
-# Azure Monitor exporters (optional; do not fail app startup/tests if unavailable)
-try:  # pragma: no cover
-    from azure.monitor.opentelemetry.exporter import (
-        AzureMonitorTraceExporter,  # type: ignore
-        AzureMonitorMetricExporter,  # type: ignore
-    )
-except Exception:  # pragma: no cover
-    AzureMonitorTraceExporter = None  # type: ignore
-    AzureMonitorMetricExporter = None  # type: ignore
+# Azure Monitor exporters
+from azure.monitor.opentelemetry.exporter import (
+    AzureMonitorTraceExporter,
+    AzureMonitorMetricExporter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,27 +46,25 @@ class MonitoringService:
         self.tracer = None
         self.meter = None
         self.app = None
-        self.is_development = os.getenv('FLASK_ENV') == 'development' or os.getenv('FLASK_DEBUG') == '1'
         
         # Metrics instruments
         self.http_request_duration = None
         self.http_requests_total = None
-        self.cpu_usage_counter = None
-        self.memory_usage_counter = None
-        self.disk_usage_counter = None
+        self.cpu_usage_gauge = None
+        self.memory_usage_gauge = None
+        self.disk_usage_gauge = None
         self.db_query_duration = None
         self.db_connections_active = None
+        self.active_users_gauge = None
+        self.user_sessions_counter = None
         
         # System monitoring thread
         self.system_monitor_thread = None
-        # Development: collect less frequently to save costs (5 minutes)
-        # Production: collect every 60 seconds for better monitoring
-        self.monitor_interval = 300 if self.is_development else 60
+        self.monitor_interval = 60  # Collect system metrics every 60 seconds
         
-        # Cache for system metrics (reduce psutil calls)
-        self._last_cpu = 0.0
-        self._last_memory = 0.0
-        self._last_disk = 0.0
+        # Active user tracking
+        self.active_users = {}  # {user_id: last_activity_timestamp}
+        self.active_user_timeout = 900  # 15 minutes timeout for active users
 
     def init_app(self, app: Flask):
         """Initialize monitoring service with Flask app"""
@@ -85,10 +76,6 @@ class MonitoringService:
         if not self.connection_string:
             logger.warning('[MONITORING] No Application Insights connection string configured')
             print('[DEBUG] No connection string, returning early')
-            return
-
-        if AzureMonitorTraceExporter is None or AzureMonitorMetricExporter is None:
-            logger.warning('[MONITORING] Azure Monitor exporter not available; monitoring disabled')
             return
         
         try:
@@ -113,10 +100,11 @@ class MonitoringService:
                 trace_exporter = AzureMonitorTraceExporter(connection_string=self.connection_string)
                 
                 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+                # Add custom span processor to enrich spans with user context
                 trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
                 trace.set_tracer_provider(trace_provider)
                 self.tracer = trace.get_tracer(__name__)
-                logger.info('[MONITORING] Created new tracer')
+                logger.info('[MONITORING] Created new tracer with custom processors')
             
             print('[DEBUG] About to set up metrics...')
             # Set up metrics (for performance counters)
@@ -175,24 +163,26 @@ class MonitoringService:
             unit="1"
         )
         
-        # System health metrics - Using UpDownCounter instead of observable gauges
-        # This is more cost-effective as we control when metrics are sent
-        self.cpu_usage_counter = self.meter.create_up_down_counter(
+        # System health metrics
+        self.cpu_usage_gauge = self.meter.create_observable_gauge(
             name="system.cpu.usage",
             description="CPU usage percentage",
-            unit="%"
+            unit="%",
+            callbacks=[self._get_cpu_usage]
         )
         
-        self.memory_usage_counter = self.meter.create_up_down_counter(
+        self.memory_usage_gauge = self.meter.create_observable_gauge(
             name="system.memory.usage",
             description="Memory usage percentage",
-            unit="%"
+            unit="%",
+            callbacks=[self._get_memory_usage]
         )
         
-        self.disk_usage_counter = self.meter.create_up_down_counter(
+        self.disk_usage_gauge = self.meter.create_observable_gauge(
             name="system.disk.usage",
             description="Disk usage percentage",
-            unit="%"
+            unit="%",
+            callbacks=[self._get_disk_usage]
         )
         
         # Database metrics
@@ -200,6 +190,20 @@ class MonitoringService:
             name="db.query.duration",
             description="Database query duration in milliseconds",
             unit="ms"
+        )
+        
+        # User session metrics
+        self.active_users_gauge = self.meter.create_observable_gauge(
+            name="app.users.active",
+            description="Number of currently active users",
+            unit="1",
+            callbacks=[self._get_active_users_count]
+        )
+        
+        self.user_sessions_counter = self.meter.create_counter(
+            name="app.user.sessions",
+            description="User session events",
+            unit="1"
         )
 
     def _instrument_libraries(self, app: Flask):
@@ -213,22 +217,17 @@ class MonitoringService:
             RequestsInstrumentor().instrument()
             logger.info('[MONITORING] Requests auto-instrumentation enabled')
             
-            # Instrument SQLAlchemy for database query tracking (within app context).
-            # Optional dependency: do not fail app startup/tests if missing.
-            if SQLAlchemyInstrumentor is None:
-                logger.info('[MONITORING] SQLAlchemy auto-instrumentation not available (missing dependency)')
-            else:
-                try:
-                    with app.app_context():
-                        from app import db
-
-                        SQLAlchemyInstrumentor().instrument(
-                            engine=db.engine,
-                            enable_commenter=True,  # Add trace context to SQL comments
-                        )
-                        logger.info('[MONITORING] SQLAlchemy auto-instrumentation enabled')
-                except Exception as e:
-                    logger.warning(f'[MONITORING] SQLAlchemy instrumentation failed: {e}')
+            # Instrument SQLAlchemy for database query tracking (within app context)
+            try:
+                with app.app_context():
+                    from app import db
+                    SQLAlchemyInstrumentor().instrument(
+                        engine=db.engine,
+                        enable_commenter=True,  # Add trace context to SQL comments
+                    )
+                    logger.info('[MONITORING] SQLAlchemy auto-instrumentation enabled')
+            except Exception as e:
+                logger.warning(f'[MONITORING] SQLAlchemy instrumentation failed: {e}')
             
         except Exception as e:
             logger.warning(f'[MONITORING] Auto-instrumentation partial failure: {e}')
@@ -238,14 +237,56 @@ class MonitoringService:
         
         @app.before_request
         def before_request():
-            """Track request start time"""
+            """Track request start time and user activity"""
             g.request_start_time = time.time()
+            
+            # Track authenticated user activity and set user context for Application Insights
+            try:
+                from flask_login import current_user
+                from opentelemetry import trace
+                
+                if current_user and current_user.is_authenticated:
+                    user_id = str(current_user.id)
+                    self._track_user_activity(current_user.id)
+                    
+                    # Store user_id in Flask g for use in after_request
+                    g.user_id = user_id
+                    
+                    # Set user context on current span using multiple attribute names
+                    # to ensure Azure Application Insights picks it up
+                    current_span = trace.get_current_span()
+                    if current_span and current_span.is_recording():
+                        # Standard OpenTelemetry semantic convention
+                        current_span.set_attribute("enduser.id", user_id)
+                        # Azure-specific attributes
+                        current_span.set_attribute("ai.user.id", user_id)
+                        current_span.set_attribute("ai.user.authUserId", user_id)
+                        # Store in custom dimensions
+                        current_span.set_attribute("user_id", user_id)
+                        logger.debug(f'[MONITORING] Set user context on span for user {user_id}')
+            except Exception as e:
+                logger.warning(f'[MONITORING] Error setting user context: {e}')
         
         @app.after_request
         def after_request(response):
             """Track request completion and metrics"""
             if not self.enabled:
                 return response
+            
+            # Ensure user context is on the span even if not set in before_request
+            try:
+                from flask_login import current_user
+                from opentelemetry import trace
+                
+                if hasattr(g, 'user_id'):
+                    user_id = g.user_id
+                    current_span = trace.get_current_span()
+                    if current_span and current_span.is_recording():
+                        # Re-set user attributes to ensure they're captured
+                        current_span.set_attribute("ai.user.authUserId", user_id)
+                        current_span.set_attribute("user_id", user_id)
+            except Exception as e:
+                logger.debug(f'[MONITORING] Error in after_request user context: {e}')
             
             try:
                 # Calculate request duration
@@ -288,20 +329,8 @@ class MonitoringService:
                         span.record_exception(error)
                 except Exception:
                     pass
-
-            # IMPORTANT:
-            # Do not re-raise HTTP exceptions (404/429/400/etc). Flask can convert them
-            # into proper responses, and tests expect `client.get/post` to return a Response.
-            try:
-                from werkzeug.exceptions import HTTPException
-
-                if isinstance(error, HTTPException):
-                    return error
-            except Exception:
-                pass
-
-            # For non-HTTP exceptions, allow Flask to render its default 500 page.
-            # Returning the error here lets Flask handle it consistently.
+            
+            # Re-raise the exception for Flask's default error handling
             raise error
 
     def _start_system_monitoring(self):
@@ -311,51 +340,37 @@ class MonitoringService:
             while self.enabled:
                 try:
                     time.sleep(self.monitor_interval)
-                    self._collect_system_metrics()
+                    # Metrics are collected via observable callbacks
                 except Exception as e:
                     logger.error(f'[MONITORING] System health monitoring error: {e}')
         
         self.system_monitor_thread = Thread(target=monitor_system_health, daemon=True)
         self.system_monitor_thread.start()
-        interval_desc = f"{self.monitor_interval}s (dev mode)" if self.is_development else f"{self.monitor_interval}s"
-        logger.info(f'[MONITORING] System health monitoring started (interval: {interval_desc})')
+        logger.info('[MONITORING] System health monitoring thread started')
 
-    def _collect_system_metrics(self):
-        """Manually collect and record system metrics (cost-optimized)"""
+    def _get_cpu_usage(self, options) -> Any:
+        """Get current CPU usage percentage"""
         try:
-            # Get CPU usage (non-blocking)
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            if self.cpu_usage_counter:
-                # Calculate delta from last reading
-                delta = cpu_percent - self._last_cpu
-                if delta != 0:  # Only send if changed
-                    self.cpu_usage_counter.add(delta)
-                    self._last_cpu = cpu_percent
+            cpu_percent = psutil.cpu_percent(interval=1)
+            yield metrics.Observation(cpu_percent)
         except Exception as e:
-            logger.debug(f'[MONITORING] Error getting CPU usage: {e}')
-        
+            logger.warning(f'[MONITORING] Error getting CPU usage: {e}')
+
+    def _get_memory_usage(self, options) -> Any:
+        """Get current memory usage percentage"""
         try:
-            # Get memory usage
             memory = psutil.virtual_memory()
-            if self.memory_usage_counter:
-                delta = memory.percent - self._last_memory
-                if abs(delta) > 0.5:  # Only send if changed by >0.5%
-                    self.memory_usage_counter.add(delta)
-                    self._last_memory = memory.percent
+            yield metrics.Observation(memory.percent)
         except Exception as e:
-            logger.debug(f'[MONITORING] Error getting memory usage: {e}')
-        
+            logger.warning(f'[MONITORING] Error getting memory usage: {e}')
+
+    def _get_disk_usage(self, options) -> Any:
+        """Get current disk usage percentage"""
         try:
-            # Get disk usage (Windows/Linux compatible)
-            disk_path = 'C:\\' if os.name == 'nt' else '/'
-            disk = psutil.disk_usage(disk_path)
-            if self.disk_usage_counter:
-                delta = disk.percent - self._last_disk
-                if abs(delta) > 1.0:  # Only send if changed by >1%
-                    self.disk_usage_counter.add(delta)
-                    self._last_disk = disk.percent
+            disk = psutil.disk_usage('/')
+            yield metrics.Observation(disk.percent)
         except Exception as e:
-            logger.debug(f'[MONITORING] Error getting disk usage: {e}')
+            logger.warning(f'[MONITORING] Error getting disk usage: {e}')
 
     def track_custom_event(self, name: str, properties: Optional[Dict[str, Any]] = None):
         """Track a custom application event"""
@@ -385,6 +400,78 @@ class MonitoringService:
             )
         except Exception as e:
             logger.warning(f'[MONITORING] Error tracking database query: {e}')
+    
+    def _track_user_activity(self, user_id: int):
+        """Track user activity for active user counting"""
+        try:
+            self.active_users[user_id] = time.time()
+            # Clean up inactive users periodically
+            current_time = time.time()
+            inactive_users = [uid for uid, last_active in self.active_users.items() 
+                            if current_time - last_active > self.active_user_timeout]
+            for uid in inactive_users:
+                self.active_users.pop(uid, None)
+        except Exception as e:
+            logger.warning(f'[MONITORING] Error tracking user activity: {e}')
+    
+    def _get_active_users_count(self, options) -> Any:
+        """Get current count of active users"""
+        try:
+            # Clean up inactive users
+            current_time = time.time()
+            self.active_users = {uid: last_active for uid, last_active in self.active_users.items() 
+                                if current_time - last_active <= self.active_user_timeout}
+            yield metrics.Observation(len(self.active_users))
+        except Exception as e:
+            logger.warning(f'[MONITORING] Error getting active users count: {e}')
+    
+    def track_user_session(self, user_id: int, event_type: str, properties: Optional[Dict[str, Any]] = None):
+        """Track user session events (login, logout, etc.) with geographic data"""
+        if not self.enabled or not self.tracer:
+            return
+        
+        try:
+            from flask import request
+            from opentelemetry import trace
+            
+            # Set user ID on current span for the request
+            current_span = trace.get_current_span()
+            if current_span:
+                current_span.set_attribute("enduser.id", str(user_id))
+                current_span.set_attribute("user_AuthenticatedId", str(user_id))
+            
+            # Start a span for the user session event
+            with self.tracer.start_as_current_span(f"user_session_{event_type}") as span:
+                span.set_attribute("user.id", str(user_id))
+                span.set_attribute("enduser.id", str(user_id))
+                span.set_attribute("user_AuthenticatedId", str(user_id))
+                span.set_attribute("session.event", event_type)
+                
+                # Add geographic data (App Insights will auto-capture from IP)
+                # These are just for span attributes; geography is auto-captured in customDimensions
+                try:
+                    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+                    if user_ip:
+                        span.set_attribute("client.ip", user_ip.split(',')[0].strip())
+                except Exception:
+                    pass
+                
+                # Add custom properties
+                if properties:
+                    for key, value in properties.items():
+                        span.set_attribute(key, str(value))
+            
+            # Increment session counter
+            if self.user_sessions_counter:
+                self.user_sessions_counter.add(
+                    1,
+                    attributes={
+                        "session.event": event_type,
+                    }
+                )
+                
+        except Exception as e:
+            logger.warning(f'[MONITORING] Error tracking user session: {e}')
 
 
 # Global instance

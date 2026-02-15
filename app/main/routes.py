@@ -243,15 +243,29 @@ def _send_invite_email(user: User, reset_url: str, organization: Organization) -
         return
 
     subject = f"You're invited to {organization.name}"
+    expiry_duration = _format_duration_seconds(_org_invite_token_ttl_seconds())
+    
+    # Plain text version
     body = (
         f"You've been invited to join {organization.name} on Cenaris.\n\n"
         f"Set your password here: {reset_url}\n\n"
-        f"This link expires in {_format_duration_seconds(_org_invite_token_ttl_seconds())}.\n\n"
+        f"This link expires in {expiry_duration}.\n\n"
         "If you weren't expecting this invite, you can ignore this email."
     )
+    
+    # HTML version with template
     try:
-        from app.auth.routes import _send_email
-        _send_email(user.email, subject, body)
+        from flask import render_template
+        html = render_template('email/invite.html', user=user, reset_url=reset_url, organization=organization, expiry_duration=expiry_duration)
+    except Exception:
+        html = None
+    
+    try:
+        from app.auth.routes import _send_email, _send_email_html
+        if html:
+            _send_email_html(user.email, subject, body, html)
+        else:
+            _send_email(user.email, subject, body)
     except Exception:
         current_app.logger.exception('Failed to send invite email to %s (org_id=%s)', user.email, getattr(organization, 'id', None))
         raise
