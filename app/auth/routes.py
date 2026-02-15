@@ -176,7 +176,13 @@ def _verify_reset_or_invite_token(token: str) -> dict | None:
 
 
 def _mail_configured() -> bool:
-    return bool(current_app.config.get('MAIL_SERVER') and current_app.config.get('MAIL_DEFAULT_SENDER'))
+    """Check if SMTP email is properly configured."""
+    has_server = bool(current_app.config.get('MAIL_SERVER'))
+    has_sender = bool(current_app.config.get('MAIL_DEFAULT_SENDER'))
+    has_username = bool(current_app.config.get('MAIL_USERNAME'))
+    has_password = bool(current_app.config.get('MAIL_PASSWORD'))
+    # All SMTP settings must be present
+    return has_sender and has_server and has_username and has_password
 
 
 def _email_verification_required() -> bool:
@@ -236,41 +242,18 @@ def _send_email_verification_email(user: User, verify_url: str) -> None:
 
 
 def _send_email(to_email: str, subject: str, body: str) -> None:
-    """Send email via SendGrid API (fast, no SMTP port issues) or SMTP fallback."""
-    sendgrid_api_key = os.environ.get('SENDGRID_API_KEY')
-    
-    # Try SendGrid Web API first (more reliable on cloud hosts that block SMTP)
-    if sendgrid_api_key:
-        try:
-            from sendgrid import SendGridAPIClient
-            from sendgrid.helpers.mail import Mail as SGMail
-            
-            sender = current_app.config.get('MAIL_DEFAULT_SENDER')
-            message = SGMail(
-                from_email=sender,
-                to_emails=to_email,
-                subject=subject,
-                plain_text_content=body,
-            )
-            
-            sg = SendGridAPIClient(sendgrid_api_key)
-            response = sg.send(message)
-            
-            if response.status_code not in (200, 201, 202):
-                raise Exception(f'SendGrid API returned {response.status_code}')
-            
-            current_app.logger.info('Email sent via SendGrid API to %s', to_email)
-            return
-        except Exception as e:
-            current_app.logger.warning('SendGrid API failed (%s), falling back to SMTP', e)
-    
-    # Fallback to SMTP (Flask-Mail)
-    msg = Message(
-        subject=subject,
-        recipients=[to_email],
-        body=body,
-    )
-    mail.send(msg)
+    """Send email via SMTP (Flask-Mail)."""
+    try:
+        msg = Message(
+            subject=subject,
+            recipients=[to_email],
+            body=body,
+        )
+        mail.send(msg)
+        current_app.logger.info('Email sent via SMTP to %s', to_email)
+    except Exception as e:
+        current_app.logger.error('Failed to send email to %s: %s', to_email, e)
+        raise
 
 
 def _turnstile_enabled() -> bool:
@@ -438,42 +421,19 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
 
 
 def _send_email_html(to_email: str, subject: str, body: str, html: str) -> None:
-    """Send HTML email via SendGrid API or SMTP fallback."""
-    sendgrid_api_key = os.environ.get('SENDGRID_API_KEY')
-    
-    if sendgrid_api_key:
-        try:
-            from sendgrid import SendGridAPIClient
-            from sendgrid.helpers.mail import Mail as SGMail
-            
-            sender = current_app.config.get('MAIL_DEFAULT_SENDER')
-            message = SGMail(
-                from_email=sender,
-                to_emails=to_email,
-                subject=subject,
-                plain_text_content=body,
-                html_content=html,
-            )
-            
-            sg = SendGridAPIClient(sendgrid_api_key)
-            response = sg.send(message)
-            
-            if response.status_code not in (200, 201, 202):
-                raise Exception(f'SendGrid API returned {response.status_code}')
-            
-            current_app.logger.info('HTML email sent via SendGrid API to %s', to_email)
-            return
-        except Exception as e:
-            current_app.logger.warning('SendGrid API failed (%s), falling back to SMTP', e)
-    
-    # Fallback to SMTP
-    msg = Message(
-        subject=subject,
-        recipients=[to_email],
-        body=body,
-        html=html,
-    )
-    mail.send(msg)
+    """Send HTML email via SMTP (Flask-Mail)."""
+    try:
+        msg = Message(
+            subject=subject,
+            recipients=[to_email],
+            body=body,
+            html=html,
+        )
+        mail.send(msg)
+        current_app.logger.info('HTML email sent via SMTP to %s', to_email)
+    except Exception as e:
+        current_app.logger.error('Failed to send HTML email to %s: %s', to_email, e)
+        raise
 
 @bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute')
@@ -540,6 +500,21 @@ def login():
                 pass
 
             login_user(user, remember=form.remember_me.data)
+            
+            # Track user session for monitoring
+            try:
+                from app.services.monitoring_service import monitoring_service
+                monitoring_service.track_user_session(
+                    user_id=user.id,
+                    event_type='login',
+                    properties={
+                        'auth_method': 'password',
+                        'organization_id': user.current_org_id if hasattr(user, 'current_org_id') else 'none'
+                    }
+                )
+            except Exception:
+                pass
+            
             try:
                 session['auth_time'] = int(now.timestamp())
                 session['session_version'] = getattr(user, 'session_version', 1)
@@ -701,6 +676,18 @@ def signup():
                 return redirect(url_for('auth.verify_email_request'))
 
             login_user(user)
+            
+            # Track user session for monitoring
+            try:
+                from app.services.monitoring_service import monitoring_service
+                monitoring_service.track_user_session(
+                    user_id=user.id,
+                    event_type='login',
+                    properties={'auth_method': 'signup'}
+                )
+            except Exception:
+                pass
+            
             flash('Account created. Let\'s finish your setup.', 'success')
             return redirect(url_for('onboarding.organization'))
         except Exception as e:
@@ -746,8 +733,8 @@ def forgot_password():
         last_sent_at = int(session.get('reset_password_last_sent_at') or 0)
         wait_seconds = _RESET_PASSWORD_REQUEST_COOLDOWN_SECONDS - (_now_ts() - last_sent_at)
         if wait_seconds > 0:
-            flash(f'Please wait {wait_seconds} seconds before requesting another reset link.', 'warning')
-            return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=False)
+            # Don't flash - let the template show the persistent countdown alert
+            return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=False, cooldown_seconds=max(wait_seconds, 0))
 
         ok, reason = _verify_turnstile()
         if not ok:
@@ -773,7 +760,7 @@ def forgot_password():
 
         return redirect(url_for('auth.forgot_password', sent='1'))
 
-    return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=sent)
+    return render_template('auth/forgot_password.html', form=form, title='Forgot Password', sent=sent, cooldown_seconds=0)
 
 
 @bp.route('/reset-password/<token>', methods=['GET', 'POST'])
@@ -1202,6 +1189,21 @@ def oauth_callback(provider):
         pass
 
     login_user(user)
+    
+    # Track user session for monitoring
+    try:
+        from app.services.monitoring_service import monitoring_service
+        monitoring_service.track_user_session(
+            user_id=user.id,
+            event_type='login',
+            properties={
+                'auth_method': 'oauth',
+                'provider': provider or 'unknown'
+            }
+        )
+    except Exception:
+        pass
+    
     # Treat a successful OAuth sign-in as an accepted invite for any invited memberships.
     # Also update last_login_at so the user is not misclassified as "pending" elsewhere.
     try:
@@ -1353,6 +1355,16 @@ def verify_email_status():
 def logout():
     """User logout route."""
     if current_user.is_authenticated:
+        # Track logout for monitoring
+        try:
+            from app.services.monitoring_service import monitoring_service
+            monitoring_service.track_user_session(
+                user_id=current_user.id,
+                event_type='logout'
+            )
+        except Exception:
+            pass
+        
         # Log security event before logout
         log_security_event('LOGOUT', details={'email': current_user.email})
         
