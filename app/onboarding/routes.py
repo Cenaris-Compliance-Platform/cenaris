@@ -32,15 +32,33 @@ def _send_welcome_email(user: User, dashboard_url: str) -> bool:
         )
         return False
 
-    subject = 'Welcome to CCM'
+    subject = 'Welcome to Cenaris'
+    
+    # Plain text version
     body = (
-        'Welcome to CCM. Your organization setup is complete.\n\n'
+        'Welcome to Cenaris! Your organization setup is complete.\n\n'
         f'Dashboard: {dashboard_url}\n\n'
-        'You can now upload documents and start managing your compliance evidence.\n'
+        'You can now upload documents and start managing your compliance evidence.\n\n'
+        'Get started by:\n'
+        '- Uploading compliance documents\n'
+        '- Inviting team members to collaborate\n'
+        '- Generating compliance reports\n'
+        '- Tracking your compliance status\n'
     )
+    
+    # HTML version with template
     try:
-        from app.auth.routes import _send_email
-        _send_email(user.email, subject, body)
+        from flask import render_template
+        html = render_template('email/welcome.html', user=user, dashboard_url=dashboard_url)
+    except Exception:
+        html = None
+    
+    try:
+        from app.auth.routes import _send_email, _send_email_html
+        if html:
+            _send_email_html(user.email, subject, body, html)
+        else:
+            _send_email(user.email, subject, body)
     except Exception:
         current_app.logger.exception('Failed to send welcome email to %s', user.email)
         raise

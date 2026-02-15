@@ -212,10 +212,6 @@ def create_app(config_name=None):
     # Initialize enhanced monitoring service (System Monitoring)
     from app.services.monitoring_service import monitoring_service
     monitoring_service.init_app(app)
-    
-    # Initialize alert service (Free code-based alerts)
-    from app.services.alert_service import alert_service
-    alert_service.init_app(app, mail)
 
     # ---- Optional SQL performance instrumentation ----
     # This is extremely useful for diagnosing 2-3s page loads (DB vs template vs network).
@@ -281,9 +277,7 @@ def create_app(config_name=None):
             client_id=ms_id,
             client_secret=ms_secret,
             server_metadata_url=f'https://login.microsoftonline.com/{ms_tenant}/v2.0/.well-known/openid-configuration',
-            client_kwargs={
-                'scope': 'openid email profile',
-            },
+            client_kwargs={'scope': 'openid email profile'},
         )
     
     # Initialize extensions
