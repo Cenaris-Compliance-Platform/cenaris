@@ -940,5 +940,63 @@ def create_app(config_name=None):
             raise click.ClickException(f'Failed committing purge: {e}')
 
         click.echo(f'Done. Purged users: {deleted_users}')
+
+    @app.cli.command('import-master-mapping')
+    @click.option('--file-path', required=True, type=click.Path(exists=True, dir_okay=False), help='Path to CSV/XLSX mapping file.')
+    @click.option('--org-id', type=int, required=False, help='Optional organization ID for org-scoped assessments.')
+    @click.option('--imported-by-user-id', type=int, required=False, help='Optional user ID for audit trail.')
+    @click.option('--version-label', default='v1.0', show_default=True, help='Framework version label to import into.')
+    def import_master_mapping(file_path: str, org_id: int | None, imported_by_user_id: int | None, version_label: str):
+        """Import the NDIS master mapping spreadsheet (CSV/XLSX) into canonical compliance tables."""
+        from app.services.compliance_mapping_service import (
+            compliance_mapping_service,
+            ComplianceMappingImportError,
+        )
+
+        try:
+            result = compliance_mapping_service.import_master_mapping(
+                file_path,
+                organization_id=org_id,
+                imported_by_user_id=imported_by_user_id,
+                version_label=version_label,
+            )
+        except ComplianceMappingImportError as e:
+            raise click.ClickException(str(e))
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Unexpected import failure: {e}')
+
+        click.echo('Import completed successfully.')
+        click.echo(f'- Framework version ID: {result.framework_version_id}')
+        click.echo(f'- Rows parsed:          {result.total_rows}')
+        click.echo(f'- Requirements loaded:  {result.imported_requirements}')
+        click.echo(f'- Assessments loaded:   {result.imported_assessments}')
+
+    @app.cli.command('recompute-compliance-scores')
+    @click.option('--org-id', type=int, required=True, help='Organization ID to recompute scores for.')
+    @click.option('--assessed-by-user-id', type=int, required=False, help='Optional user ID recorded as last assessor.')
+    def recompute_compliance_scores(org_id: int, assessed_by_user_id: int | None):
+        """Recompute computed_score/computed_flag for all visible requirements in an organization."""
+        from app.models import Organization
+        from app.services.compliance_scoring_service import compliance_scoring_service
+
+        org = db.session.get(Organization, int(org_id))
+        if org is None:
+            raise click.ClickException(f'Organization not found: {org_id}')
+
+        try:
+            total = compliance_scoring_service.recompute_for_organization(
+                organization_id=int(org_id),
+                assessed_by_user_id=assessed_by_user_id,
+                commit=True,
+            )
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Failed to recompute scores: {e}')
+
+        click.echo('Compliance score recomputation completed.')
+        click.echo(f'- Organization ID: {org_id}')
+        click.echo(f'- Requirements processed: {total}')
+        click.echo('- Flags now use canonical values: Critical gap / High risk gap / OK / Mature')
     
     return app

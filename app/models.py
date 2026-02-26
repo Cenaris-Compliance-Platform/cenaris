@@ -294,6 +294,177 @@ class Document(db.Model):
     )
 
 
+class ComplianceFrameworkVersion(db.Model):
+    __tablename__ = 'compliance_framework_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+    jurisdiction = db.Column(db.String(20), nullable=False, default='AU')
+    scheme = db.Column(db.String(50), nullable=False, default='NDIS')
+    source_authority = db.Column(db.String(255), nullable=True)
+    source_document = db.Column(db.String(255), nullable=True)
+    source_url = db.Column(db.String(500), nullable=True)
+    version_label = db.Column(db.String(50), nullable=False, default='v1.0')
+    imported_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    imported_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    checksum = db.Column(db.String(64), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    imported_by = db.relationship('User', foreign_keys=[imported_by_user_id], lazy='select')
+    requirements = db.relationship(
+        'ComplianceRequirement',
+        backref='framework_version',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'organization_id',
+            'scheme',
+            'version_label',
+            name='uq_compliance_framework_org_scheme_version',
+        ),
+        db.Index('ix_compliance_framework_versions_org_active', 'organization_id', 'is_active'),
+    )
+
+
+class ComplianceRequirement(db.Model):
+    __tablename__ = 'compliance_requirements'
+
+    id = db.Column(db.Integer, primary_key=True)
+    framework_version_id = db.Column(db.Integer, db.ForeignKey('compliance_framework_versions.id'), nullable=False)
+
+    requirement_id = db.Column(db.String(120), nullable=False)
+    module_type = db.Column(db.String(40), nullable=True)
+    module_name = db.Column(db.String(255), nullable=True)
+    standard_name = db.Column(db.String(255), nullable=True)
+    outcome_code = db.Column(db.String(120), nullable=True)
+    outcome_text = db.Column(db.Text, nullable=True)
+    quality_indicator_code = db.Column(db.String(120), nullable=True)
+    quality_indicator_text = db.Column(db.Text, nullable=True)
+
+    applies_to_all_providers = db.Column(db.Boolean, default=False, nullable=False)
+    registration_group_numbers = db.Column(db.String(255), nullable=True)
+    registration_group_names = db.Column(db.Text, nullable=True)
+    registration_group_source_url = db.Column(db.String(500), nullable=True)
+
+    audit_type = db.Column(db.String(50), nullable=True)
+    high_risk_flag = db.Column(db.Boolean, default=False, nullable=False)
+    stage_1_applies = db.Column(db.Boolean, default=False, nullable=False)
+    stage_2_applies = db.Column(db.Boolean, default=False, nullable=False)
+    audit_test_methods = db.Column(db.Text, nullable=True)
+    sampling_required = db.Column(db.Boolean, default=False, nullable=False)
+    sampling_subject = db.Column(db.String(255), nullable=True)
+
+    system_evidence_required = db.Column(db.Text, nullable=True)
+    implementation_evidence_required = db.Column(db.Text, nullable=True)
+    workforce_evidence_required = db.Column(db.Text, nullable=True)
+    participant_evidence_required = db.Column(db.Text, nullable=True)
+
+    requires_workforce_evidence = db.Column(db.Boolean, default=False, nullable=False)
+    requires_participant_evidence = db.Column(db.Boolean, default=False, nullable=False)
+    minimum_evidence_score_2 = db.Column(db.Text, nullable=True)
+    best_practice_evidence_score_3 = db.Column(db.Text, nullable=True)
+    common_nonconformity_patterns = db.Column(db.Text, nullable=True)
+    gap_rule_1 = db.Column(db.Text, nullable=True)
+    gap_rule_2 = db.Column(db.Text, nullable=True)
+    gap_rule_3 = db.Column(db.Text, nullable=True)
+    nc_severity_default = db.Column(db.String(50), nullable=True)
+    evidence_owner_role = db.Column(db.String(120), nullable=True)
+    review_frequency = db.Column(db.String(120), nullable=True)
+    system_of_record = db.Column(db.String(255), nullable=True)
+    audit_export_label = db.Column(db.String(255), nullable=True)
+    source_version = db.Column(db.String(50), nullable=True)
+    source_last_reviewed_date = db.Column(db.Date, nullable=True)
+    change_trigger = db.Column(db.String(255), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    org_assessments = db.relationship(
+        'OrganizationRequirementAssessment',
+        backref='requirement',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+    evidence_links = db.relationship(
+        'RequirementEvidenceLink',
+        backref='requirement',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('framework_version_id', 'requirement_id', name='uq_compliance_requirement_per_framework'),
+        db.Index('ix_compliance_requirements_requirement_id', 'requirement_id'),
+        db.Index('ix_compliance_requirements_quality_indicator_code', 'quality_indicator_code'),
+    )
+
+
+class OrganizationRequirementAssessment(db.Model):
+    __tablename__ = 'organization_requirement_assessments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    requirement_id = db.Column(db.Integer, db.ForeignKey('compliance_requirements.id'), nullable=False)
+
+    evidence_status_system = db.Column(db.String(20), nullable=False, default='Not assessed')
+    evidence_status_implementation = db.Column(db.String(20), nullable=False, default='Not assessed')
+    evidence_status_workforce = db.Column(db.String(20), nullable=False, default='Not assessed')
+    evidence_status_participant = db.Column(db.String(20), nullable=False, default='Not assessed')
+    best_practice_evidence_present = db.Column(db.Boolean, default=False, nullable=False)
+
+    computed_score = db.Column(db.Integer, nullable=True)
+    computed_flag = db.Column(db.String(30), nullable=True)
+
+    last_assessed_at = db.Column(db.DateTime, nullable=True)
+    last_assessed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        onupdate=datetime.now(timezone.utc),
+    )
+
+    last_assessed_by = db.relationship('User', foreign_keys=[last_assessed_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'requirement_id', name='uq_org_requirement_assessment'),
+        db.Index('ix_org_requirement_assessments_org', 'organization_id'),
+        db.Index('ix_org_requirement_assessments_flag', 'computed_flag'),
+    )
+
+
+class RequirementEvidenceLink(db.Model):
+    __tablename__ = 'requirement_evidence_links'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    requirement_id = db.Column(db.Integer, db.ForeignKey('compliance_requirements.id'), nullable=False)
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=False)
+
+    evidence_bucket = db.Column(db.String(30), nullable=False)
+    rationale_note = db.Column(db.Text, nullable=True)
+    linked_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    linked_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    linked_by = db.relationship('User', foreign_keys=[linked_by_user_id], lazy='select')
+    document = db.relationship('Document', foreign_keys=[document_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'organization_id',
+            'requirement_id',
+            'document_id',
+            'evidence_bucket',
+            name='uq_requirement_evidence_link',
+        ),
+        db.Index('ix_requirement_evidence_links_org_requirement', 'organization_id', 'requirement_id'),
+        db.Index('ix_requirement_evidence_links_document', 'document_id'),
+    )
+
+
 rbac_role_permissions = db.Table(
     'rbac_role_permissions',
     db.Column('role_id', db.Integer, db.ForeignKey('rbac_roles.id', ondelete='CASCADE'), primary_key=True),
