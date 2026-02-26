@@ -1,9 +1,20 @@
 from flask import render_template, redirect, url_for, jsonify, request, make_response, flash, abort, current_app
 from flask_login import login_required, current_user
 from app.main import bp
-from app.models import Document, Organization, OrganizationMembership, User
+from app.models import (
+    ComplianceFrameworkVersion,
+    ComplianceRequirement,
+    Document,
+    Organization,
+    OrganizationMembership,
+    OrganizationRequirementAssessment,
+    RequirementEvidenceLink,
+    User,
+)
 from app import db, mail
 from app.services.azure_data_service import azure_data_service
+from app.services.compliance_scoring_service import compliance_scoring_service
+from sqlalchemy import and_, or_
 
 import threading
 import time
@@ -2015,6 +2026,266 @@ def gap_analysis():
                          gap_data=gap_data,
                          summary_stats=summary_stats,
                          ml_summary=summary)
+
+
+@bp.route('/compliance-requirements')
+@login_required
+def compliance_requirements():
+    """Organization-scoped compliance requirements and assessment view."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    query_text = (request.args.get('q') or '').strip()
+    status_filter = (request.args.get('status') or '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = int(request.args.get('per_page', '25') or 25)
+    per_page = min(max(per_page, 10), 100)
+
+    base_query = (
+        db.session.query(ComplianceRequirement, OrganizationRequirementAssessment)
+        .join(ComplianceFrameworkVersion, ComplianceFrameworkVersion.id == ComplianceRequirement.framework_version_id)
+        .outerjoin(
+            OrganizationRequirementAssessment,
+            and_(
+                OrganizationRequirementAssessment.organization_id == int(org_id),
+                OrganizationRequirementAssessment.requirement_id == ComplianceRequirement.id,
+            ),
+        )
+        .filter(
+            ComplianceFrameworkVersion.is_active.is_(True),
+            or_(
+                ComplianceFrameworkVersion.organization_id.is_(None),
+                ComplianceFrameworkVersion.organization_id == int(org_id),
+            ),
+        )
+    )
+
+    if query_text:
+        like = f'%{query_text}%'
+        base_query = base_query.filter(
+            or_(
+                ComplianceRequirement.requirement_id.ilike(like),
+                ComplianceRequirement.quality_indicator_code.ilike(like),
+                ComplianceRequirement.quality_indicator_text.ilike(like),
+                ComplianceRequirement.outcome_code.ilike(like),
+                ComplianceRequirement.outcome_text.ilike(like),
+            )
+        )
+
+    normalized_status_filter = _normalize_computed_flag_filter(status_filter)
+    if normalized_status_filter:
+        status_values = _computed_flag_filter_values(normalized_status_filter)
+        base_query = base_query.filter(OrganizationRequirementAssessment.computed_flag.in_(status_values))
+
+    pagination = base_query.order_by(
+        ComplianceRequirement.requirement_id.asc(),
+        ComplianceRequirement.id.asc(),
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    requirement_rows = [
+        {
+            'requirement': requirement,
+            'assessment': assessment,
+        }
+        for requirement, assessment in pagination.items
+    ]
+
+    return render_template(
+        'main/compliance_requirements.html',
+        title='Compliance Requirements',
+        requirement_rows=requirement_rows,
+        pagination=pagination,
+        q=query_text,
+        status_filter=normalized_status_filter,
+    )
+
+
+def _normalize_computed_flag_filter(value: str) -> str:
+    normalized = (value or '').strip().lower().replace('_', ' ')
+    mapping = {
+        'critical gap': 'Critical gap',
+        'high risk gap': 'High risk gap',
+        'ok': 'OK',
+        'mature': 'Mature',
+        'red': 'Critical gap',
+        'amber': 'High risk gap',
+        'green': 'OK',
+    }
+    return mapping.get(normalized, '')
+
+
+def _computed_flag_filter_values(canonical_flag: str) -> list[str]:
+    mapping = {
+        'Critical gap': ['Critical gap', 'red', 'Red'],
+        'High risk gap': ['High risk gap', 'amber', 'Amber'],
+        'OK': ['OK', 'ok', 'green', 'Green'],
+        'Mature': ['Mature', 'mature'],
+    }
+    return mapping.get(canonical_flag, [canonical_flag])
+
+
+def _get_org_visible_requirement_or_404(requirement_db_id: int, org_id: int):
+    requirement = (
+        db.session.query(ComplianceRequirement)
+        .join(ComplianceFrameworkVersion, ComplianceFrameworkVersion.id == ComplianceRequirement.framework_version_id)
+        .filter(
+            ComplianceRequirement.id == int(requirement_db_id),
+            ComplianceFrameworkVersion.is_active.is_(True),
+            or_(
+                ComplianceFrameworkVersion.organization_id.is_(None),
+                ComplianceFrameworkVersion.organization_id == int(org_id),
+            ),
+        )
+        .first()
+    )
+    if not requirement:
+        abort(404)
+    return requirement
+
+
+@bp.route('/compliance-requirements/<int:requirement_db_id>')
+@login_required
+def compliance_requirement_detail(requirement_db_id):
+    """Requirement detail with linked evidence documents."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    requirement = _get_org_visible_requirement_or_404(requirement_db_id=int(requirement_db_id), org_id=int(org_id))
+
+    assessment = OrganizationRequirementAssessment.query.filter_by(
+        organization_id=int(org_id),
+        requirement_id=int(requirement.id),
+    ).first()
+
+    linked_evidence = (
+        RequirementEvidenceLink.query
+        .filter_by(organization_id=int(org_id), requirement_id=int(requirement.id))
+        .order_by(RequirementEvidenceLink.linked_at.desc())
+        .all()
+    )
+
+    linked_doc_ids = {int(link.document_id) for link in linked_evidence}
+    available_documents = (
+        Document.query
+        .filter_by(organization_id=int(org_id), is_active=True)
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
+
+    return render_template(
+        'main/compliance_requirement_detail.html',
+        title=f'Requirement {requirement.requirement_id}',
+        requirement=requirement,
+        assessment=assessment,
+        linked_evidence=linked_evidence,
+        available_documents=available_documents,
+        linked_doc_ids=linked_doc_ids,
+    )
+
+
+@bp.route('/compliance-requirements/<int:requirement_db_id>/link', methods=['POST'])
+@login_required
+def compliance_requirement_link_evidence(requirement_db_id):
+    """Link a document to a requirement evidence bucket."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    requirement = _get_org_visible_requirement_or_404(requirement_db_id=int(requirement_db_id), org_id=int(org_id))
+
+    document_id = request.form.get('document_id', type=int)
+    evidence_bucket = (request.form.get('evidence_bucket') or '').strip().lower()
+    rationale_note = (request.form.get('rationale_note') or '').strip() or None
+
+    allowed_buckets = {'system', 'implementation', 'workforce', 'participant'}
+    if evidence_bucket not in allowed_buckets:
+        flash('Please choose a valid evidence bucket.', 'error')
+        return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
+
+    document = Document.query.filter_by(
+        id=document_id,
+        organization_id=int(org_id),
+        is_active=True,
+    ).first()
+    if not document:
+        abort(404)
+
+    existing = RequirementEvidenceLink.query.filter_by(
+        organization_id=int(org_id),
+        requirement_id=int(requirement.id),
+        document_id=int(document.id),
+        evidence_bucket=evidence_bucket,
+    ).first()
+    if existing:
+        flash('This evidence link already exists.', 'info')
+        return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
+
+    link = RequirementEvidenceLink(
+        organization_id=int(org_id),
+        requirement_id=int(requirement.id),
+        document_id=int(document.id),
+        evidence_bucket=evidence_bucket,
+        rationale_note=rationale_note,
+        linked_by_user_id=int(current_user.id),
+    )
+    db.session.add(link)
+    compliance_scoring_service.recompute_requirement_assessment(
+        organization_id=int(org_id),
+        requirement_id=int(requirement.id),
+        assessed_by_user_id=int(current_user.id),
+        commit=True,
+    )
+
+    flash('Evidence linked to requirement.', 'success')
+    return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
+
+
+@bp.route('/compliance-requirements/<int:requirement_db_id>/unlink/<int:link_id>', methods=['POST'])
+@login_required
+def compliance_requirement_unlink_evidence(requirement_db_id, link_id):
+    """Remove a requirement evidence link."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    requirement = _get_org_visible_requirement_or_404(requirement_db_id=int(requirement_db_id), org_id=int(org_id))
+
+    link = RequirementEvidenceLink.query.filter_by(
+        id=int(link_id),
+        organization_id=int(org_id),
+        requirement_id=int(requirement.id),
+    ).first()
+    if not link:
+        abort(404)
+
+    db.session.delete(link)
+    compliance_scoring_service.recompute_requirement_assessment(
+        organization_id=int(org_id),
+        requirement_id=int(requirement.id),
+        assessed_by_user_id=int(current_user.id),
+        commit=True,
+    )
+
+    flash('Evidence link removed.', 'success')
+    return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
 
 @bp.route('/reports')
 @login_required

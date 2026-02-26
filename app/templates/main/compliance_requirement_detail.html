@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+      <div>
+        <h1 class="h3 fw-bold mb-1">Requirement {{ requirement.requirement_id }}</h1>
+        <p class="text-body-secondary mb-0">Link evidence documents to this requirement</p>
+      </div>
+      <a href="{{ url_for('main.compliance_requirements') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Requirements
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-8">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Requirement Details</h5>
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Quality indicator</dt>
+            <dd class="col-sm-8">{{ requirement.quality_indicator_code or '—' }}</dd>
+
+            <dt class="col-sm-4">Outcome</dt>
+            <dd class="col-sm-8">{{ requirement.outcome_code or '—' }}</dd>
+
+            <dt class="col-sm-4">Indicator text</dt>
+            <dd class="col-sm-8">{{ requirement.quality_indicator_text or '—' }}</dd>
+
+            <dt class="col-sm-4">Outcome text</dt>
+            <dd class="col-sm-8">{{ requirement.outcome_text or '—' }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Assessment</h5>
+          <div class="mb-2">
+            <span class="text-body-secondary">Score:</span>
+            <span class="fw-semibold">{{ assessment.computed_score if assessment and assessment.computed_score is not none else '—' }}</span>
+          </div>
+          <div>
+            <span class="text-body-secondary">Flag:</span>
+            {% if assessment and assessment.computed_flag %}
+            {% set flag = assessment.computed_flag|lower|replace('_', ' ') %}
+            {% if flag in ['mature', 'green'] %}
+            <span class="badge bg-primary">{{ assessment.computed_flag }}</span>
+            {% elif flag in ['ok'] %}
+            <span class="badge bg-success">{{ assessment.computed_flag }}</span>
+            {% elif flag in ['high risk gap', 'amber'] %}
+            <span class="badge bg-warning text-dark">{{ assessment.computed_flag }}</span>
+            {% elif flag in ['critical gap', 'red'] %}
+            <span class="badge bg-danger">{{ assessment.computed_flag }}</span>
+            {% else %}
+            <span class="badge bg-secondary">{{ assessment.computed_flag }}</span>
+            {% endif %}
+            {% else %}
+            <span class="text-body-secondary">Not assessed</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <h5 class="card-title">Link Evidence</h5>
+      <form method="POST" action="{{ url_for('main.compliance_requirement_link_evidence', requirement_db_id=requirement.id) }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-md-4">
+          <label for="document_id" class="form-label">Document</label>
+          <select class="form-select" name="document_id" id="document_id" required>
+            <option value="">Select document</option>
+            {% for doc in available_documents %}
+            <option value="{{ doc.id }}" {% if doc.id in linked_doc_ids %}disabled{% endif %}>{{ doc.filename }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="evidence_bucket" class="form-label">Evidence bucket</label>
+          <select class="form-select" name="evidence_bucket" id="evidence_bucket" required>
+            <option value="system">System</option>
+            <option value="implementation">Implementation</option>
+            <option value="workforce">Workforce</option>
+            <option value="participant">Participant</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="rationale_note" class="form-label">Note</label>
+          <input type="text" class="form-control" id="rationale_note" name="rationale_note" maxlength="500" placeholder="Optional" />
+        </div>
+        <div class="col-md-2 d-grid">
+          <button type="submit" class="btn btn-primary">Link</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-body-tertiary border-bottom">
+      <h5 class="card-title mb-0">Linked Evidence</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Document</th>
+            <th>Bucket</th>
+            <th>Note</th>
+            <th>Linked</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for link in linked_evidence %}
+          <tr>
+            <td>{{ link.document.filename if link.document else ('Document #' ~ link.document_id) }}</td>
+            <td><span class="badge bg-body-tertiary text-body border">{{ link.evidence_bucket }}</span></td>
+            <td>{{ link.rationale_note or '—' }}</td>
+            <td>{{ link.linked_at | datetime_format('%b %d, %Y %I:%M %p') if link.linked_at else '—' }}</td>
+            <td class="text-end">
+              <form method="POST" action="{{ url_for('main.compliance_requirement_unlink_evidence', requirement_db_id=requirement.id, link_id=link.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button type="submit" class="btn btn-sm btn-outline-danger">Unlink</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center py-4 text-body-secondary">No evidence linked yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

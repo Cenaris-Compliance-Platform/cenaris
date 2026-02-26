@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+      <div>
+        <h1 class="h2 fw-bold mb-1">Compliance Requirements</h1>
+        <p class="text-body-secondary mb-0">Review imported requirements and current assessment state</p>
+      </div>
+      <a href="{{ url_for('main.gap_analysis') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-graph-up me-1"></i>Gap Analysis
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-6">
+          <label for="q" class="form-label">Search</label>
+          <input id="q" name="q" value="{{ q }}" class="form-control" placeholder="Requirement ID, quality indicator, outcome" />
+        </div>
+        <div class="col-md-3">
+          <label for="status" class="form-label">Computed flag</label>
+          <select id="status" name="status" class="form-select">
+            <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+            <option value="Critical gap" {% if status_filter == 'Critical gap' %}selected{% endif %}>Critical gap</option>
+            <option value="High risk gap" {% if status_filter == 'High risk gap' %}selected{% endif %}>High risk gap</option>
+            <option value="OK" {% if status_filter == 'OK' %}selected{% endif %}>OK</option>
+            <option value="Mature" {% if status_filter == 'Mature' %}selected{% endif %}>Mature</option>
+          </select>
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+          <button type="submit" class="btn btn-primary flex-grow-1">Apply</button>
+          <a href="{{ url_for('main.compliance_requirements') }}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Requirement</th>
+            <th>Quality Indicator</th>
+            <th>Outcome</th>
+            <th>Score</th>
+            <th>Flag</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in requirement_rows %}
+          {% set req = row.requirement %}
+          {% set assessment = row.assessment %}
+          <tr>
+            <td>
+              <div class="fw-semibold">
+                <a href="{{ url_for('main.compliance_requirement_detail', requirement_db_id=req.id) }}" class="text-decoration-none">
+                  {{ req.requirement_id }}
+                </a>
+              </div>
+              {% if req.module_name %}
+              <small class="text-body-secondary">{{ req.module_name }}</small>
+              {% endif %}
+            </td>
+            <td>
+              <div>{{ req.quality_indicator_code or '—' }}</div>
+              {% if req.quality_indicator_text %}
+              <small class="text-body-secondary">{{ req.quality_indicator_text[:120] }}{% if req.quality_indicator_text|length > 120 %}…{% endif %}</small>
+              {% endif %}
+            </td>
+            <td>
+              <div>{{ req.outcome_code or '—' }}</div>
+              {% if req.outcome_text %}
+              <small class="text-body-secondary">{{ req.outcome_text[:120] }}{% if req.outcome_text|length > 120 %}…{% endif %}</small>
+              {% endif %}
+            </td>
+            <td>{{ assessment.computed_score if assessment and assessment.computed_score is not none else '—' }}</td>
+            <td>
+              {% if assessment and assessment.computed_flag %}
+              {% set flag = assessment.computed_flag|lower|replace('_', ' ') %}
+              {% if flag in ['mature', 'green'] %}
+              <span class="badge bg-primary">{{ assessment.computed_flag }}</span>
+              {% elif flag in ['ok'] %}
+              <span class="badge bg-success">{{ assessment.computed_flag }}</span>
+              {% elif flag in ['high risk gap', 'amber'] %}
+              <span class="badge bg-warning text-dark">{{ assessment.computed_flag }}</span>
+              {% elif flag in ['critical gap', 'red'] %}
+              <span class="badge bg-danger">{{ assessment.computed_flag }}</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ assessment.computed_flag }}</span>
+              {% endif %}
+              {% else %}
+              <span class="text-body-secondary">Not assessed</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center py-4 text-body-secondary">No requirements found for the selected filters.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pagination.pages > 1 %}
+    <div class="card-footer bg-body-tertiary border-top">
+      <nav aria-label="Requirements pagination">
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.prev_num, q=q, status=status_filter) if pagination.has_prev else '#' }}">Previous</a>
+          </li>
+          <li class="page-item disabled">
+            <span class="page-link">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+          </li>
+          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.next_num, q=q, status=status_filter) if pagination.has_next else '#' }}">Next</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

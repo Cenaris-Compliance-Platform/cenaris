@@ -23,11 +23,6 @@ from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
 # Azure Monitor exporters
-from azure.monitor.opentelemetry.exporter import (
-    AzureMonitorTraceExporter,
-    AzureMonitorMetricExporter,
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -65,6 +60,26 @@ class MonitoringService:
         # Active user tracking
         self.active_users = {}  # {user_id: last_activity_timestamp}
         self.active_user_timeout = 900  # 15 minutes timeout for active users
+        self._trace_exporter_cls = None
+        self._metric_exporter_cls = None
+
+    def _ensure_exporters_loaded(self) -> bool:
+        """Load Azure Monitor exporters lazily so startup doesn't fail on optional deps."""
+        if self._trace_exporter_cls and self._metric_exporter_cls:
+            return True
+
+        try:
+            from azure.monitor.opentelemetry.exporter import (
+                AzureMonitorTraceExporter,
+                AzureMonitorMetricExporter,
+            )
+
+            self._trace_exporter_cls = AzureMonitorTraceExporter
+            self._metric_exporter_cls = AzureMonitorMetricExporter
+            return True
+        except Exception as e:
+            logger.warning(f'[MONITORING] Azure Monitor exporters unavailable: {e}')
+            return False
 
     def init_app(self, app: Flask):
         """Initialize monitoring service with Flask app"""
@@ -76,6 +91,10 @@ class MonitoringService:
         if not self.connection_string:
             logger.warning('[MONITORING] No Application Insights connection string configured')
             print('[DEBUG] No connection string, returning early')
+            return
+
+        if not self._ensure_exporters_loaded():
+            print('[DEBUG] Azure Monitor exporters unavailable, monitoring disabled')
             return
         
         try:
@@ -97,7 +116,7 @@ class MonitoringService:
                 print(f'[DEBUG] Creating new tracer, error was: {te}')
                 # Set up tracing only if not already configured
                 trace_provider = TracerProvider(resource=resource)
-                trace_exporter = AzureMonitorTraceExporter(connection_string=self.connection_string)
+                trace_exporter = self._trace_exporter_cls(connection_string=self.connection_string)
                 
                 from opentelemetry.sdk.trace.export import BatchSpanProcessor
                 # Add custom span processor to enrich spans with user context
@@ -109,7 +128,7 @@ class MonitoringService:
             print('[DEBUG] About to set up metrics...')
             # Set up metrics (for performance counters)
             metric_provider = MeterProvider(resource=resource)
-            metric_exporter = AzureMonitorMetricExporter(connection_string=self.connection_string)
+            metric_exporter = self._metric_exporter_cls(connection_string=self.connection_string)
             
             from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
             metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=60000)
