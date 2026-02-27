@@ -998,5 +998,71 @@ def create_app(config_name=None):
         click.echo(f'- Organization ID: {org_id}')
         click.echo(f'- Requirements processed: {total}')
         click.echo('- Flags now use canonical values: Critical gap / High risk gap / OK / Mature')
+
+    @app.cli.command('build-ndis-rag-corpus')
+    @click.option(
+        '--pdf-path',
+        default='data/sources/ndis/regulatory/ndis-practice-standards-and-quality-indicators.pdf',
+        show_default=True,
+        type=click.Path(exists=True, dir_okay=False),
+        help='Path to the NDIS regulatory PDF.',
+    )
+    @click.option(
+        '--output-path',
+        default='data/rag/ndis/ndis_chunks.jsonl',
+        show_default=True,
+        type=click.Path(dir_okay=False),
+        help='Output JSONL file for chunked corpus.',
+    )
+    @click.option('--chunk-chars', default=1200, show_default=True, type=int)
+    @click.option('--overlap-chars', default=180, show_default=True, type=int)
+    def build_ndis_rag_corpus(pdf_path: str, output_path: str, chunk_chars: int, overlap_chars: int):
+        """Chunk the NDIS PDF into a JSONL corpus for downstream vector indexing."""
+        from app.services.rag_ingestion_service import rag_ingestion_service
+
+        try:
+            result = rag_ingestion_service.build_pdf_corpus(
+                pdf_path=pdf_path,
+                output_path=output_path,
+                chunk_chars=chunk_chars,
+                overlap_chars=overlap_chars,
+            )
+        except Exception as e:
+            raise click.ClickException(f'Failed to build RAG corpus: {e}')
+
+        click.echo('RAG corpus build completed.')
+        click.echo(f'- Pages processed:  {result.total_pages}')
+        click.echo(f'- Chunks created:   {result.total_chunks}')
+        click.echo(f'- Output JSONL:     {result.output_path}')
+
+    @app.cli.command('compile-ndis-policy-prompt')
+    @click.option(
+        '--source-path',
+        default='data/sources/ndis/reference/FINAL Cenaris NDIS Compliance Source of Truth.docx',
+        show_default=True,
+        type=click.Path(exists=True, dir_okay=False),
+        help='Path to source-of-truth prompt guidance (.docx or .txt).',
+    )
+    @click.option(
+        '--output-path',
+        default='app/ai/prompts/ndis_policy_system_prompt.txt',
+        show_default=True,
+        type=click.Path(dir_okay=False),
+        help='Output prompt file path used by policy generation pipeline.',
+    )
+    def compile_ndis_policy_prompt(source_path: str, output_path: str):
+        """Compile NDIS source-of-truth text into a reusable system prompt file."""
+        from app.services.policy_prompt_service import policy_prompt_service
+
+        try:
+            written = policy_prompt_service.compile_prompt_file(
+                source_path=source_path,
+                output_path=output_path,
+            )
+        except Exception as e:
+            raise click.ClickException(f'Failed to compile policy prompt: {e}')
+
+        click.echo('NDIS policy system prompt compiled successfully.')
+        click.echo(f'- Output prompt: {written}')
     
     return app

@@ -263,7 +263,21 @@ class ComplianceMappingService:
         if lower.endswith('.csv'):
             return pd.read_csv(file_path)
         if lower.endswith('.xlsx') or lower.endswith('.xlsm'):
-            return pd.read_excel(file_path)
+            try:
+                workbook = pd.ExcelFile(file_path)
+                preferred = None
+                for sheet in workbook.sheet_names:
+                    if (sheet or '').strip().lower() == 'master_mapping':
+                        preferred = sheet
+                        break
+                if preferred is None:
+                    for sheet in workbook.sheet_names:
+                        if 'mapping' in (sheet or '').strip().lower():
+                            preferred = sheet
+                            break
+                return pd.read_excel(file_path, sheet_name=preferred or 0)
+            except Exception:
+                return pd.read_excel(file_path)
         if lower.endswith('.xls'):
             return pd.read_excel(file_path)
         raise ComplianceMappingImportError(

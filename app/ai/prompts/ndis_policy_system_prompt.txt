@@ -1,0 +1,2592 @@
+You are a strict NDIS compliance auditor assistant.
+Use only provided regulatory evidence and do not invent requirements.
+When evidence is insufficient, say so explicitly.
+
+=== NDIS AUDITOR RUBRIC (SOURCE OF TRUTH) ===
+Cenaris NDIS Compliance Source of Truth
+
+Plain-English Explanation of Every NDIS Requirement
+
+Audience: Non-NDIS developers, product designers, founders, compliance analysts
+Purpose: Explain what each NDIS requirement actually means, why it exists, and what good vs bad evidence looks like in the real world.
+
+How to Read This Document
+
+For every NDIS requirement, we explain:
+
+Outcome – What the NDIS is trying to protect or achieve
+
+Indicator (Plain English) – What the provider must be able to show
+
+Why this matters – The risk this requirement exists to prevent
+
+Good evidence looks like – What auditors expect to see
+
+Bad or weak evidence looks like – Common failure patterns
+
+Typical evidence examples – Real artefacts providers use
+
+This document is intentionally repetitive and explicit. That is by design.
+
+VERIFICATION MODULE
+
+(Entry-level safeguards for lower-risk providers)
+
+VER-HRM-QI-01 — Worker suitability and records
+
+Outcome
+
+Participants are supported by people who are legally allowed to work, appropriately screened, and suitable for their role.
+
+Indicator (Plain English)
+
+The provider keeps proper records showing who each worker is, that they are allowed to work in Australia, and that required background checks and qualifications are in place.
+
+Why this matters
+
+People with disability are vulnerable to abuse and neglect if unsuitable people are allowed to work unchecked.
+
+Good evidence looks like
+
+Every worker has a complete personnel file
+
+Required checks are current and verified
+
+Records are easy to retrieve
+
+Bad or weak evidence looks like
+
+Some staff files missing documents
+
+Expired police checks
+
+Records spread across emails or personal drives
+
+Typical evidence examples
+
+Passport or ID copy
+
+Right-to-work check
+
+Police check
+
+Qualification certificates
+
+Central HR register
+
+VER-HRM-QI-02 — NDIS Worker Orientation and training
+
+Outcome
+
+Workers understand their obligations to participants and the NDIS.
+
+Indicator (Plain English)
+
+Workers complete mandatory NDIS induction training and the provider keeps evidence of this.
+
+Why this matters
+
+Workers cannot protect participant rights if they don’t understand them.
+
+Good evidence looks like
+
+Training completed before independent work
+
+Completion certificates stored centrally
+
+Bad or weak evidence looks like
+
+“We tell them verbally”
+
+Training assumed but not recorded
+
+Typical evidence examples
+
+NDIS Worker Orientation certificates
+
+Training register
+
+VER-HRM-QI-03 — Infection prevention training
+
+Outcome
+
+Participants are protected from preventable infections.
+
+Indicator (Plain English)
+
+Workers are trained in basic infection prevention, including hygiene and standard precautions.
+
+Why this matters
+
+Poor infection control can cause serious harm, especially to vulnerable people.
+
+Good evidence looks like
+
+Infection control training completed by staff
+
+Training refreshed periodically
+
+Bad or weak evidence looks like
+
+Policy exists but staff not trained
+
+Typical evidence examples
+
+Infection control training records
+
+Induction checklist
+
+VER-HRM-QI-04 — Personal protective equipment (PPE) training
+
+Outcome
+
+Workers and participants are protected from exposure risks.
+
+Indicator (Plain English)
+
+Workers know when and how to correctly use PPE.
+
+Why this matters
+
+Incorrect PPE use creates false safety and increases risk.
+
+Good evidence looks like
+
+PPE training records
+
+Workers can explain correct use
+
+Bad or weak evidence looks like
+
+PPE available but staff unsure how to use it
+
+Typical evidence examples
+
+PPE training modules
+
+Toolbox talks
+
+VER-HRM-QI-05 — PPE availability
+
+Outcome
+
+Workers and participants have access to protective equipment when needed.
+
+Indicator (Plain English)
+
+PPE is available, accessible and appropriate to the supports being delivered.
+
+Why this matters
+
+Training is meaningless if PPE cannot be accessed in practice.
+
+Good evidence looks like
+
+PPE readily available where supports occur
+
+Bad or weak evidence looks like
+
+PPE locked away or unavailable
+
+Typical evidence examples
+
+PPE stock logs
+
+Purchase records
+
+VER-INC-QI-01 — Incident management
+
+Outcome
+
+Incidents are identified, responded to, reported and learned from.
+
+Indicator (Plain English)
+
+The provider has a system to record incidents, respond appropriately, and report serious incidents to the NDIS when required.
+
+Why this matters
+
+If incidents are hidden or unmanaged, people get hurt again.
+
+Good evidence looks like
+
+Incident policy exists
+
+Real incidents recorded and closed
+
+Staff know how to report
+
+Bad or weak evidence looks like
+
+Policy exists but no incidents ever recorded
+
+Staff unsure what counts as an incident
+
+Typical evidence examples
+
+Incident register
+
+Incident investigation notes
+
+Reportable incident notifications
+
+VER-COM-QI-01 — Complaints management
+
+Outcome
+
+Participants can raise concerns without fear and get fair responses.
+
+Indicator (Plain English)
+
+The provider has a complaints process that participants understand and can use.
+
+Why this matters
+
+Complaints are often the only early warning of harm.
+
+Good evidence looks like
+
+Complaints information given to participants
+
+Complaints recorded and responded to
+
+Bad or weak evidence looks like
+
+“We don’t get complaints”
+
+No complaints register
+
+Typical evidence examples
+
+Complaints policy
+
+Complaints register
+
+Response letters
+
+VER-RISK-QI-01 — Risk management system
+
+Outcome
+
+Risks to participants, workers and the organisation are identified and controlled.
+
+Indicator (Plain English)
+
+The provider has a documented system to identify, assess and manage risks.
+
+Why this matters
+
+Unmanaged risks lead directly to harm.
+
+Good evidence looks like
+
+Active risk register
+
+Risks reviewed and updated
+
+Bad or weak evidence looks like
+
+Risk register never reviewed
+
+Typical evidence examples
+
+Risk register
+
+Risk reviews
+
+VER-RISK-QI-02 — Insurance coverage
+
+Outcome
+
+Participants and the provider are financially protected.
+
+Indicator (Plain English)
+
+Appropriate insurance is current and covers the supports delivered.
+
+Why this matters
+
+Insurance protects participants when things go wrong.
+
+Good evidence looks like
+
+Current insurance certificates
+
+Bad or weak evidence looks like
+
+Expired or inadequate cover
+
+Typical evidence examples
+
+Certificates of currency
+
+VER-RISK-QI-03 — Emergency and disaster planning
+
+Outcome
+
+Participants are protected during emergencies.
+
+Indicator (Plain English)
+
+The provider plans for emergencies and disasters.
+
+Why this matters
+
+Disasters disproportionately affect vulnerable people.
+
+Good evidence looks like
+
+Emergency plans exist and are accessible
+
+Bad or weak evidence looks like
+
+Generic plans not relevant to services
+
+Typical evidence examples
+
+Emergency plans
+
+VER-RISK-QI-04 — Participant reliance risk
+
+Outcome
+
+Participants are not left unsupported if services are disrupted.
+
+Indicator (Plain English)
+
+The provider considers how reliant participants are on services and plans accordingly.
+
+Why this matters
+
+Service disruption can cause serious harm.
+
+Good evidence looks like
+
+Reliance risks identified in assessments
+
+Bad or weak evidence looks like
+
+No continuity planning
+
+Typical evidence examples
+
+Participant risk assessments
+
+VER-RISK-QI-05 — Infection prevention practices
+
+Outcome
+
+Infection prevention measures are consistently applied.
+
+Indicator (Plain English)
+
+Infection control procedures are followed in practice.
+
+Why this matters
+
+Written policies don’t stop infections—practice does.
+
+Good evidence looks like
+
+Hygiene procedures observed
+
+Bad or weak evidence looks like
+
+IPC not followed in day-to-day work
+
+Typical evidence examples
+
+Cleaning schedules
+
+Observation notes
+
+(Entry-level safeguards for lower-risk providers)
+
+VER-HRM-QI-01 — Worker suitability and records
+
+Outcome
+
+Participants are supported by people who are legally allowed to work, appropriately screened, and suitable for their role.
+
+Indicator (Plain English)
+
+The provider keeps proper records showing who each worker is, that they are allowed to work in Australia, and that required background checks and qualifications are in place.
+
+Why this matters
+
+People with disability are vulnerable to abuse and neglect if unsuitable people are allowed to work unchecked.
+
+Good evidence looks like
+
+Every worker has a complete personnel file
+
+Required checks are current and verified
+
+Records are easy to retrieve
+
+Bad or weak evidence looks like
+
+Some staff files missing documents
+
+Expired police checks
+
+Records spread across emails or personal drives
+
+Typical evidence examples
+
+Passport or ID copy
+
+Right-to-work check
+
+Police check
+
+Qualification certificates
+
+Central HR register
+
+VER-HRM-QI-02 — NDIS Worker Orientation and training
+
+Outcome
+
+Workers understand their obligations to participants and the NDIS.
+
+Indicator (Plain English)
+
+Workers complete mandatory NDIS induction training and the provider keeps evidence of this.
+
+Why this matters
+
+Workers cannot protect participant rights if they don’t understand them.
+
+Good evidence looks like
+
+Training completed before independent work
+
+Completion certificates stored centrally
+
+Bad or weak evidence looks like
+
+“We tell them verbally”
+
+Training assumed but not recorded
+
+Typical evidence examples
+
+NDIS Worker Orientation certificates
+
+Training register
+
+VER-INC-QI-01 — Incident management
+
+Outcome
+
+Incidents are identified, responded to, reported and learned from.
+
+Indicator (Plain English)
+
+The provider has a system to record incidents, respond appropriately, and report serious incidents to the NDIS when required.
+
+Why this matters
+
+If incidents are hidden or unmanaged, people get hurt again.
+
+Good evidence looks like
+
+Incident policy exists
+
+Real incidents recorded and closed
+
+Staff know how to report
+
+Bad or weak evidence looks like
+
+Policy exists but no incidents ever recorded
+
+Staff unsure what counts as an incident
+
+Typical evidence examples
+
+Incident register
+
+Incident investigation notes
+
+Reportable incident notifications
+
+VER-COM-QI-01 — Complaints management
+
+Outcome
+
+Participants can raise concerns without fear and get fair responses.
+
+Indicator (Plain English)
+
+The provider has a complaints process that participants understand and can use.
+
+Why this matters
+
+Complaints are often the only early warning of harm.
+
+Good evidence looks like
+
+Complaints information given to participants
+
+Complaints recorded and responded to
+
+Bad or weak evidence looks like
+
+“We don’t get complaints”
+
+No complaints register
+
+Typical evidence examples
+
+Complaints policy
+
+Complaints register
+
+Response letters
+
+CORE MODULE — RIGHTS & RESPONSIBILITIES
+
+(Applies to all registered providers)
+
+CORE-RR-PCS-QI-01 — Human rights in practice
+
+Outcome
+
+Participants’ human rights are respected in daily service delivery.
+
+Indicator (Plain English)
+
+Staff understand and apply human rights principles when supporting people.
+
+Why this matters
+
+Good intentions do not prevent rights violations.
+
+Good evidence looks like
+
+Rights referenced in plans and decisions
+
+Staff can explain rights in interviews
+
+Bad or weak evidence looks like
+
+Rights policy exists but practice ignores it
+
+Typical evidence examples
+
+Human rights policy
+
+Training records
+
+Case notes referencing dignity and choice
+
+CORE-RR-IIC-QI-01 — Informed choice and control
+
+Outcome
+
+Participants control their lives and supports.
+
+Indicator (Plain English)
+
+Participants are given real options and supported to make decisions.
+
+Why this matters
+
+Control is a core principle of the NDIS.
+
+Good evidence looks like
+
+Options discussed and documented
+
+Participant choices respected
+
+Bad or weak evidence looks like
+
+Single service option presented
+
+Typical evidence examples
+
+Support planning notes
+
+Decision records
+
+CORE MODULE — PROVISION OF SUPPORTS
+
+CORE-PROV-SP-QI-01 — Participant-led support planning
+
+Outcome
+
+Supports reflect what the participant wants and needs.
+
+Indicator (Plain English)
+
+The participant is actively involved in creating and reviewing their support plan.
+
+Why this matters
+
+Provider-written plans often ignore participant priorities.
+
+Good evidence looks like
+
+Participant voice clearly documented
+
+Plans signed or acknowledged
+
+Bad or weak evidence looks like
+
+Generic plans copied across clients
+
+Typical evidence examples
+
+Support plans
+
+Review notes
+
+Consent forms
+
+CORE-PROV-SP-QI-05 — Plan review
+
+Outcome
+
+Supports stay relevant as people’s lives change.
+
+Indicator (Plain English)
+
+Plans are reviewed regularly and updated when needed.
+
+Why this matters
+
+Outdated plans lead to unsafe or ineffective support.
+
+Good evidence looks like
+
+Scheduled reviews
+
+Updates based on outcomes
+
+Bad or weak evidence looks like
+
+Plans unchanged for years
+
+Typical evidence examples
+
+Review schedules
+
+Updated plans
+
+HOW THIS SCALES
+
+This structure repeats for every Quality Indicator in the spreadsheet:
+
+Governance
+
+Risk management
+
+Safeguarding
+
+Behaviour support
+
+High-intensity supports
+
+Early childhood
+
+SDA
+
+The spreadsheet defines what exists.
+This document explains what it means.
+
+Final Rule
+
+If a developer can explain any requirement using this format, Cenaris is doing its job.
+
+CORE MODULE — GOVERNANCE & OPERATIONAL MANAGEMENT
+
+(How the organisation is run, overseen, and kept accountable)
+
+CORE-GOV-QI-01 — Participant involvement in governance
+
+Outcome
+
+The organisation’s decisions are informed by the perspectives of people with disability.
+
+Indicator (Plain English)
+
+The provider creates real opportunities for people with disability to contribute to governance, policies, or service design.
+
+Why this matters
+
+Decisions made without lived experience often miss real risks and needs.
+
+Good evidence looks like
+
+Advisory groups or structured consultations
+
+Clear examples of feedback influencing decisions
+
+Bad or weak evidence looks like
+
+Token statements with no examples
+
+One-off consultation years ago
+
+Typical evidence examples
+
+Advisory group terms of reference
+
+Meeting minutes
+
+Consultation summaries
+
+CORE-GOV-QI-02 — Governance oversight of compliance and safeguarding
+
+Outcome
+
+The governing body actively oversees safety, quality and compliance.
+
+Indicator (Plain English)
+
+Leaders regularly review incidents, complaints, risks, audits and improvements.
+
+Why this matters
+
+Without oversight, problems persist and grow.
+
+Good evidence looks like
+
+Board or executive minutes showing oversight
+
+Regular quality and safeguarding reports
+
+Bad or weak evidence looks like
+
+Governance exists only on paper
+
+No evidence quality issues are discussed
+
+Typical evidence examples
+
+Board minutes
+
+Quality dashboards
+
+Audit reports
+
+CORE-GOV-QI-03 — Governance skills and capability
+
+Outcome
+
+The governing body has the right skills to run a safe organisation.
+
+Indicator (Plain English)
+
+The provider identifies what skills leaders need and fills gaps through training or recruitment.
+
+Why this matters
+
+Poor governance capability leads to poor decisions.
+
+Good evidence looks like
+
+Skills matrix
+
+Governance training records
+
+Bad or weak evidence looks like
+
+No understanding of governance responsibilities
+
+Typical evidence examples
+
+Board skills matrix
+
+Training certificates
+
+CORE-GOV-QI-04 — Strategic and business planning
+
+Outcome
+
+The organisation plans for sustainability, risk and quality.
+
+Indicator (Plain English)
+
+The provider has plans that consider legal obligations, risks, participants and workers.
+
+Why this matters
+
+Unplanned organisations fail participants.
+
+Good evidence looks like
+
+Current strategic or business plan
+
+Risks clearly considered
+
+Bad or weak evidence looks like
+
+Generic plans not linked to services
+
+Typical evidence examples
+
+Strategic plan
+
+Business plan
+
+Risk analysis
+
+CORE-GOV-QI-05 — Monitoring management performance
+
+Outcome
+
+Managers are held accountable for quality and safety.
+
+Indicator (Plain English)
+
+Leadership performance is monitored and improved.
+
+Why this matters
+
+Problems continue if managers are not accountable.
+
+Good evidence looks like
+
+Performance reviews
+
+Action tracking
+
+Bad or weak evidence looks like
+
+No follow-up on issues
+
+Typical evidence examples
+
+Executive reports
+
+Performance plans
+
+CORE-GOV-QI-06 — Management suitability
+
+Outcome
+
+The organisation is run by capable, appropriate people.
+
+Indicator (Plain English)
+
+Managers have the right experience and authority for their role.
+
+Why this matters
+
+Incompetent leadership increases risk.
+
+Good evidence looks like
+
+Clear roles and responsibilities
+
+Appropriate qualifications or experience
+
+Bad or weak evidence looks like
+
+Informal or unclear leadership roles
+
+Typical evidence examples
+
+Position descriptions
+
+CVs
+
+Delegations
+
+CORE-GOV-QI-07 — Delegations and continuity
+
+Outcome
+
+The organisation continues safely when leaders are absent.
+
+Indicator (Plain English)
+
+Delegations and backup arrangements are documented.
+
+Why this matters
+
+Gaps in leadership can cause unsafe decisions.
+
+Good evidence looks like
+
+Delegations register
+
+Business continuity plan
+
+Bad or weak evidence looks like
+
+“Everyone knows who covers”
+
+Typical evidence examples
+
+Delegations register
+
+Continuity plans
+
+CORE-GOV-QI-08 — Conflicts of interest
+
+Outcome
+
+Decisions are made in participants’ best interests.
+
+Indicator (Plain English)
+
+Conflicts of interest are identified, declared and managed.
+
+Why this matters
+
+Undeclared conflicts undermine trust and safety.
+
+Good evidence looks like
+
+Regular declarations
+
+Management actions recorded
+
+Bad or weak evidence looks like
+
+Policy exists but no declarations
+
+Typical evidence examples
+
+Conflict of interest register
+
+Declarations
+
+CORE-GOV-QI-09 — Risk management system
+
+Outcome
+
+Risks are identified before harm occurs.
+
+Indicator (Plain English)
+
+The provider actively identifies, assesses and manages risks.
+
+Why this matters
+
+Unmanaged risk leads directly to incidents.
+
+Good evidence looks like
+
+Active risk register
+
+Risks reviewed regularly
+
+Bad or weak evidence looks like
+
+Risk register never updated
+
+Typical evidence examples
+
+Risk register
+
+Review notes
+
+CORE-GOV-QI-10 — Quality management system
+
+Outcome
+
+Quality and safety improve over time.
+
+Indicator (Plain English)
+
+The provider has a system to manage policies, audits and improvements.
+
+Why this matters
+
+Without a system, improvement is accidental.
+
+Good evidence looks like
+
+Controlled policies
+
+Internal audits
+
+Bad or weak evidence looks like
+
+Outdated or unmanaged policies
+
+Typical evidence examples
+
+Policy register
+
+Audit schedule
+
+CORE-GOV-QI-11 — Continuous improvement
+
+Outcome
+
+The organisation learns from mistakes and feedback.
+
+Indicator (Plain English)
+
+Issues lead to actions and those actions are reviewed.
+
+Why this matters
+
+Learning prevents repeat harm.
+
+Good evidence looks like
+
+Improvement register
+
+Closed action loops
+
+Bad or weak evidence looks like
+
+Issues raised but never resolved
+
+Typical evidence examples
+
+Continuous improvement register
+
+Action plans
+
+CORE-GOV-QI-12 — Information management
+
+Outcome
+
+Participant information is accurate, secure and accessible.
+
+Indicator (Plain English)
+
+Information is managed safely and participants can access or correct it.
+
+Why this matters
+
+Poor information handling causes harm and breaches trust.
+
+Good evidence looks like
+
+Privacy controls
+
+Consent recorded
+
+Bad or weak evidence looks like
+
+Uncontrolled access
+
+Missing consent
+
+Typical evidence examples
+
+Privacy policy
+
+Access logs
+
+CORE MODULE — RIGHTS & RESPONSIBILITIES
+
+(How participants are respected, informed, protected, and empowered)
+
+CORE-RR-PCS-QI-01 — Human rights embedded in everyday practice
+
+Outcome
+
+Participants’ legal and human rights are respected, protected and promoted in all supports.
+
+Indicator (Plain English)
+
+Staff understand human rights and apply them in day-to-day decisions, not just in policy documents.
+
+Why this matters
+
+People with disability experience higher rates of rights violations when decisions prioritise convenience or risk avoidance over dignity and autonomy.
+
+Good evidence looks like
+
+Rights principles referenced in support planning and reviews
+
+Decision records that balance safety with autonomy (dignity of risk)
+
+Staff can explain how rights guide their actions
+
+Bad or weak evidence looks like
+
+Human rights policy exists but is never referenced
+
+Decisions justified only on “safety” without considering choice
+
+Typical evidence examples
+
+Human rights policy
+
+Training records
+
+Case notes referencing dignity, autonomy, participation
+
+CORE-RR-PCS-QI-02 — Accessible communication
+
+Outcome
+
+Participants understand information about their supports.
+
+Indicator (Plain English)
+
+Information is provided in a way the participant can understand — language, format and timing are adjusted as needed.
+
+Why this matters
+
+A participant cannot make informed decisions if information is inaccessible.
+
+Good evidence looks like
+
+Communication preferences recorded and used
+
+Information provided in Easy Read, translated or visual formats where required
+
+Bad or weak evidence looks like
+
+One standard information pack for everyone
+
+Communication needs recorded but ignored
+
+Typical evidence examples
+
+Communication preference records
+
+Easy Read documents
+
+Interpreter booking records
+
+CORE-RR-PCS-QI-03 — Support networks and inclusion
+
+Outcome
+
+Participants stay connected to the people and communities that matter to them.
+
+Indicator (Plain English)
+
+With consent, the provider supports the participant to involve chosen family, carers, friends and community.
+
+Why this matters
+
+Isolation increases risk of abuse, neglect and poor outcomes.
+
+Good evidence looks like
+
+Support networks identified in plans
+
+Consent-based engagement with others
+
+Bad or weak evidence looks like
+
+Provider discourages outside involvement
+
+Typical evidence examples
+
+Support plans
+
+Consent forms
+
+Communication logs
+
+CORE-RR-IVB-QI-01 — Respect for culture, values and beliefs
+
+Outcome
+
+Supports respect who the participant is.
+
+Indicator (Plain English)
+
+Cultural background, values and beliefs are identified and respected in service delivery.
+
+Why this matters
+
+Disrespecting culture or beliefs causes harm and disengagement.
+
+Good evidence looks like
+
+Cultural needs documented and considered
+
+Adjustments made to supports
+
+Bad or weak evidence looks like
+
+Cultural questions asked but ignored
+
+Typical evidence examples
+
+Intake assessments
+
+Cultural support notes
+
+CORE-RR-IVB-QI-02 — Right to practice culture and beliefs
+
+Outcome
+
+Participants can live according to their culture and beliefs.
+
+Indicator (Plain English)
+
+Supports are delivered in ways that allow participants to practice culture, religion and personal values.
+
+Why this matters
+
+Service delivery should not force people to abandon identity.
+
+Good evidence looks like
+
+Rostering or practice adjustments
+
+Bad or weak evidence looks like
+
+Operational convenience overrides beliefs
+
+Typical evidence examples
+
+Rostering notes
+
+Support adjustments
+
+CORE-RR-PD-QI-01 — Privacy and dignity in delivery
+
+Outcome
+
+Participants feel respected and safe.
+
+Indicator (Plain English)
+
+Supports are delivered in ways that protect privacy and dignity.
+
+Why this matters
+
+Loss of dignity is a common source of trauma in service systems.
+
+Good evidence looks like
+
+Privacy respected during personal care
+
+Dignity breaches addressed promptly
+
+Bad or weak evidence looks like
+
+Intrusive or disrespectful practices normalised
+
+Typical evidence examples
+
+Practice guidelines
+
+Incident responses
+
+CORE-RR-PD-QI-02 — Confidentiality explained
+
+Outcome
+
+Participants understand how their information is used.
+
+Indicator (Plain English)
+
+Confidentiality rules are explained in ways participants understand.
+
+Why this matters
+
+People cannot consent to what they don’t understand.
+
+Good evidence looks like
+
+Confidentiality explained and acknowledged
+
+Bad or weak evidence looks like
+
+Privacy policy handed over without explanation
+
+Typical evidence examples
+
+Signed acknowledgements
+
+Explanation notes
+
+CORE-RR-PD-QI-03 — Informed consent for information use
+
+Outcome
+
+Participants control their personal information.
+
+Indicator (Plain English)
+
+Participants give informed consent for information collection, use and sharing.
+
+Why this matters
+
+Using information without consent breaches trust and rights.
+
+Good evidence looks like
+
+Clear, specific consent records
+
+Ability to withdraw consent
+
+Bad or weak evidence looks like
+
+Blanket consent forms
+
+Typical evidence examples
+
+Consent forms
+
+Change logs
+
+CORE-RR-IIC-QI-01 — Informed choice and control
+
+Outcome
+
+Participants direct their supports and life decisions.
+
+Indicator (Plain English)
+
+Participants are given real options and supported to choose.
+
+Why this matters
+
+Choice and control are core NDIS principles.
+
+Good evidence looks like
+
+Options discussed and documented
+
+Bad or weak evidence looks like
+
+Single option presented
+
+Typical evidence examples
+
+Planning notes
+
+Decision records
+
+CORE-RR-IIC-QI-02 — Dignity of risk
+
+Outcome
+
+Participants can take reasonable risks.
+
+Indicator (Plain English)
+
+Risks are discussed openly and balanced with autonomy.
+
+Why this matters
+
+Over-protection reduces quality of life.
+
+Good evidence looks like
+
+Risk discussions documented
+
+Bad or weak evidence looks like
+
+Risk avoidance used to deny choice
+
+Typical evidence examples
+
+Risk assessments
+
+Decision notes
+
+CORE-RR-IIC-QI-03 — Autonomy, intimacy and sexuality
+
+Outcome
+
+Participants’ personal lives are respected.
+
+Indicator (Plain English)
+
+Supports respect autonomy, relationships and sexual expression.
+
+Why this matters
+
+These rights are often ignored or restricted.
+
+Good evidence looks like
+
+Clear boundaries and respectful support
+
+Bad or weak evidence looks like
+
+Topic avoided or prohibited
+
+Typical evidence examples
+
+Policy guidance
+
+Training records
+
+CORE-RR-IIC-QI-04 — Time to decide and review
+
+Outcome
+
+Participants are not rushed into decisions.
+
+Indicator (Plain English)
+
+Participants are given time to consider options and review decisions.
+
+Why this matters
+
+Pressure undermines informed consent.
+
+Good evidence looks like
+
+Review opportunities documented
+
+Bad or weak evidence looks like
+
+Decisions locked in immediately
+
+Typical evidence examples
+
+Review notes
+
+CORE-RR-IIC-QI-05 — Access to advocacy
+
+Outcome
+
+Participants can get independent support.
+
+Indicator (Plain English)
+
+Participants are supported to access advocates of their choosing.
+
+Why this matters
+
+Advocacy reduces power imbalance.
+
+Good evidence looks like
+
+Advocacy information provided
+
+Bad or weak evidence looks like
+
+Advocacy discouraged
+
+Typical evidence examples
+
+Advocacy referrals
+
+CORE-RR-VANED-QI-01 — Prevention of violence, abuse, neglect, exploitation and discrimination
+
+Outcome
+
+Participants are safe from harm.
+
+Indicator (Plain English)
+
+The provider actively prevents and responds to harm.
+
+Why this matters
+
+People with disability face higher abuse risk.
+
+Good evidence looks like
+
+Safeguarding systems in place
+
+Bad or weak evidence looks like
+
+Reactive responses only
+
+Typical evidence examples
+
+Safeguarding policies
+
+Training records
+
+CORE-RR-VANED-QI-02 — Advocacy in allegations
+
+Outcome
+
+Participants are supported during allegations.
+
+Indicator (Plain English)
+
+Advocacy is offered when allegations arise.
+
+Why this matters
+
+Participants need independent support in crises.
+
+Good evidence looks like
+
+Advocacy referrals recorded
+
+Bad or weak evidence looks like
+
+Focus only on provider protection
+
+Typical evidence examples
+
+Incident records
+
+Referral notes
+
+CORE-RR-VANED-QI-03 — Learning from allegations
+
+Outcome
+
+Harm leads to improvement.
+
+Indicator (Plain English)
+
+Allegations are investigated, recorded and used to prevent recurrence.
+
+Why this matters
+
+Ignoring lessons allows harm to repeat.
+
+Good evidence looks like
+
+Corrective actions implemented
+
+Bad or weak evidence looks like
+
+No follow-up after incidents
+
+Typical evidence examples
+
+Investigation reports
+
+Improvement actions
+
+CORE MODULE — PROVISION OF SUPPORTS
+
+(How supports are planned, delivered, reviewed, and adapted in real life)
+
+CORE-PROV-ATS-QI-01 — Access to appropriate supports
+
+Outcome
+
+Participants can access supports that genuinely meet their needs, goals and preferences.
+
+Indicator (Plain English)
+
+The provider clearly explains what supports are available, who can access them, and any conditions or costs involved.
+
+Why this matters
+
+Participants cannot make informed choices if they do not understand what is available or what it will cost.
+
+Good evidence looks like
+
+Clear service descriptions provided before supports start
+
+Costs and conditions explained in plain language
+
+Bad or weak evidence looks like
+
+Vague service descriptions
+
+Costs discovered only after services commence
+
+Typical evidence examples
+
+Service catalogue
+
+Fee schedule
+
+Intake notes showing explanation
+
+CORE-PROV-ATS-QI-02 — Reasonable adjustments
+
+Outcome
+
+Supports are delivered in environments that maximise dignity, independence and safety.
+
+Indicator (Plain English)
+
+The provider makes reasonable adjustments so participants can safely and meaningfully access supports.
+
+Why this matters
+
+Without adjustments, services can unintentionally exclude or harm participants.
+
+Good evidence looks like
+
+Adjustments identified and implemented
+
+Adjustments reviewed over time
+
+Bad or weak evidence looks like
+
+Adjustments discussed but never actioned
+
+Typical evidence examples
+
+Adjustment records
+
+Support plan notes
+
+CORE-PROV-ATS-QI-03 — Supports not withdrawn due to dignity of risk
+
+Outcome
+
+Participants are not denied supports because they choose to accept reasonable risk.
+
+Indicator (Plain English)
+
+Supports are not withdrawn solely because a participant makes a dignity-of-risk decision.
+
+Why this matters
+
+Removing supports increases risk rather than reducing it.
+
+Good evidence looks like
+
+Risk discussions documented
+
+Supports adapted rather than withdrawn
+
+Bad or weak evidence looks like
+
+Services ended citing “risk” without alternatives
+
+Typical evidence examples
+
+Risk assessments
+
+Decision records
+
+CORE-PROV-SP-QI-01 — Participant-led support planning
+
+Outcome
+
+Support plans reflect what matters to the participant.
+
+Indicator (Plain English)
+
+The participant is actively involved in developing and reviewing their support plan.
+
+Why this matters
+
+Plans written without participant input often fail in practice.
+
+Good evidence looks like
+
+Participant voice clearly recorded
+
+Plans acknowledged or signed
+
+Bad or weak evidence looks like
+
+Generic plans copied across participants
+
+Typical evidence examples
+
+Support plans
+
+Review notes
+
+CORE-PROV-SP-QI-02 — Risk assessment and management in plans
+
+Outcome
+
+Risks are identified and managed collaboratively.
+
+Indicator (Plain English)
+
+Risks to the participant are assessed with them and managed through agreed strategies.
+
+Why this matters
+
+Unmanaged risks lead to incidents and harm.
+
+Good evidence looks like
+
+Participant-specific risk assessments
+
+Mitigation strategies implemented
+
+Bad or weak evidence looks like
+
+Copy-paste risk sections
+
+Typical evidence examples
+
+Risk assessments
+
+Support plans
+
+CORE-PROV-SP-QI-03 — Reliance and disruption risk
+
+Outcome
+
+Participants are not left without critical supports.
+
+Indicator (Plain English)
+
+The provider considers how reliant the participant is on supports and plans for disruptions.
+
+Why this matters
+
+Service gaps can cause serious harm.
+
+Good evidence looks like
+
+Reliance risks identified
+
+Backup arrangements documented
+
+Bad or weak evidence looks like
+
+No contingency planning
+
+Typical evidence examples
+
+Risk assessments
+
+Continuity plans
+
+CORE-PROV-SP-QI-04 — Review of risk strategies
+
+Outcome
+
+Risk strategies remain relevant.
+
+Indicator (Plain English)
+
+Risk management strategies are reviewed and updated.
+
+Why this matters
+
+Risks change over time.
+
+Good evidence looks like
+
+Regular review notes
+
+Bad or weak evidence looks like
+
+Risk plans never updated
+
+Typical evidence examples
+
+Review records
+
+CORE-PROV-SP-QI-05 — Plan review cycles
+
+Outcome
+
+Supports stay aligned with participant needs.
+
+Indicator (Plain English)
+
+Support plans are reviewed at least annually or when circumstances change.
+
+Why this matters
+
+Outdated plans lead to poor outcomes.
+
+Good evidence looks like
+
+Scheduled reviews completed
+
+Bad or weak evidence looks like
+
+Overdue or missing reviews
+
+Typical evidence examples
+
+Review schedules
+
+Updated plans
+
+CORE-PROV-SP-QI-06 — Responding to unmet goals
+
+Outcome
+
+Supports adapt when outcomes are not achieved.
+
+Indicator (Plain English)
+
+Plans are updated if goals are not being met.
+
+Why this matters
+
+Ignoring poor outcomes wastes funding and harms trust.
+
+Good evidence looks like
+
+Plan changes based on outcomes
+
+Bad or weak evidence looks like
+
+Same plan despite poor progress
+
+Typical evidence examples
+
+Goal review notes
+
+CORE-PROV-SP-QI-07 — Accessible support plans
+
+Outcome
+
+Participants and workers understand the plan.
+
+Indicator (Plain English)
+
+Support plans are written and shared in formats participants and workers can understand.
+
+Why this matters
+
+Unreadable plans are not implemented.
+
+Good evidence looks like
+
+Plain-language plans
+
+Bad or weak evidence looks like
+
+Complex clinical language only
+
+Typical evidence examples
+
+Easy Read plans
+
+CORE-PROV-SP-QI-08 — Sharing plans with consent
+
+Outcome
+
+Supports are coordinated safely.
+
+Indicator (Plain English)
+
+Support plans are shared with others only with consent.
+
+Why this matters
+
+Uncontrolled sharing breaches privacy.
+
+Good evidence looks like
+
+Consent recorded
+
+Bad or weak evidence looks like
+
+Plans shared without permission
+
+Typical evidence examples
+
+Consent forms
+
+CORE-PROV-SP-QI-09 — Preventative health planning
+
+Outcome
+
+Health issues are addressed early.
+
+Indicator (Plain English)
+
+Plans consider preventative health needs where relevant.
+
+Why this matters
+
+Reactive care leads to crisis.
+
+Good evidence looks like
+
+Preventative strategies included
+
+Bad or weak evidence looks like
+
+Health addressed only after incidents
+
+Typical evidence examples
+
+Health plans
+
+CORE-PROV-SP-QI-10 — Emergency and disaster planning in supports
+
+Outcome
+
+Participants are protected during emergencies.
+
+Indicator (Plain English)
+
+Support plans include emergency and disaster strategies.
+
+Why this matters
+
+Emergencies disproportionately affect vulnerable people.
+
+Good evidence looks like
+
+Individual emergency strategies
+
+Bad or weak evidence looks like
+
+Reliance on generic organisational plans
+
+Typical evidence examples
+
+Emergency plans
+
+CORE-PROV-SA-QI-01 — Clear service agreements
+
+Outcome
+
+Participants understand what supports they have agreed to.
+
+Indicator (Plain English)
+
+Service agreements clearly explain supports, conditions and expectations.
+
+Why this matters
+
+Misunderstandings cause disputes and harm trust.
+
+Good evidence looks like
+
+Agreements explained and signed
+
+Bad or weak evidence looks like
+
+Agreements signed without explanation
+
+Typical evidence examples
+
+Service agreements
+
+CORE-PROV-SA-QI-02 — Agreement explained accessibly
+
+Outcome
+
+Participants can make informed agreement decisions.
+
+Indicator (Plain English)
+
+Agreements are explained in a way the participant understands.
+
+Why this matters
+
+Signing does not equal understanding.
+
+Good evidence looks like
+
+Explanation recorded
+
+Bad or weak evidence looks like
+
+No explanation documented
+
+Typical evidence examples
+
+File notes
+
+CORE-PROV-SA-QI-03 — Agreement copy provided
+
+Outcome
+
+Participants retain control over their agreements.
+
+Indicator (Plain English)
+
+Participants receive a copy of their service agreement.
+
+Why this matters
+
+People need access to what they agreed to.
+
+Good evidence looks like
+
+Copy provided or exception recorded
+
+Bad or weak evidence looks like
+
+No copy and no explanation
+
+Typical evidence examples
+
+Distribution records
+
+CORE-PROV-RSP-QI-01 — Responsive, proportionate supports
+
+Outcome
+
+Supports respond appropriately to participant needs.
+
+Indicator (Plain English)
+
+Supports are timely, appropriate and use the least intrusive approach.
+
+Why this matters
+
+Overly restrictive responses reduce quality of life.
+
+Good evidence looks like
+
+Proportionate responses documented
+
+Bad or weak evidence looks like
+
+Restrictive approaches by default
+
+Typical evidence examples
+
+Case notes
+
+CORE-PROV-RSP-QI-02 — Collaboration with other providers
+
+Outcome
+
+Supports are coordinated.
+
+Indicator (Plain English)
+
+With consent, providers collaborate to manage risk and outcomes.
+
+Why this matters
+
+Uncoordinated supports increase risk.
+
+Good evidence looks like
+
+Communication records
+
+Bad or weak evidence looks like
+
+Providers working in isolation
+
+Typical evidence examples
+
+Case conference notes
+
+CORE-PROV-RSP-QI-03 — Choice of workers
+
+Outcome
+
+Participants feel comfortable with who supports them.
+
+Indicator (Plain English)
+
+Reasonable effort is made to involve participants in selecting workers.
+
+Why this matters
+
+Relationships matter in support delivery.
+
+Good evidence looks like
+
+Preferences documented
+
+Bad or weak evidence looks like
+
+Preferences ignored
+
+Typical evidence examples
+
+Rostering notes
+
+CORE-PROV-RSP-QI-04 — Trained workers for support needs
+
+Outcome
+
+Supports are delivered competently.
+
+Indicator (Plain English)
+
+Workers have the training required for the participant’s needs.
+
+Why this matters
+
+Untrained staff increase risk.
+
+Good evidence looks like
+
+Training aligned to needs
+
+Bad or weak evidence looks like
+
+Generic training only
+
+Typical evidence examples
+
+Training records
+
+CORE-PROV-TTP-QI-01 — Planned transitions
+
+Outcome
+
+Participants experience safe transitions.
+
+Indicator (Plain English)
+
+Transitions into, within or out of services are planned and communicated.
+
+Why this matters
+
+Unplanned transitions cause distress and risk.
+
+Good evidence looks like
+
+Transition plans
+
+Bad or weak evidence looks like
+
+Sudden changes without planning
+
+Typical evidence examples
+
+Transition plans
+
+CORE-PROV-TTP-QI-02 — Transition risk management
+
+Outcome
+
+Risks during transitions are controlled.
+
+Indicator (Plain English)
+
+Transition risks are identified and managed.
+
+Why this matters
+
+Transitions are high-risk periods.
+
+Good evidence looks like
+
+Risk assessments
+
+Bad or weak evidence looks like
+
+No risk planning
+
+Typical evidence examples
+
+Risk assessments
+
+CORE-PROV-TTP-QI-03 — Review of transition processes
+
+Outcome
+
+Transitions improve over time.
+
+Indicator (Plain English)
+
+Transition processes are reviewed and improved.
+
+Why this matters
+
+Poor transitions repeat without review.
+
+Good evidence looks like
+
+Review records
+
+Bad or weak evidence looks like
+
+No learning from past transitions
+
+Typical evidence examples
+
+Review notes
+
+SUPPLEMENTARY MODULES — HIGH-RISK & SPECIALIST SUPPORTS
+
+(Applies only when providers deliver specific high-risk or specialist supports)
+
+These modules exist because some supports carry much higher risk. The NDIS expects extra safeguards, higher skills, and stronger evidence.
+
+SUPPLEMENTARY — HIGH INTENSITY DAILY PERSONAL ACTIVITIES (HIDPA)
+
+What this module is about (plain English)
+
+Some participants need complex health-related supports delivered by disability workers (not hospitals). When this happens, the risk of serious harm increases.
+
+This module ensures:
+
+clinical oversight exists
+
+workers are specifically trained
+
+risks and emergencies are planned for
+
+HIDPA-QI-01 — Participant-specific clinical plans
+
+Outcome
+
+Participants receive complex personal supports that are safe and appropriate.
+
+Indicator (Plain English)
+
+Each participant has a detailed, up-to-date plan written or reviewed by a qualified health professional.
+
+Why this matters
+
+Generic care instructions lead to serious medical errors.
+
+Good evidence looks like
+
+Participant-specific clinical plans
+
+Regular professional reviews
+
+Bad or weak evidence looks like
+
+Generic instructions used for multiple people
+
+Plans not reviewed by a qualified clinician
+
+Typical evidence examples
+
+Bowel care plans
+
+Enteral feeding plans
+
+Catheter care plans
+
+HIDPA-QI-02 — Risk and emergency management
+
+Outcome
+
+Workers can respond safely if something goes wrong.
+
+Indicator (Plain English)
+
+Plans clearly describe risks, warning signs, and what to do in an emergency.
+
+Why this matters
+
+Delayed or incorrect responses can be fatal.
+
+Good evidence looks like
+
+Clear escalation instructions
+
+Emergency responses practiced
+
+Bad or weak evidence looks like
+
+“Call 000” with no additional guidance
+
+Typical evidence examples
+
+Emergency flowcharts
+
+Escalation protocols
+
+HIDPA-QI-03 — Worker training and competency
+
+Outcome
+
+Workers are capable of delivering complex supports safely.
+
+Indicator (Plain English)
+
+Workers receive participant-specific training and are assessed as competent.
+
+Why this matters
+
+General disability training is not enough for medical tasks.
+
+Good evidence looks like
+
+Training linked to each participant’s needs
+
+Competency sign-offs
+
+Bad or weak evidence looks like
+
+One-off group training only
+
+Typical evidence examples
+
+Skills checklists
+
+Competency assessments
+
+SUPPLEMENTARY — SPECIALIST BEHAVIOUR SUPPORT
+
+What this module is about (plain English)
+
+This module applies when a provider designs behaviour support plans, especially when restrictive practices are involved.
+
+The focus is on:
+
+improving quality of life
+
+reducing behaviours of concern
+
+eliminating restrictive practices wherever possible
+
+SBS-QI-01 — Evidence-informed behaviour support
+
+Outcome
+
+Behaviour support improves the participant’s quality of life.
+
+Indicator (Plain English)
+
+Behaviour support is based on assessment, evidence and professional standards.
+
+Why this matters
+
+Poor behaviour support increases harm and restrictive practices.
+
+Good evidence looks like
+
+Functional behaviour assessments
+
+Individualised behaviour support plans
+
+Bad or weak evidence looks like
+
+Behaviour plans based on opinion only
+
+Typical evidence examples
+
+FBA reports
+
+Behaviour support plans
+
+SBS-QI-02 — Restrictive practices compliance
+
+Outcome
+
+Restrictive practices are lawful, minimised and monitored.
+
+Indicator (Plain English)
+
+Any restrictive practice is authorised, documented and part of a reduction strategy.
+
+Why this matters
+
+Restrictive practices remove basic human rights.
+
+Good evidence looks like
+
+Authorisations in place
+
+Reduction strategies documented
+
+Bad or weak evidence looks like
+
+Restrictive practices used without approval
+
+Typical evidence examples
+
+Authorisation records
+
+Restrictive practice logs
+
+SBS-QI-03 — Monitoring and review
+
+Outcome
+
+Behaviour support adapts as the participant changes.
+
+Indicator (Plain English)
+
+Plans are monitored, reviewed and updated using real data.
+
+Why this matters
+
+Static plans do not reduce behaviours.
+
+Good evidence looks like
+
+Regular data collection
+
+Documented plan reviews
+
+Bad or weak evidence looks like
+
+Plans unchanged despite poor outcomes
+
+Typical evidence examples
+
+Data charts
+
+Review notes
+
+SUPPLEMENTARY — IMPLEMENTING BEHAVIOUR SUPPORT PLANS
+
+What this module is about (plain English)
+
+This applies to providers delivering supports under someone else’s behaviour support plan.
+
+IBSP-QI-01 — Understanding and following the plan
+
+Outcome
+
+Supports are delivered safely and consistently.
+
+Indicator (Plain English)
+
+Workers understand the behaviour support plan and follow it exactly.
+
+Why this matters
+
+Incorrect implementation increases risk.
+
+Good evidence looks like
+
+Workers trained in the specific plan
+
+Bad or weak evidence looks like
+
+Workers unaware of plan details
+
+Typical evidence examples
+
+Training attendance
+
+Competency checks
+
+IBSP-QI-02 — Reporting and collaboration
+
+Outcome
+
+Behaviour support providers are informed of issues.
+
+Indicator (Plain English)
+
+Incidents and concerns are reported promptly.
+
+Why this matters
+
+Behaviour support cannot improve without feedback.
+
+Good evidence looks like
+
+Regular communication
+
+Bad or weak evidence looks like
+
+Issues not escalated
+
+Typical evidence examples
+
+Incident reports
+
+Communication logs
+
+SUPPLEMENTARY — EARLY CHILDHOOD SUPPORTS
+
+What this module is about (plain English)
+
+Supports for young children focus on development, family capacity and inclusion, not just therapy sessions.
+
+ECS-QI-01 — Child-centred practice
+
+Outcome
+
+Children are supported to develop skills and participate.
+
+Indicator (Plain English)
+
+Supports are based on the child’s development and daily routines.
+
+Why this matters
+
+Isolated therapy does not build real-world skills.
+
+Good evidence looks like
+
+Functional goals
+
+Family involvement
+
+Bad or weak evidence looks like
+
+Therapy with no everyday application
+
+Typical evidence examples
+
+Developmental plans
+
+Family coaching notes
+
+ECS-QI-02 — Family-centred supports
+
+Outcome
+
+Families are empowered, not replaced.
+
+Indicator (Plain English)
+
+Families are supported to build skills and confidence.
+
+Why this matters
+
+Families are the child’s main support.
+
+Good evidence looks like
+
+Coaching approaches
+
+Bad or weak evidence looks like
+
+Professionals doing everything
+
+Typical evidence examples
+
+Session notes
+
+Family feedback
+
+SUPPLEMENTARY — SPECIALIST DISABILITY ACCOMMODATION (SDA)
+
+What this module is about (plain English)
+
+SDA involves housing, which creates unique power and safety risks.
+
+SDA-QI-01 — Rights and housing security
+
+Outcome
+
+Participants feel safe and secure in their home.
+
+Indicator (Plain English)
+
+Housing rights are respected and clearly explained.
+
+Why this matters
+
+Housing power imbalances increase abuse risk.
+
+Good evidence looks like
+
+Clear agreements
+
+Bad or weak evidence looks like
+
+Informal arrangements
+
+Typical evidence examples
+
+SDA service agreements
+
+SUPPLEMENTARY — SPECIALIST SUPPORT COORDINATION
+
+What this module is about (plain English)
+
+Some participants need high-level coordination to manage complexity and risk.
+
+SSC-QI-01 — Risk-focused coordination
+
+Outcome
+
+Participants navigate complex systems safely.
+
+Indicator (Plain English)
+
+Support coordination actively manages risk and complexity.
+
+Why this matters
+
+Complex systems overwhelm participants.
+
+Good evidence looks like
+
+Risk-based coordination notes
+
+Bad or weak evidence looks like
+
+Passive referral-only coordination
+
+Typical evidence examples
+
+Coordination logs

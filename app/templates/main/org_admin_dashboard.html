@@ -16,6 +16,19 @@
     </div>
   </div>
 
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+      <div>
+        <h2 class="h6 fw-bold mb-1"><i class="bi bi-database-check me-2"></i>NDIS Compliance Data</h2>
+        <p class="text-body-secondary mb-0">Initialize or refresh NDIS requirement mapping for this organisation.</p>
+      </div>
+      <form method="post" action="{{ url_for('main.org_admin_initialize_compliance_data') }}" class="m-0">
+        {{ initialize_compliance_data_form.csrf_token }}
+        {{ initialize_compliance_data_form.submit() }}
+      </form>
+    </div>
+  </div>
+
   <div class="row g-3 mb-4">
     <div class="col-md-4">
       <div class="card h-100">
