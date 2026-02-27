@@ -385,7 +385,15 @@ def org_admin_dashboard():
     if maybe is not None:
         return maybe
 
-    from app.main.forms import InviteMemberForm, MembershipActionForm, PendingInviteResendForm, PendingInviteRevokeForm, UpdateMemberRoleForm, UpdateMemberDepartmentForm
+    from app.main.forms import (
+        InitializeComplianceDataForm,
+        InviteMemberForm,
+        MembershipActionForm,
+        PendingInviteResendForm,
+        PendingInviteRevokeForm,
+        UpdateMemberRoleForm,
+        UpdateMemberDepartmentForm,
+    )
     from app.models import Department
 
     org_id = _active_org_id()
@@ -451,6 +459,7 @@ def org_admin_dashboard():
     update_department_form = UpdateMemberDepartmentForm()
     pending_invite_resend_form = PendingInviteResendForm()
     pending_invite_revoke_form = PendingInviteRevokeForm()
+    initialize_compliance_data_form = InitializeComplianceDataForm()
 
     # Populate role choices for role-update form.
     available_roles = []
@@ -485,9 +494,64 @@ def org_admin_dashboard():
         update_department_form=update_department_form,
         pending_invite_resend_form=pending_invite_resend_form,
         pending_invite_revoke_form=pending_invite_revoke_form,
+        initialize_compliance_data_form=initialize_compliance_data_form,
         departments=departments,
         available_roles=available_roles,
     )
+
+
+@bp.route('/org/admin/compliance/initialize', methods=['POST'])
+@login_required
+def org_admin_initialize_compliance_data():
+    """Initialize NDIS mapping data for the active organisation."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    from app.main.forms import InitializeComplianceDataForm
+    from app.services.compliance_mapping_service import ComplianceMappingImportError, compliance_mapping_service
+
+    form = InitializeComplianceDataForm()
+    if not form.validate_on_submit():
+        flash('Unable to initialize compliance data. Please refresh and try again.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    org_id = _active_org_id()
+    mapping_file_path = os.path.abspath(
+        os.path.join(
+            current_app.root_path,
+            os.pardir,
+            'data',
+            'sources',
+            'ndis',
+            'mapping',
+            'MASTER Cenaris_NDIS_Audit_Master_Mapping_v1.xlsx',
+        )
+    )
+
+    if not os.path.exists(mapping_file_path):
+        flash('NDIS mapping file is missing. Please upload or restore it in data/sources/ndis/mapping.', 'error')
+        return redirect(url_for('main.org_admin_dashboard'))
+
+    try:
+        result = compliance_mapping_service.import_master_mapping(
+            mapping_file_path,
+            organization_id=int(org_id),
+            imported_by_user_id=int(current_user.id),
+            version_label='v1.0',
+        )
+        flash(
+            f'NDIS mapping initialized. Loaded {result.imported_requirements} requirements for this organisation.',
+            'success',
+        )
+    except ComplianceMappingImportError as e:
+        flash(f'Initialization failed: {e}', 'error')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('Failed to initialize NDIS mapping for org %s', org_id)
+        flash(f'Initialization failed: {e}', 'error')
+
+    return redirect(url_for('main.org_admin_dashboard'))
 
 
 @bp.route('/org/admin/members/department', methods=['POST'])

@@ -297,6 +297,13 @@ class PendingInviteRevokeForm(FlaskForm):
     )
 
 
+class InitializeComplianceDataForm(FlaskForm):
+    submit = SubmitField(
+        'Initialize NDIS Data',
+        render_kw={'class': 'btn btn-outline-success'},
+    )
+
+
 class CreateDepartmentForm(FlaskForm):
     name = StringField(
         'Department name',
