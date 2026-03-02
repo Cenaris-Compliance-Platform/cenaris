@@ -1,23 +1,31 @@
-from flask import render_template, redirect, url_for, jsonify, request, make_response, flash, abort, current_app
+from flask import render_template, redirect, url_for, jsonify, request, make_response, flash, abort, current_app, send_file
 from flask_login import login_required, current_user
 from app.main import bp
 from app.models import (
+    AIUsageEvent,
     ComplianceFrameworkVersion,
     ComplianceRequirement,
     Document,
     Organization,
+    OrganizationAISettings,
     OrganizationMembership,
     OrganizationRequirementAssessment,
     RequirementEvidenceLink,
     User,
 )
-from app import db, mail
+from app import db, mail, limiter, invalidate_org_switcher_context_cache
 from app.services.azure_data_service import azure_data_service
+from app.services.analytics_service import analytics_service
+from app.services.azure_openai_policy_service import azure_openai_policy_service
+from app.services.policy_draft_service import policy_draft_service
 from app.services.compliance_scoring_service import compliance_scoring_service
+from app.services.notification_service import notification_service
+from app.services.rag_query_service import rag_query_service
 from sqlalchemy import and_, or_
 
 import threading
 import time
+from datetime import datetime
 
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
@@ -25,6 +33,8 @@ from itsdangerous import URLSafeTimedSerializer
 import os
 import hashlib
 import json
+import csv
+import io
 
 
 _RESEND_ORG_INVITE_COOLDOWN_SECONDS = 60 * 5
@@ -41,6 +51,106 @@ def _safe_int_env(name: str, default: int) -> int:
         return int(os.environ.get(name) or default)
     except Exception:
         return default
+
+
+def _clamp_int(value, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
+
+def _limit_text(text: str, *, max_chars: int) -> str:
+    value = (text or '').strip()
+    if max_chars <= 0:
+        return value
+    return value[:max_chars]
+
+
+def _log_ai_call(event_name: str, *, org_id: int, mode: str, provider: str, model: str, usage: dict | None, latency_ms: int):
+    usage = usage or {}
+    current_app.logger.info(
+        '[AI_USAGE] %s',
+        json.dumps(
+            {
+                'event': event_name,
+                'org_id': int(org_id),
+                'mode': mode,
+                'provider': provider,
+                'model': model,
+                'prompt_tokens': int(usage.get('prompt_tokens') or 0),
+                'completion_tokens': int(usage.get('completion_tokens') or 0),
+                'total_tokens': int(usage.get('total_tokens') or 0),
+                'latency_ms': int(latency_ms),
+            },
+            sort_keys=True,
+        ),
+    )
+
+    try:
+        user_id = int(current_user.id) if getattr(current_user, 'is_authenticated', False) else None
+        db.session.add(
+            AIUsageEvent(
+                organization_id=int(org_id),
+                user_id=user_id,
+                event=(event_name or '').strip() or 'unknown',
+                mode=(mode or '').strip() or 'unknown',
+                provider=(provider or '').strip() or 'unknown',
+                model=(model or '').strip() or 'unknown',
+                prompt_tokens=int(usage.get('prompt_tokens') or 0),
+                completion_tokens=int(usage.get('completion_tokens') or 0),
+                total_tokens=int(usage.get('total_tokens') or 0),
+                latency_ms=int(latency_ms or 0),
+            )
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to persist AI usage event')
+
+
+def _ai_rate_limit_key() -> str:
+    try:
+        user_id = int(current_user.id) if getattr(current_user, 'is_authenticated', False) else 0
+    except Exception:
+        user_id = 0
+    try:
+        org_id = int(_active_org_id() or 0)
+    except Exception:
+        org_id = 0
+
+    ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or 'unknown').strip()
+    return f'org:{org_id}:user:{user_id}:ip:{ip}'
+
+
+def _get_org_ai_settings(org_id: int | None) -> OrganizationAISettings | None:
+    try:
+        if not org_id:
+            return None
+        return OrganizationAISettings.query.filter_by(organization_id=int(org_id)).first()
+    except Exception:
+        return None
+
+
+def _effective_ai_setting(org_id: int | None, key: str, default):
+    settings = _get_org_ai_settings(org_id)
+    if settings is None:
+        return default
+    value = getattr(settings, key, None)
+    return default if value is None else value
+
+
+def _rag_rate_limit_value() -> str:
+    org_id = _active_org_id()
+    default = current_app.config.get('AI_RAG_RATE_LIMIT') or '20 per minute'
+    return str(_effective_ai_setting(org_id, 'rag_rate_limit', default) or default)
+
+
+def _policy_rate_limit_value() -> str:
+    org_id = _active_org_id()
+    default = current_app.config.get('AI_POLICY_RATE_LIMIT') or '10 per minute'
+    return str(_effective_ai_setting(org_id, 'policy_rate_limit', default) or default)
 
 
 def _org_invite_token_ttl_seconds() -> int:
@@ -1758,7 +1868,11 @@ def ai_evidence():
 @login_required
 def organization_settings():
     from flask import abort, flash, make_response, request
-    from app.main.forms import OrganizationBillingForm, OrganizationProfileSettingsForm
+    from app.main.forms import (
+        OrganizationBillingForm,
+        OrganizationMonthlyReportForm,
+        OrganizationProfileSettingsForm,
+    )
 
     maybe = _require_org_permission('org.manage')
     if maybe is not None:
@@ -1774,6 +1888,8 @@ def organization_settings():
 
     profile_form = OrganizationProfileSettingsForm(obj=organization)
     billing_form = OrganizationBillingForm(obj=organization)
+    monthly_report_form = OrganizationMonthlyReportForm(obj=organization)
+    is_org_admin = bool(current_user.has_permission('users.manage', org_id=int(organization.id)))
 
     if request.method == 'POST':
         submitted = (request.form.get('form_name') or '').strip()
@@ -1797,6 +1913,8 @@ def organization_settings():
                             title='Organization Settings',
                             profile_form=profile_form,
                             billing_form=billing_form,
+                            monthly_report_form=monthly_report_form,
+                            is_org_admin=is_org_admin,
                             organization=organization,
                         )
 
@@ -1820,6 +1938,51 @@ def organization_settings():
                 except Exception:
                     db.session.rollback()
                     flash('Failed to save billing details. Please try again.', 'error')
+        elif submitted == 'monthly_reports':
+            if not is_org_admin:
+                abort(403)
+
+            if monthly_report_form.validate_on_submit():
+                previous_enabled = bool(getattr(organization, 'monthly_report_enabled', False))
+                previous_recipient = ((getattr(organization, 'monthly_report_recipient_email', '') or '').strip().lower())
+
+                organization.monthly_report_enabled = bool(monthly_report_form.monthly_report_enabled.data)
+                organization.monthly_report_recipient_email = (
+                    (monthly_report_form.monthly_report_recipient_email.data or '').strip().lower() or None
+                )
+
+                try:
+                    db.session.commit()
+
+                    new_enabled = bool(getattr(organization, 'monthly_report_enabled', False))
+                    new_recipient = ((getattr(organization, 'monthly_report_recipient_email', '') or '').strip().lower())
+                    should_send_setup_email = bool(
+                        new_enabled
+                        and new_recipient
+                        and ((not previous_enabled and new_enabled) or (new_recipient != previous_recipient))
+                    )
+                    if should_send_setup_email:
+                        try:
+                            sent = notification_service.send_monthly_report_setup_confirmation(
+                                recipient_email=new_recipient,
+                                organization_name=(organization.name or '').strip() or 'your organisation',
+                            )
+                            if sent:
+                                flash('Setup confirmation email sent to the monthly report recipient.', 'success')
+                            else:
+                                flash('Monthly report settings saved, but setup confirmation email could not be sent.', 'warning')
+                        except Exception:
+                            current_app.logger.exception(
+                                'Failed sending monthly report setup confirmation for org %s',
+                                int(organization.id),
+                            )
+                            flash('Monthly report settings saved, but setup confirmation email failed to send.', 'warning')
+
+                    flash('Monthly report settings saved.', 'success')
+                    return redirect(url_for('main.organization_settings'))
+                except Exception:
+                    db.session.rollback()
+                    flash('Failed to save monthly report settings. Please try again.', 'error')
         else:
             flash('Invalid form submission.', 'error')
 
@@ -1828,8 +1991,245 @@ def organization_settings():
         title='Organization Profile',
         profile_form=profile_form,
         billing_form=billing_form,
+        monthly_report_form=monthly_report_form,
+        is_org_admin=is_org_admin,
         organization=organization,
     )
+
+
+@bp.route('/organization/ai-controls', methods=['GET', 'POST'])
+@login_required
+def organization_ai_controls():
+    from app.main.forms import OrganizationAISettingsForm, OrganizationAIUsageRetentionForm
+
+    maybe = _require_org_permission('org.manage')
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        abort(404)
+
+    settings = _get_org_ai_settings(int(org_id))
+    if settings is None:
+        settings = OrganizationAISettings(organization_id=int(org_id), updated_by_user_id=int(current_user.id))
+
+    form = OrganizationAISettingsForm(obj=settings)
+    retention_form = OrganizationAIUsageRetentionForm()
+    if request.method == 'GET':
+        retention_form.days.data = int(current_app.config.get('AI_USAGE_RETENTION_DAYS') or 90)
+        retention_form.dry_run.data = True
+
+    if request.method == 'GET':
+        form.max_query_chars.data = int(_effective_ai_setting(org_id, 'max_query_chars', current_app.config.get('AI_MAX_QUERY_CHARS') or 1200))
+        form.max_top_k.data = int(_effective_ai_setting(org_id, 'max_top_k', current_app.config.get('AI_MAX_TOP_K') or 5))
+        form.max_citation_text_chars.data = int(_effective_ai_setting(org_id, 'max_citation_text_chars', current_app.config.get('AI_MAX_CITATION_TEXT_CHARS') or 600))
+        form.max_answer_chars.data = int(_effective_ai_setting(org_id, 'max_answer_chars', current_app.config.get('AI_MAX_ANSWER_CHARS') or 2000))
+        form.max_policy_draft_chars.data = int(_effective_ai_setting(org_id, 'max_policy_draft_chars', current_app.config.get('AI_MAX_POLICY_DRAFT_CHARS') or 6000))
+        form.rag_rate_limit.data = str(_effective_ai_setting(org_id, 'rag_rate_limit', current_app.config.get('AI_RAG_RATE_LIMIT') or '20 per minute'))
+        form.policy_rate_limit.data = str(_effective_ai_setting(org_id, 'policy_rate_limit', current_app.config.get('AI_POLICY_RATE_LIMIT') or '10 per minute'))
+        form.policy_draft_use_llm.data = bool(_effective_ai_setting(org_id, 'policy_draft_use_llm', current_app.config.get('POLICY_DRAFT_USE_LLM') or False))
+
+    if form.validate_on_submit():
+        settings.policy_draft_use_llm = bool(form.policy_draft_use_llm.data)
+        settings.max_query_chars = int(form.max_query_chars.data)
+        settings.max_top_k = int(form.max_top_k.data)
+        settings.max_citation_text_chars = int(form.max_citation_text_chars.data)
+        settings.max_answer_chars = int(form.max_answer_chars.data)
+        settings.max_policy_draft_chars = int(form.max_policy_draft_chars.data)
+        settings.rag_rate_limit = (form.rag_rate_limit.data or '').strip() or '20 per minute'
+        settings.policy_rate_limit = (form.policy_rate_limit.data or '').strip() or '10 per minute'
+        settings.updated_by_user_id = int(current_user.id)
+
+        if not getattr(settings, 'id', None):
+            db.session.add(settings)
+
+        try:
+            db.session.commit()
+            flash('AI controls saved.', 'success')
+            return redirect(url_for('main.organization_ai_controls'))
+        except Exception:
+            db.session.rollback()
+            flash('Failed to save AI controls. Please try again.', 'error')
+    elif request.method == 'POST':
+        current_app.logger.warning('AI controls form validation failed: %s', form.errors)
+
+    event_filter = (request.args.get('event') or '').strip()
+    time_range = (request.args.get('time_range') or '7d').strip().lower()
+    page = _clamp_int(request.args.get('page', 1), default=1, minimum=1, maximum=10_000)
+    per_page = 25
+
+    from datetime import datetime, timezone, timedelta
+
+    now = datetime.now(timezone.utc)
+    range_map = {
+        '24h': timedelta(hours=24),
+        '7d': timedelta(days=7),
+        '30d': timedelta(days=30),
+        'all': None,
+    }
+    selected_delta = range_map.get(time_range, timedelta(days=7))
+    start_time = (now - selected_delta) if selected_delta is not None else None
+
+    usage_query = AIUsageEvent.query.filter_by(organization_id=int(org_id))
+    if event_filter:
+        usage_query = usage_query.filter(AIUsageEvent.event == event_filter)
+    if start_time is not None:
+        usage_query = usage_query.filter(AIUsageEvent.created_at >= start_time)
+
+    total_usage_events = usage_query.count()
+    usage_events = (
+        usage_query
+        .order_by(AIUsageEvent.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    total_pages = max(1, (total_usage_events + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+
+    available_events = [
+        row[0]
+        for row in (
+            db.session.query(AIUsageEvent.event)
+            .filter(AIUsageEvent.organization_id == int(org_id))
+            .distinct()
+            .order_by(AIUsageEvent.event.asc())
+            .all()
+        )
+        if row and row[0]
+    ]
+
+    return render_template(
+        'main/organization_ai_controls.html',
+        title='AI Controls',
+        form=form,
+        retention_form=retention_form,
+        organization=organization,
+        usage_events=usage_events,
+        usage_total=total_usage_events,
+        usage_page=page,
+        usage_pages=total_pages,
+        usage_event_filter=event_filter,
+        usage_time_range=time_range,
+        usage_available_events=available_events,
+    )
+
+
+@bp.route('/organization/ai-controls/retention-run', methods=['POST'])
+@login_required
+def organization_ai_retention_run():
+    from app.main.forms import OrganizationAIUsageRetentionForm
+    from datetime import datetime, timezone, timedelta
+
+    maybe = _require_org_permission('org.manage')
+    if maybe is not None:
+        return maybe
+
+    form = OrganizationAIUsageRetentionForm()
+    if not form.validate_on_submit():
+        flash('Invalid retention request. Check retention days.', 'error')
+        return redirect(url_for('main.organization_ai_controls'))
+
+    org_id = _active_org_id()
+    days = max(1, int(form.days.data or (current_app.config.get('AI_USAGE_RETENTION_DAYS') or 90)))
+    dry_run = bool(form.dry_run.data)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    q = (
+        AIUsageEvent.query
+        .filter(AIUsageEvent.organization_id == int(org_id))
+        .filter(AIUsageEvent.created_at < cutoff)
+    )
+    candidate_rows = int(q.count())
+
+    if dry_run:
+        flash(f'Dry run: {candidate_rows} AI usage events older than {days} days would be deleted.', 'info')
+        return redirect(url_for('main.organization_ai_controls'))
+
+    try:
+        deleted = int(q.delete(synchronize_session=False) or 0)
+        db.session.commit()
+        flash(f'Retention cleanup complete. Deleted {deleted} AI usage events older than {days} days.', 'success')
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to run AI usage retention cleanup for org %s', org_id)
+        flash('Retention cleanup failed. Please try again.', 'error')
+
+    return redirect(url_for('main.organization_ai_controls'))
+
+
+@bp.route('/organization/ai-controls/usage.csv')
+@login_required
+def organization_ai_usage_csv():
+    maybe = _require_org_permission('org.manage')
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    event_filter = (request.args.get('event') or '').strip()
+    time_range = (request.args.get('time_range') or 'all').strip().lower()
+
+    from datetime import datetime, timezone, timedelta
+
+    now = datetime.now(timezone.utc)
+    range_map = {
+        '24h': timedelta(hours=24),
+        '7d': timedelta(days=7),
+        '30d': timedelta(days=30),
+        'all': None,
+    }
+    selected_delta = range_map.get(time_range, None)
+    start_time = (now - selected_delta) if selected_delta is not None else None
+
+    events_query = AIUsageEvent.query.filter_by(organization_id=int(org_id))
+    if event_filter:
+        events_query = events_query.filter(AIUsageEvent.event == event_filter)
+    if start_time is not None:
+        events_query = events_query.filter(AIUsageEvent.created_at >= start_time)
+
+    events = (
+        events_query
+        .order_by(AIUsageEvent.created_at.desc())
+        .limit(5000)
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'timestamp_utc',
+        'event',
+        'mode',
+        'provider',
+        'model',
+        'user_id',
+        'prompt_tokens',
+        'completion_tokens',
+        'total_tokens',
+        'latency_ms',
+    ])
+
+    for event in events:
+        writer.writerow([
+            event.created_at.isoformat() if event.created_at else '',
+            event.event or '',
+            event.mode or '',
+            event.provider or '',
+            event.model or '',
+            event.user_id or '',
+            int(event.prompt_tokens or 0),
+            int(event.completion_tokens or 0),
+            int(event.total_tokens or 0),
+            int(event.latency_ms or 0),
+        ])
+
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = 'attachment; filename=ai_usage_events.csv'
+    return response
 
 
 @bp.route('/organization/logo')
@@ -2351,6 +2751,234 @@ def compliance_requirement_unlink_evidence(requirement_db_id, link_id):
     flash('Evidence link removed.', 'success')
     return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
 
+
+@bp.route('/api/rag/query', methods=['POST'])
+@login_required
+@limiter.limit(_rag_rate_limit_value, key_func=_ai_rate_limit_key)
+def rag_query_api():
+    """Retrieve relevant NDIS corpus citations for a question/requirement."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    max_query_chars = int(_effective_ai_setting(org_id, 'max_query_chars', current_app.config.get('AI_MAX_QUERY_CHARS') or 1200))
+    max_top_k = int(_effective_ai_setting(org_id, 'max_top_k', current_app.config.get('AI_MAX_TOP_K') or 5))
+    max_citation_text_chars = int(_effective_ai_setting(org_id, 'max_citation_text_chars', current_app.config.get('AI_MAX_CITATION_TEXT_CHARS') or 600))
+    max_answer_chars = int(_effective_ai_setting(org_id, 'max_answer_chars', current_app.config.get('AI_MAX_ANSWER_CHARS') or 2000))
+    started = time.perf_counter()
+
+    query_text = _limit_text((payload.get('query') or '').strip(), max_chars=max_query_chars)
+    requirement_id = (payload.get('requirement_id') or '').strip()
+    top_k = _clamp_int(payload.get('top_k', 3), default=3, minimum=1, maximum=max_top_k)
+
+    if not query_text and not requirement_id:
+        return jsonify({'success': False, 'error': 'query or requirement_id is required'}), 400
+
+    corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
+    corpus_path = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
+
+    try:
+        result = rag_query_service.query(
+            corpus_path=corpus_path,
+            query_text=query_text,
+            requirement_id=requirement_id,
+            top_k=top_k,
+        )
+    except FileNotFoundError:
+        return jsonify({'success': False, 'error': 'RAG corpus is not built yet'}), 503
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        current_app.logger.exception('RAG query failed')
+        return jsonify({'success': False, 'error': 'Failed to process RAG query'}), 500
+
+    response_payload = {
+        'success': True,
+        'answer': _limit_text(result.answer, max_chars=max_answer_chars),
+        'citations': [
+            {
+                'chunk_id': c.chunk_id,
+                'source_id': c.source_id,
+                'page_number': c.page_number,
+                'score': c.score,
+                'text': _limit_text(c.text, max_chars=max_citation_text_chars),
+            }
+            for c in result.citations
+        ],
+        'limits': {
+            'top_k': top_k,
+            'max_query_chars': max_query_chars,
+            'max_citation_text_chars': max_citation_text_chars,
+            'max_answer_chars': max_answer_chars,
+        },
+    }
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    _log_ai_call(
+        'rag_query',
+        org_id=int(org_id),
+        mode='retrieval',
+        provider='local',
+        model='lexical-rag',
+        usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+        latency_ms=latency_ms,
+    )
+
+    return jsonify(
+        response_payload
+    )
+
+
+@bp.route('/api/policy/draft', methods=['POST'])
+@login_required
+@limiter.limit(_policy_rate_limit_value, key_func=_ai_rate_limit_key)
+def policy_draft_api():
+    """Generate a policy draft using LLM mode (if enabled) with deterministic fallback."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    max_query_chars = int(_effective_ai_setting(org_id, 'max_query_chars', current_app.config.get('AI_MAX_QUERY_CHARS') or 1200))
+    max_top_k = int(_effective_ai_setting(org_id, 'max_top_k', current_app.config.get('AI_MAX_TOP_K') or 5))
+    max_citation_text_chars = int(_effective_ai_setting(org_id, 'max_citation_text_chars', current_app.config.get('AI_MAX_CITATION_TEXT_CHARS') or 600))
+    max_draft_chars = int(_effective_ai_setting(org_id, 'max_policy_draft_chars', current_app.config.get('AI_MAX_POLICY_DRAFT_CHARS') or 6000))
+
+    policy_type = (payload.get('policy_type') or '').strip()
+    query_text = _limit_text((payload.get('query') or '').strip(), max_chars=max_query_chars)
+    requirement_id = (payload.get('requirement_id') or '').strip()
+    top_k = _clamp_int(payload.get('top_k', 3), default=3, minimum=1, maximum=max_top_k)
+
+    if not policy_type:
+        return jsonify({'success': False, 'error': 'policy_type is required'}), 400
+    if not query_text and not requirement_id:
+        return jsonify({'success': False, 'error': 'query or requirement_id is required'}), 400
+
+    corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
+    corpus_path = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
+
+    try:
+        rag_result = rag_query_service.query(
+            corpus_path=corpus_path,
+            query_text=query_text,
+            requirement_id=requirement_id,
+            top_k=top_k,
+        )
+    except FileNotFoundError:
+        return jsonify({'success': False, 'error': 'RAG corpus is not built yet'}), 503
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception:
+        current_app.logger.exception('Policy draft retrieval failed')
+        return jsonify({'success': False, 'error': 'Failed to retrieve citations for policy draft'}), 500
+
+    organization = db.session.get(Organization, int(org_id))
+    prompt_path = current_app.config.get('NDIS_POLICY_PROMPT_PATH') or 'app/ai/prompts/ndis_policy_system_prompt.txt'
+    prompt_path = os.path.abspath(os.path.join(current_app.root_path, os.pardir, prompt_path))
+
+    citations = [
+        {
+            'chunk_id': c.chunk_id,
+            'source_id': c.source_id,
+            'page_number': c.page_number,
+            'score': c.score,
+            'text': _limit_text(c.text, max_chars=max_citation_text_chars),
+        }
+        for c in rag_result.citations
+    ]
+
+    draft_result = policy_draft_service.build_draft(
+        policy_type=policy_type,
+        organization_name=(organization.name if organization else 'Organisation'),
+        requirement_id=requirement_id,
+        user_goal=query_text,
+        citations=citations,
+        prompt_path=prompt_path,
+    )
+
+    draft_text = _limit_text(draft_result.draft_text, max_chars=max_draft_chars)
+    disclaimer_text = draft_result.disclaimer
+    draft_mode = 'deterministic'
+    provider = 'local'
+    model = 'deterministic'
+    usage: dict[str, int] = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+    warnings: list[str] = []
+
+    use_llm = bool(_effective_ai_setting(org_id, 'policy_draft_use_llm', current_app.config.get('POLICY_DRAFT_USE_LLM')))
+    ai_env = (current_app.config.get('AI_ENVIRONMENT') or 'development').strip().lower()
+    allow_in_dev = bool(current_app.config.get('AI_POLICY_LLM_ALLOW_IN_DEVELOPMENT'))
+    if use_llm and ai_env != 'production' and not allow_in_dev:
+        warnings.append('LLM mode is disabled outside production by configuration. Used deterministic fallback.')
+        use_llm = False
+
+    started = time.perf_counter()
+    if use_llm:
+        if not azure_openai_policy_service.is_configured(current_app.config):
+            warnings.append('LLM mode enabled but Azure OpenAI is not fully configured. Used deterministic fallback.')
+        else:
+            try:
+                llm_result = azure_openai_policy_service.generate_policy_draft(
+                    config=current_app.config,
+                    policy_type=policy_type,
+                    organization_name=(organization.name if organization else 'Organisation'),
+                    requirement_id=requirement_id,
+                    user_goal=query_text,
+                    citations=citations,
+                    prompt_path=prompt_path,
+                )
+                draft_text = _limit_text(llm_result.draft_text, max_chars=max_draft_chars)
+                disclaimer_text = llm_result.disclaimer
+                usage = llm_result.usage
+                draft_mode = 'llm'
+                provider = 'azure-openai'
+                model = llm_result.deployment
+            except Exception:
+                current_app.logger.exception('Policy draft LLM generation failed; using deterministic fallback')
+                warnings.append('LLM generation failed. Used deterministic fallback.')
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    _log_ai_call(
+        'policy_draft',
+        org_id=int(org_id),
+        mode=draft_mode,
+        provider=provider,
+        model=model,
+        usage=usage,
+        latency_ms=latency_ms,
+    )
+
+    return jsonify(
+        {
+            'success': True,
+            'draft_text': draft_text,
+            'disclaimer': disclaimer_text,
+            'draft_mode': draft_mode,
+            'llm': {
+                'provider': provider,
+                'model': model,
+                'usage': usage,
+                'latency_ms': latency_ms,
+            },
+            'warnings': warnings,
+            'citations': citations,
+            'limits': {
+                'top_k': top_k,
+                'max_query_chars': max_query_chars,
+                'max_citation_text_chars': max_citation_text_chars,
+                'max_policy_draft_chars': max_draft_chars,
+            },
+        }
+    )
+
 @bp.route('/reports')
 @login_required
 def reports():
@@ -2543,21 +3171,70 @@ def profile_avatar():
 @bp.route('/notifications')
 @login_required
 def notifications():
-    """Notifications route."""
-    notifications = [
-        {
-            'id': 1,
-            'title': 'New compliance requirement detected',
-            'message': 'ISO 27001:2022 update requires additional documentation',
-            'type': 'warning',
-            'timestamp': '2024-10-13 14:30:00',
-            'read': False
-        }
-    ]
-    
-    return render_template('main/notifications.html', 
-                         title='Notifications',
-                         notifications=notifications)
+    """Admin-only notifications center for important organisation events."""
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not org_id:
+        abort(400)
+
+    unread_only = (request.args.get('status') or '').strip().lower() == 'unread'
+    notifications = notification_service.list_admin_notifications(
+        organization_id=int(org_id),
+        unread_only=unread_only,
+        limit=150,
+    )
+    unread_count = notification_service.unread_count(organization_id=int(org_id))
+
+    return render_template(
+        'main/notifications.html',
+        title='Notifications',
+        notifications=notifications,
+        unread_only=unread_only,
+        unread_count=unread_count,
+    )
+
+
+@bp.route('/notifications/<int:notification_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notification_id: int):
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not org_id:
+        abort(400)
+
+    ok = notification_service.mark_read(
+        notification_id=int(notification_id),
+        user_id=int(current_user.id),
+        organization_id=int(org_id),
+    )
+    invalidate_org_switcher_context_cache(int(current_user.id), int(org_id))
+    if not ok:
+        flash('Notification not found.', 'error')
+    return redirect(url_for('main.notifications'))
+
+
+@bp.route('/notifications/mark-all-read', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    maybe = _require_org_admin()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not org_id:
+        abort(400)
+
+    marked = notification_service.mark_all_read(organization_id=int(org_id), user_id=int(current_user.id))
+    invalidate_org_switcher_context_cache(int(current_user.id), int(org_id))
+    if marked > 0:
+        flash(f'Marked {marked} notification(s) as read.', 'success')
+    return redirect(url_for('main.notifications'))
 
 @bp.route('/ml-results')
 @login_required
@@ -2688,6 +3365,75 @@ def audit_export():
     return render_template('main/audit_export.html',
                          title='Audit Export',
                          export_stats=export_stats)
+
+
+@bp.route('/analytics')
+@login_required
+def analytics_dashboard():
+    """Analytics dashboard for compliance trends and reporting."""
+    maybe = _require_org_permission('documents.view')
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        abort(404)
+
+    payload = analytics_service.build_dashboard_payload(organization_id=int(org_id))
+    return render_template(
+        'main/analytics_dashboard.html',
+        title='Analytics Dashboard',
+        summary=payload.get('summary') or {},
+        framework_analytics=payload.get('framework_analytics') or [],
+        analytics_payload=payload,
+    )
+
+
+@bp.route('/analytics/export.xlsx')
+@login_required
+def analytics_export_xlsx():
+    """Export analytics data to Excel."""
+    maybe = _require_org_permission('audits.export')
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    payload = analytics_service.build_dashboard_payload(organization_id=int(org_id))
+    workbook = analytics_service.build_excel(payload)
+    filename = f"analytics_dashboard_{datetime.now().strftime('%Y%m%d')}.xlsx"
+
+    return send_file(
+        workbook,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@bp.route('/analytics/export.pdf')
+@login_required
+def analytics_export_pdf():
+    """Export analytics summary to PDF."""
+    maybe = _require_org_permission('audits.export')
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        abort(404)
+
+    payload = analytics_service.build_dashboard_payload(organization_id=int(org_id))
+    pdf_buffer = analytics_service.build_pdf(payload, organization_name=(organization.name or 'Organisation'))
+    filename = f"analytics_dashboard_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename,
+    )
 
 # User roles route removed - functionality moved to Org Admin Dashboard
 
@@ -2964,10 +3710,59 @@ def system_logs():
                         'user_agent': evt.user_agent,
                     }
                 })
+
+    if log_type in ['all', 'ai']:
+        q = AIUsageEvent.query.filter_by(organization_id=int(org_id))
+        if start_time is not None:
+            q = q.filter(AIUsageEvent.created_at >= start_time)
+        if (user_id_filter or '').strip():
+            try:
+                q = q.filter(AIUsageEvent.user_id == int(user_id_filter))
+            except Exception:
+                pass
+
+        if (event_type or '').strip():
+            q = q.filter(AIUsageEvent.event == (event_type or '').strip())
+
+        ai_events_rows = q.order_by(AIUsageEvent.created_at.desc()).limit(500).all()
+        for evt in ai_events_rows:
+            created_at = evt.created_at
+            if created_at and getattr(created_at, 'tzinfo', None) is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+
+            created_at_local = None
+            try:
+                created_at_local = created_at.astimezone(display_tz) if created_at else None
+            except Exception:
+                created_at_local = created_at
+
+            logs.append({
+                'timestamp': created_at_local.strftime('%Y-%m-%d %H:%M:%S %Z') if created_at_local else None,
+                'log_type': 'ai',
+                'event_type': evt.event,
+                'event_description': f"{evt.mode} via {evt.provider}",
+                'user_id': evt.user_id,
+                'user_name': None,
+                'user_email': None,
+                'organization_id': org_id,
+                'ip_address': None,
+                'details': {
+                    'mode': evt.mode,
+                    'provider': evt.provider,
+                    'model': evt.model,
+                    'prompt_tokens': int(evt.prompt_tokens or 0),
+                    'completion_tokens': int(evt.completion_tokens or 0),
+                    'total_tokens': int(evt.total_tokens or 0),
+                    'latency_ms': int(evt.latency_ms or 0),
+                }
+            })
+
+    logs.sort(key=lambda item: item.get('timestamp') or '', reverse=True)
     
     # Statistics
     total_logs = len(logs)
     security_events = len([l for l in logs if l.get('log_type') == 'security'])
+    ai_events = len([l for l in logs if l.get('log_type') == 'ai'])
     error_count = len([l for l in logs if l.get('log_type') == 'error'])
     failed_logins = len([l for l in logs if l.get('event_type') == 'LOGIN_FAILURE'])
     
@@ -2982,6 +3777,7 @@ def system_logs():
                          user_id=user_id_filter,
                          total_logs=total_logs,
                          security_events=security_events,
+                         ai_events=ai_events,
                          error_count=error_count,
                          failed_logins=failed_logins,
                          display_tz_label=display_tz_label,

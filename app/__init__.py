@@ -569,6 +569,8 @@ def create_app(config_name=None):
             can_manage_org = False
             can_manage_roles = False
             active_role_name = None
+            admin_notifications_unread = 0
+            admin_notifications_recent = []
             available_roles = []
             user_departments = []
             
@@ -585,6 +587,33 @@ def create_app(config_name=None):
                     can_manage_org = current_user.has_permission('org.manage', org_id=int(active_org_id))
                     can_manage_roles = current_user.has_permission('roles.manage', org_id=int(active_org_id))
                     is_org_admin_active = bool(can_manage_team)
+
+                    if can_manage_team:
+                        try:
+                            from app.services.notification_service import notification_service
+
+                            admin_notifications_unread = int(
+                                notification_service.unread_count(organization_id=int(active_org_id))
+                            )
+                            recent_rows = notification_service.list_admin_notifications(
+                                organization_id=int(active_org_id),
+                                unread_only=False,
+                                limit=5,
+                            )
+                            admin_notifications_recent = [
+                                {
+                                    'id': int(getattr(n, 'id', 0) or 0),
+                                    'title': (getattr(n, 'title', '') or '').strip() or 'Notification',
+                                    'message': (getattr(n, 'message', '') or '').strip() or '',
+                                    'severity': (getattr(n, 'severity', 'info') or 'info').strip().lower(),
+                                    'is_read': bool(getattr(n, 'is_read', False)),
+                                    'created_at': getattr(n, 'created_at', None),
+                                }
+                                for n in (recent_rows or [])
+                            ]
+                        except Exception:
+                            admin_notifications_unread = 0
+                            admin_notifications_recent = []
 
                     # Load roles/departments if the user has invite permissions (for the floating invite modal).
                     if can_invite_member:
@@ -631,6 +660,8 @@ def create_app(config_name=None):
                 'can_manage_org': can_manage_org,
                 'can_manage_roles': can_manage_roles,
                 'active_role_name': active_role_name,
+                'admin_notifications_unread': int(admin_notifications_unread),
+                'admin_notifications_recent': admin_notifications_recent,
                 'available_roles': [{'id': r.id, 'name': r.name} for r in (available_roles or [])],
                 'user_departments': [{'id': d.id, 'name': d.name} for d in (user_departments or [])],
             }
@@ -1064,5 +1095,98 @@ def create_app(config_name=None):
 
         click.echo('NDIS policy system prompt compiled successfully.')
         click.echo(f'- Output prompt: {written}')
+
+    @app.cli.command('prune-ai-usage-events')
+    @click.option('--days', type=int, required=False, help='Delete events older than N days. Defaults to AI_USAGE_RETENTION_DAYS.')
+    @click.option('--org-id', type=int, required=False, help='Optional organization ID scope.')
+    @click.option('--dry-run', is_flag=True, help='Show how many rows would be deleted without deleting.')
+    @click.option('--yes', is_flag=True, help='Skip confirmation prompt.')
+    def prune_ai_usage_events(days: int | None, org_id: int | None, dry_run: bool, yes: bool):
+        """Prune old AI usage telemetry rows for data retention governance."""
+        from datetime import datetime, timezone, timedelta
+        from app.models import AIUsageEvent, Organization
+
+        retention_days = int(days if days is not None else (app.config.get('AI_USAGE_RETENTION_DAYS') or 90))
+        retention_days = max(1, retention_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        q = AIUsageEvent.query.filter(AIUsageEvent.created_at < cutoff)
+
+        if org_id is not None:
+            org = db.session.get(Organization, int(org_id))
+            if org is None:
+                raise click.ClickException(f'Organization not found: {org_id}')
+            q = q.filter(AIUsageEvent.organization_id == int(org_id))
+
+        to_delete = int(q.count())
+        click.echo('AI usage retention prune summary:')
+        click.echo(f'- Retention days: {retention_days}')
+        click.echo(f'- Cutoff (UTC):   {cutoff.isoformat()}')
+        click.echo(f'- Candidate rows: {to_delete}')
+        if org_id is not None:
+            click.echo(f'- Organization:   {org_id}')
+
+        if dry_run:
+            click.echo('Dry run only. No rows deleted.')
+            return
+
+        if not yes:
+            if not click.confirm('Delete these rows now?', default=False):
+                click.echo('Aborted.')
+                return
+
+        try:
+            deleted = q.delete(synchronize_session=False)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Failed pruning AI usage events: {e}')
+
+        click.echo(f'Deleted AI usage rows: {deleted}')
+
+    @app.cli.command('send-monthly-notification-digest')
+    @click.option('--org-id', type=int, required=False, help='Optional organization ID. If omitted, sends for all organizations.')
+    @click.option('--year', type=int, required=False, help='Digest year. Defaults to previous month year (UTC).')
+    @click.option('--month', type=int, required=False, help='Digest month 1-12. Defaults to previous month (UTC).')
+    def send_monthly_notification_digest(org_id: int | None, year: int | None, month: int | None):
+        """Send monthly admin notification summaries via configured email provider."""
+        from datetime import datetime, timezone
+        from app.models import Organization
+        from app.services.notification_service import notification_service
+
+        now = datetime.now(timezone.utc)
+        if year is None or month is None:
+            y = now.year
+            m = now.month - 1
+            if m == 0:
+                y -= 1
+                m = 12
+            year = year or y
+            month = month or m
+
+        if int(month) < 1 or int(month) > 12:
+            raise click.ClickException('Month must be between 1 and 12.')
+
+        if org_id is not None:
+            orgs = Organization.query.filter_by(id=int(org_id)).all()
+            if not orgs:
+                raise click.ClickException(f'Organization not found: {org_id}')
+        else:
+            orgs = Organization.query.order_by(Organization.id.asc()).all()
+
+        total_sent = 0
+        for org in orgs:
+            try:
+                sent = notification_service.send_monthly_digest(
+                    organization_id=int(org.id),
+                    year=int(year),
+                    month=int(month),
+                )
+                total_sent += int(sent)
+                click.echo(f'Org {org.id} ({org.name}): sent {sent} digest email(s).')
+            except Exception as e:
+                click.echo(f'Org {org.id} ({org.name}): failed - {e}')
+
+        click.echo(f'Done. Total digest emails sent: {total_sent}')
     
     return app

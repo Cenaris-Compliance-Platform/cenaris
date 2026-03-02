@@ -67,6 +67,71 @@
     </div>
   </div>
 
+  <div class="card border-0 shadow-sm mb-3" id="ragExplainCard" data-requirement-id="{{ requirement.requirement_id }}">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="card-title mb-0">NDIS Citation Assistant</h5>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="runRagExplainBtn">
+          <i class="bi bi-search me-1"></i>Explain with NDIS citations
+        </button>
+      </div>
+      <p class="text-body-secondary mb-3">Retrieve official NDIS passages related to this requirement for evidence-grounded review.</p>
+
+      <div class="mb-3">
+        <label for="ragQueryInput" class="form-label">Question (optional)</label>
+        <input
+          id="ragQueryInput"
+          class="form-control"
+          placeholder="e.g., What does NDIS require for incident management evidence?"
+          value="{{ requirement.quality_indicator_text or requirement.outcome_text or '' }}"
+        />
+      </div>
+
+      <div id="ragExplainStatus" class="small text-body-secondary mb-2 d-none"></div>
+
+      <div id="ragExplainResult" class="d-none">
+        <div class="alert alert-light border mb-3" id="ragAnswerText"></div>
+        <h6 class="fw-semibold mb-2">Citations</h6>
+        <div id="ragCitationList" class="d-flex flex-column gap-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3" id="policyDraftCard" data-requirement-id="{{ requirement.requirement_id }}">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="card-title mb-0">Policy Draft Assistant</h5>
+        <button type="button" class="btn btn-outline-success btn-sm" id="generatePolicyDraftBtn">
+          <i class="bi bi-file-earmark-text me-1"></i>Generate policy draft
+        </button>
+      </div>
+      <p class="text-body-secondary mb-3">Generate a first draft policy using NDIS citations. Always review before use.</p>
+
+      <div class="row g-2 mb-3">
+        <div class="col-md-4">
+          <label for="policyTypeSelect" class="form-label">Policy type</label>
+          <select id="policyTypeSelect" class="form-select">
+            <option value="Incident Management Policy">Incident Management Policy</option>
+            <option value="Risk Management Policy">Risk Management Policy</option>
+            <option value="Complaints Handling Policy">Complaints Handling Policy</option>
+            <option value="Quality and Safeguards Policy">Quality and Safeguards Policy</option>
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label for="policyGoalInput" class="form-label">Goal / context</label>
+          <input id="policyGoalInput" class="form-control" placeholder="Optional context for this draft" />
+        </div>
+      </div>
+
+      <div id="policyDraftStatus" class="small text-body-secondary mb-2 d-none"></div>
+
+      <div id="policyDraftResult" class="d-none">
+        <label for="policyDraftOutput" class="form-label fw-semibold">Draft Output</label>
+        <textarea id="policyDraftOutput" class="form-control" rows="14" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
       <h5 class="card-title">Link Evidence</h5>
@@ -140,4 +205,149 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const card = document.getElementById('ragExplainCard');
+    const runBtn = document.getElementById('runRagExplainBtn');
+    const queryInput = document.getElementById('ragQueryInput');
+    const statusEl = document.getElementById('ragExplainStatus');
+    const resultEl = document.getElementById('ragExplainResult');
+    const answerEl = document.getElementById('ragAnswerText');
+    const citationListEl = document.getElementById('ragCitationList');
+    const policyCard = document.getElementById('policyDraftCard');
+    const policyBtn = document.getElementById('generatePolicyDraftBtn');
+    const policyTypeSelect = document.getElementById('policyTypeSelect');
+    const policyGoalInput = document.getElementById('policyGoalInput');
+    const policyStatusEl = document.getElementById('policyDraftStatus');
+    const policyResultEl = document.getElementById('policyDraftResult');
+    const policyOutputEl = document.getElementById('policyDraftOutput');
+
+    if (!card || !runBtn || !queryInput || !statusEl || !resultEl || !answerEl || !citationListEl) {
+      return;
+    }
+
+    const requirementId = (card.dataset.requirementId || '').trim();
+
+    const setStatus = (message, isError) => {
+      statusEl.textContent = message || '';
+      statusEl.classList.remove('d-none', 'text-danger', 'text-body-secondary');
+      statusEl.classList.add(isError ? 'text-danger' : 'text-body-secondary');
+    };
+
+    const clearCitations = () => {
+      citationListEl.innerHTML = '';
+    };
+
+    runBtn.addEventListener('click', async function () {
+      const query = (queryInput.value || '').trim();
+      if (!query && !requirementId) {
+        setStatus('Please enter a question before searching.', true);
+        return;
+      }
+
+      runBtn.disabled = true;
+      setStatus('Retrieving NDIS citations…', false);
+      resultEl.classList.add('d-none');
+      clearCitations();
+
+      try {
+        const response = await fetch("{{ url_for('main.rag_query_api') }}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: query,
+            requirement_id: requirementId,
+            top_k: 3,
+          }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error((payload && payload.error) || 'RAG query failed.');
+        }
+
+        answerEl.textContent = payload.answer || '';
+
+        const citations = Array.isArray(payload.citations) ? payload.citations : [];
+        citations.forEach((citation) => {
+          const item = document.createElement('div');
+          item.className = 'border rounded p-2 bg-body-tertiary';
+
+          const title = document.createElement('div');
+          title.className = 'small fw-semibold mb-1';
+          const pageText = citation.page_number ? `Page ${citation.page_number}` : 'Page n/a';
+          title.textContent = `${citation.source_id || 'ndis-source'} · ${pageText} · score ${citation.score ?? '0'}`;
+
+          const body = document.createElement('div');
+          body.className = 'small text-body-secondary';
+          body.textContent = citation.text || '';
+
+          item.appendChild(title);
+          item.appendChild(body);
+          citationListEl.appendChild(item);
+        });
+
+        resultEl.classList.remove('d-none');
+        setStatus(citations.length ? 'Citations retrieved.' : 'No citations found for this query.', false);
+      } catch (err) {
+        setStatus(err.message || 'Failed to retrieve citations.', true);
+      } finally {
+        runBtn.disabled = false;
+      }
+    });
+
+    const setPolicyStatus = (message, isError) => {
+      if (!policyStatusEl) return;
+      policyStatusEl.textContent = message || '';
+      policyStatusEl.classList.remove('d-none', 'text-danger', 'text-body-secondary');
+      policyStatusEl.classList.add(isError ? 'text-danger' : 'text-body-secondary');
+    };
+
+    if (policyCard && policyBtn && policyTypeSelect && policyGoalInput && policyResultEl && policyOutputEl) {
+      policyBtn.addEventListener('click', async function () {
+        const policyType = (policyTypeSelect.value || '').trim();
+        const goal = (policyGoalInput.value || '').trim();
+        if (!policyType) {
+          setPolicyStatus('Please select a policy type.', true);
+          return;
+        }
+
+        policyBtn.disabled = true;
+        policyResultEl.classList.add('d-none');
+        setPolicyStatus('Generating policy draft…', false);
+
+        try {
+          const response = await fetch("{{ url_for('main.policy_draft_api') }}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              policy_type: policyType,
+              query: goal || (queryInput ? (queryInput.value || '').trim() : ''),
+              requirement_id: requirementId,
+              top_k: 3,
+            }),
+          });
+
+          const payload = await response.json();
+          if (!response.ok || !payload.success) {
+            throw new Error((payload && payload.error) || 'Policy draft generation failed.');
+          }
+
+          policyOutputEl.value = payload.draft_text || '';
+          policyResultEl.classList.remove('d-none');
+          setPolicyStatus('Policy draft generated. Review and edit before use.', false);
+        } catch (err) {
+          setPolicyStatus(err.message || 'Failed to generate policy draft.', true);
+        } finally {
+          policyBtn.disabled = false;
+        }
+      });
+    }
+  })();
+</script>
 {% endblock %}

@@ -1,0 +1,104 @@
+.....F..                                                                 [100%]
+================================== FAILURES ===================================
+_________________ test_org_ai_controls_usage_filter_by_event __________________
+
+client = <FlaskClient <Flask 'app'>>, app = <Flask 'app'>
+seed_org_user = (1, 1, 1)
+
+    def test_org_ai_controls_usage_filter_by_event(client, app, seed_org_user):
+        org_id, user_id, _membership_id = seed_org_user
+    
+        with app.app_context():
+            db.session.add(
+                AIUsageEvent(
+                    organization_id=int(org_id),
+                    user_id=int(user_id),
+                    event='policy_draft',
+                    mode='llm',
+                    provider='azure-openai',
+                    model='gpt-4.1',
+                    prompt_tokens=10,
+                    completion_tokens=20,
+                    total_tokens=30,
+                    latency_ms=100,
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
+            db.session.add(
+                AIUsageEvent(
+                    organization_id=int(org_id),
+                    user_id=int(user_id),
+                    event='rag_query',
+                    mode='retrieval',
+                    provider='local',
+                    model='lexical-rag',
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    latency_ms=20,
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
+            db.session.commit()
+    
+        _login(client)
+    
+        response = client.get('/organization/ai-controls?event=policy_draft&time_range=all')
+        assert response.status_code == 200
+        assert b'policy_draft' in response.data
+>       assert b'rag_query' not in response.data
+E       assert b'rag_query' not in b'<!DOCTYPE html>\n\n\n<html lang="en" data-bs-theme="light">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name=...  </button>\n            </div>\n          </form>\n        </div>\n      </div>\n    </div>\n    \n  </body>\n</html>'
+E        +  where b'<!DOCTYPE html>\n\n\n<html lang="en" data-bs-theme="light">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name=...  </button>\n            </div>\n          </form>\n        </div>\n      </div>\n    </div>\n    \n  </body>\n</html>' = <WrapperTestResponse 37814 bytes [200 OK]>.data
+
+tests\test_org_ai_controls.py:208: AssertionError
+---------------------------- Captured stdout setup ----------------------------
+[WARNING] Could not initialize Azure logging for security logger: Invalid connection string
+[WARNING] Could not initialize Azure logging for error logger: Invalid connection string
+[WARNING] Could not initialize Azure logging for access logger: Invalid connection string
+[WARNING] Could not initialize Azure tracing: Invalid connection string
+[INFO] Application logging system initialized
+[DEBUG] MonitoringService.init_app() called
+[DEBUG] Connection string found: True
+[DEBUG] Starting monitoring setup...
+[DEBUG] Resource created
+[DEBUG] Reusing existing tracer
+[DEBUG] About to set up metrics...
+[DEBUG] ERROR in monitoring setup: Invalid connection string
+---------------------------- Captured stderr setup ----------------------------
+Traceback (most recent call last):
+  File "C:\Users\DELL\Desktop\cenaris\venv\Lib\site-packages\azure\monitor\opentelemetry\exporter\_connection_string_parser.py", line 95, in _parse_connection_string
+    result = dict(s.split("=") for s in pairs)
+ValueError: dictionary update sequence element #0 has length 1; 2 is required
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL\Desktop\cenaris\app\services\monitoring_service.py", line 131, in init_app
+    metric_exporter = self._metric_exporter_cls(connection_string=self.connection_string)
+  File "C:\Users\DELL\Desktop\cenaris\venv\Lib\site-packages\azure\monitor\opentelemetry\exporter\export\metrics\_exporter.py", line 65, in __init__
+    BaseExporter.__init__(self, **kwargs)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL\Desktop\cenaris\venv\Lib\site-packages\azure\monitor\opentelemetry\exporter\export\_base.py", line 86, in __init__
+    parsed_connection_string = ConnectionStringParser(kwargs.get('connection_string'))
+  File "C:\Users\DELL\Desktop\cenaris\venv\Lib\site-packages\azure\monitor\opentelemetry\exporter\_connection_string_parser.py", line 38, in __init__
+    self._initialize()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\DELL\Desktop\cenaris\venv\Lib\site-packages\azure\monitor\opentelemetry\exporter\_connection_string_parser.py", line 43, in _initialize
+    code_cs = self._parse_connection_string(self._connection_string)
+  File "C:\Users\DELL\Desktop\cenaris\venv\Lib\site-packages\azure\monitor\opentelemetry\exporter\_connection_string_parser.py", line 99, in _parse_connection_string
+    raise ValueError("Invalid connection string") from exc
+ValueError: Invalid connection string
+----------------------------- Captured log setup ------------------------------
+INFO     app.services.monitoring_service:monitoring_service.py:114 [MONITORING] Reusing existing tracer from logging service
+ERROR    app.services.monitoring_service:monitoring_service.py:164 [MONITORING] Failed to initialize: Invalid connection string
+---------------------------- Captured stderr call -----------------------------
+[2026-02-28 14:47:46] [SECURITY] INFO: {"event_type": "LOGIN_SUCCESS", "description": "User logged in successfully", "timestamp": "2026-02-28T09:47:46.584318+00:00", "user_id": 1, "org_id": null, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "details": {"email": "user@example.com", "provider": "password"}}
+[2026-02-28 14:47:46] [ACCESS] {"method": "POST", "path": "/auth/login", "status_code": 302, "duration_ms": 411.21, "user_id": 1, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "timestamp": "2026-02-28T09:47:46.592041+00:00"}
+[2026-02-28 14:47:46] [ACCESS] {"method": "GET", "path": "/organization/ai-controls", "status_code": 200, "duration_ms": 71.96, "user_id": 1, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "timestamp": "2026-02-28T09:47:46.665253+00:00"}
+------------------------------ Captured log call ------------------------------
+INFO     security:logging_service.py:133 {"event_type": "LOGIN_SUCCESS", "description": "User logged in successfully", "timestamp": "2026-02-28T09:47:46.584318+00:00", "user_id": 1, "org_id": null, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "details": {"email": "user@example.com", "provider": "password"}}
+INFO     access:logging_service.py:225 {"method": "POST", "path": "/auth/login", "status_code": 302, "duration_ms": 411.21, "user_id": 1, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "timestamp": "2026-02-28T09:47:46.592041+00:00"}
+INFO     access:logging_service.py:225 {"method": "GET", "path": "/organization/ai-controls", "status_code": 200, "duration_ms": 71.96, "user_id": 1, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "timestamp": "2026-02-28T09:47:46.665253+00:00"}
+=========================== short test summary info ===========================
+FAILED tests/test_org_ai_controls.py::test_org_ai_controls_usage_filter_by_event
+1 failed, 7 passed in 22.35s

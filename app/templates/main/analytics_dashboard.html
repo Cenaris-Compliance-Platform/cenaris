@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Analytics Dashboard</h1>
+      <p class="text-body-secondary mb-0">Compliance trends, framework performance, uploads, and user activity</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-primary" href="{{ url_for('main.analytics_export_xlsx') }}">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+      </a>
+      <a class="btn btn-outline-danger" href="{{ url_for('main.analytics_export_pdf') }}">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Export PDF
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-body-secondary small">Compliance Rate</div>
+          <div class="h3 mb-0">{{ summary.compliance_rate }}%</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-body-secondary small">Requirements Assessed</div>
+          <div class="h3 mb-0">{{ summary.assessed_requirements }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-body-secondary small">Gap Closure Rate (90d)</div>
+          <div class="h3 mb-0">{{ summary.gap_closure_rate_90d }}%</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-body-secondary small">Avg Time-to-Compliance</div>
+          <div class="h3 mb-0">
+            {% if summary.avg_time_to_compliance_days is not none %}
+              {{ summary.avg_time_to_compliance_days }}d
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-body-tertiary">
+          <strong>Compliance Trends</strong>
+        </div>
+        <div class="card-body">
+          <canvas id="complianceTrendChart" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-body-tertiary">
+          <strong>Status Distribution</strong>
+        </div>
+        <div class="card-body">
+          <canvas id="statusPieChart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-body-tertiary">
+          <strong>Framework Analytics</strong>
+        </div>
+        <div class="card-body">
+          <canvas id="frameworkBarChart" height="140"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-body-tertiary">
+          <strong>Upload Statistics</strong>
+        </div>
+        <div class="card-body">
+          <canvas id="uploadLineChart" height="140"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-body-tertiary">
+          <strong>User Activity</strong>
+        </div>
+        <div class="card-body">
+          <canvas id="activityLineChart" height="140"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-body-tertiary">
+          <strong>Upload Content Types</strong>
+        </div>
+        <div class="card-body">
+          <canvas id="uploadTypePieChart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-body-tertiary">
+      <strong>Framework Detail</strong>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Framework</th>
+            <th>Total</th>
+            <th>Compliant</th>
+            <th>Gaps</th>
+            <th>Compliance Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in framework_analytics %}
+          <tr>
+            <td>{{ item.framework }}</td>
+            <td>{{ item.total }}</td>
+            <td>{{ item.compliant }}</td>
+            <td>{{ item.gaps }}</td>
+            <td>{{ item.compliance_rate }}%</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-body-secondary py-4">No framework analytics available yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  window.analyticsPayload = {{ analytics_payload|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/analytics_charts.js') }}"></script>
+{% endblock %}
