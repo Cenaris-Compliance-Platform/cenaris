@@ -111,6 +111,7 @@ def test_requirement_detail_route_renders(client, app):
     body = resp.get_data(as_text=True)
     assert "REQ-LINK-1" in body
     assert "Link Evidence" in body
+    assert "Explain with NDIS citations" in body
 
 
 def test_requirement_link_and_unlink_evidence(client, app):

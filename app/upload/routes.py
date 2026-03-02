@@ -4,8 +4,9 @@ from werkzeug.utils import secure_filename
 from app.upload import bp
 from app.services.azure_storage import AzureBlobStorageService
 from app.services.file_validation import FileValidationService
+from app.services.notification_service import notification_service
 from app.models import Document, Organization, OrganizationMembership
-from app import db
+from app import db, invalidate_org_switcher_context_cache
 from datetime import datetime, timezone
 import logging
 import re
@@ -177,6 +178,26 @@ def upload_file():
                 flash(f'File uploaded as "{versioned_filename}" (original name already exists).', 'success')
             else:
                 flash(f'File "{versioned_filename}" uploaded successfully to {storage_type}!', 'success')
+
+            try:
+                notification_service.create_admin_notification(
+                    organization_id=int(org_id),
+                    actor_user_id=int(current_user.id),
+                    event_type='document_uploaded',
+                    title='Document uploaded',
+                    message=f'{current_user.display_name()} uploaded "{versioned_filename}".',
+                    severity='info',
+                    link_url=url_for('main.evidence_repository'),
+                    payload={
+                        'document_id': int(document.id),
+                        'filename': versioned_filename,
+                        'file_size': int(validation_result.get('file_size') or 0),
+                    },
+                    send_email=False,
+                )
+                invalidate_org_switcher_context_cache(int(current_user.id), int(org_id))
+            except Exception:
+                logger.exception('Failed to create upload notification for org %s', org_id)
             
             logger.info(f"File uploaded successfully: {file_path} as {versioned_filename} by user {current_user.id} to {storage_type}")
         

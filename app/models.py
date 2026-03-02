@@ -105,6 +105,8 @@ class Organization(db.Model):
     billing_email = db.Column(db.String(120))
     billing_address = db.Column(db.String(255))
     billing_details = db.Column(db.Text)
+    monthly_report_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    monthly_report_recipient_email = db.Column(db.String(120), nullable=True)
     logo_blob_name = db.Column(db.String(255))
     logo_content_type = db.Column(db.String(100))
     subscription_tier = db.Column(db.String(20), default='Starter')
@@ -462,6 +464,91 @@ class RequirementEvidenceLink(db.Model):
         ),
         db.Index('ix_requirement_evidence_links_org_requirement', 'organization_id', 'requirement_id'),
         db.Index('ix_requirement_evidence_links_document', 'document_id'),
+    )
+
+
+class AIUsageEvent(db.Model):
+    __tablename__ = 'ai_usage_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    event = db.Column(db.String(40), nullable=False)
+    mode = db.Column(db.String(20), nullable=False)
+    provider = db.Column(db.String(40), nullable=False)
+    model = db.Column(db.String(120), nullable=False)
+    prompt_tokens = db.Column(db.Integer, nullable=False, default=0)
+    completion_tokens = db.Column(db.Integer, nullable=False, default=0)
+    total_tokens = db.Column(db.Integer, nullable=False, default=0)
+    latency_ms = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    user = db.relationship('User', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_ai_usage_events_org_created_at', 'organization_id', 'created_at'),
+        db.Index('ix_ai_usage_events_event_created_at', 'event', 'created_at'),
+    )
+
+
+class AdminNotification(db.Model):
+    __tablename__ = 'admin_notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    read_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    event_type = db.Column(db.String(60), nullable=False)
+    title = db.Column(db.String(160), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    severity = db.Column(db.String(20), nullable=False, default='info')
+    link_url = db.Column(db.String(255), nullable=True)
+    payload_json = db.Column(db.Text, nullable=True)
+
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+    read_at = db.Column(db.DateTime, nullable=True)
+    email_sent_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    actor = db.relationship('User', foreign_keys=[actor_user_id], lazy='select')
+    read_by = db.relationship('User', foreign_keys=[read_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_admin_notifications_org_created_at', 'organization_id', 'created_at'),
+        db.Index('ix_admin_notifications_org_read_created_at', 'organization_id', 'is_read', 'created_at'),
+        db.Index('ix_admin_notifications_event_type', 'event_type'),
+    )
+
+
+class OrganizationAISettings(db.Model):
+    __tablename__ = 'organization_ai_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, unique=True)
+    policy_draft_use_llm = db.Column(db.Boolean, nullable=False, default=False)
+    max_query_chars = db.Column(db.Integer, nullable=False, default=1200)
+    max_top_k = db.Column(db.Integer, nullable=False, default=5)
+    max_citation_text_chars = db.Column(db.Integer, nullable=False, default=600)
+    max_answer_chars = db.Column(db.Integer, nullable=False, default=2000)
+    max_policy_draft_chars = db.Column(db.Integer, nullable=False, default=6000)
+    rag_rate_limit = db.Column(db.String(40), nullable=False, default='20 per minute')
+    policy_rate_limit = db.Column(db.String(40), nullable=False, default='10 per minute')
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        onupdate=datetime.now(timezone.utc),
+    )
+    updated_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    organization = db.relationship('Organization', lazy='select')
+    updated_by = db.relationship('User', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_org_ai_settings_org_id', 'organization_id'),
     )
 
 

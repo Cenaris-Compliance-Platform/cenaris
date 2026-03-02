@@ -30,6 +30,7 @@
                             <select name="log_type" class="form-select">
                                 <option value="all" {% if log_type == 'all' %}selected{% endif %}>All Logs</option>
                                 <option value="security" {% if log_type == 'security' %}selected{% endif %}>Security Events</option>
+                                <option value="ai" {% if log_type == 'ai' %}selected{% endif %}>AI Events</option>
                                 <option value="access" {% if log_type == 'access' %}selected{% endif %}>Access Logs</option>
                                 <option value="error" {% if log_type == 'error' %}selected{% endif %}>Errors</option>
                             </select>
@@ -90,8 +91,8 @@
         <div class="col-md-3">
             <div class="card border-0 shadow-sm">
                 <div class="card-body text-center">
-                    <div class="h3 fw-bold text-danger mb-1">{{ error_count }}</div>
-                    <div class="text-body-secondary small">Errors</div>
+                    <div class="h3 fw-bold text-info mb-1">{{ ai_events }}</div>
+                    <div class="text-body-secondary small">AI Events</div>
                 </div>
             </div>
         </div>
