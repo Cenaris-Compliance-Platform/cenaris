@@ -160,7 +160,6 @@ def upload_file():
                     blob_name=file_path,
                     file_size=validation_result['file_size'],
                     content_type=db_content_type,
-                    search_text=f"{versioned_filename} {db_content_type or ''}".strip(),
                     uploaded_by=current_user.id,
                     organization_id=int(org_id),
                 )
