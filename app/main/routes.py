@@ -6,6 +6,7 @@ from app.models import (
     ComplianceFrameworkVersion,
     ComplianceRequirement,
     Document,
+    DocumentTag,
     Organization,
     OrganizationAISettings,
     OrganizationMembership,
@@ -21,7 +22,7 @@ from app.services.policy_draft_service import policy_draft_service
 from app.services.compliance_scoring_service import compliance_scoring_service
 from app.services.notification_service import notification_service
 from app.services.rag_query_service import rag_query_service
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 
 import threading
 import time
@@ -29,12 +30,14 @@ from datetime import datetime
 
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
+from werkzeug.exceptions import NotFound
 
 import os
 import hashlib
 import json
 import csv
 import io
+import zipfile
 
 
 _RESEND_ORG_INVITE_COOLDOWN_SECONDS = 60 * 5
@@ -1661,6 +1664,15 @@ def evidence_repository():
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
     
+    # Filters
+    query_text = (request.args.get('q') or '').strip()
+    selected_tag = (request.args.get('tag') or '').strip()
+    file_type = (request.args.get('file_type') or '').strip().lower()
+    date_from = (request.args.get('date_from') or '').strip()
+    date_to = (request.args.get('date_to') or '').strip()
+    size_min_raw = (request.args.get('size_min') or '').strip()
+    size_max_raw = (request.args.get('size_max') or '').strip()
+
     # Pagination to avoid loading thousands of documents at once.
     page = request.args.get('page', 1, type=int)
     per_page = int(request.args.get('per_page', '50') or 50)
@@ -1673,24 +1685,98 @@ def evidence_repository():
         .options(joinedload(Document.uploader))
         .filter_by(organization_id=org_id, is_active=True)
     )
+
+    if query_text or selected_tag:
+        query = query.outerjoin(Document.tags)
+
+    if query_text:
+        like = f'%{query_text}%'
+        text_filter = or_(
+            Document.filename.ilike(like),
+            Document.content_type.ilike(like),
+            Document.search_text.ilike(like),
+            DocumentTag.name.ilike(like),
+        )
+        try:
+            bind = db.session.get_bind()
+            if bind and bind.dialect.name == 'postgresql':
+                text_filter = or_(
+                    text_filter,
+                    func.to_tsvector('simple', func.coalesce(Document.search_text, '')).op('@@')(
+                        func.plainto_tsquery('simple', query_text)
+                    ),
+                )
+        except Exception:
+            pass
+        query = query.filter(text_filter)
+
+    if selected_tag:
+        query = query.filter(func.lower(DocumentTag.name) == selected_tag.lower())
+
+    if file_type == 'pdf':
+        query = query.filter(Document.content_type.ilike('application/pdf%'))
+    elif file_type == 'image':
+        query = query.filter(Document.content_type.ilike('image/%'))
+    elif file_type == 'word':
+        query = query.filter(or_(Document.filename.ilike('%.doc'), Document.filename.ilike('%.docx')))
+
+    if size_min_raw:
+        try:
+            size_min = max(0, int(size_min_raw))
+            query = query.filter(Document.file_size >= size_min)
+        except Exception:
+            flash('Minimum size filter must be a number (bytes).', 'warning')
+
+    if size_max_raw:
+        try:
+            size_max = max(0, int(size_max_raw))
+            query = query.filter(Document.file_size <= size_max)
+        except Exception:
+            flash('Maximum size filter must be a number (bytes).', 'warning')
+
+    if date_from:
+        try:
+            from_dt = datetime.strptime(date_from, '%Y-%m-%d')
+            query = query.filter(Document.uploaded_at >= from_dt)
+        except Exception:
+            flash('Invalid From date filter.', 'warning')
+
+    if date_to:
+        try:
+            to_dt = datetime.strptime(date_to, '%Y-%m-%d')
+            to_dt_exclusive = datetime(to_dt.year, to_dt.month, to_dt.day, 23, 59, 59)
+            query = query.filter(Document.uploaded_at <= to_dt_exclusive)
+        except Exception:
+            flash('Invalid To date filter.', 'warning')
+
+    query = query.distinct()
+
     pagination = query.order_by(Document.uploaded_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
     documents = pagination.items
+
+    available_tags = (
+        DocumentTag.query
+        .filter_by(organization_id=int(org_id))
+        .order_by(DocumentTag.name.asc())
+        .all()
+    )
+
     return render_template('main/evidence_repository.html', 
                          title='Evidence Repository',
                          documents=documents,
-                         pagination=pagination)
+                         pagination=pagination,
+                         available_tags=available_tags,
+                         q=query_text,
+                         selected_tag=selected_tag,
+                         file_type=file_type,
+                         date_from=date_from,
+                         date_to=date_to,
+                         size_min=size_min_raw,
+                         size_max=size_max_raw)
 
-@bp.route('/document/<int:doc_id>/download')
-def download_document(doc_id):
-    """Download a document."""
-    from flask import send_file, abort
-    from app.services.azure_storage import AzureBlobStorageService
-    import io
-
-    # For document downloads, do not leak existence via redirects.
-    # Return 404 for any unauthenticated/unauthorized access.
+def _authorized_org_document_or_404(doc_id: int) -> Document:
     if not getattr(current_user, 'is_authenticated', False):
         abort(404)
 
@@ -1708,15 +1794,61 @@ def download_document(doc_id):
 
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(404)
-    
-    # Get document from database
+
     document = db.session.get(Document, int(doc_id))
-    
-    # Check if document exists and belongs to active org
     if not document or not getattr(document, 'is_active', True):
         abort(404)
     if int(document.organization_id) != int(org_id):
         abort(404)
+    return document
+
+
+def _is_previewable_document(document: Document) -> bool:
+    content_type = (document.content_type or '').lower()
+    filename = (document.filename or '').lower()
+    if content_type.startswith('image/'):
+        return True
+    if content_type.startswith('text/'):
+        return True
+    if content_type.startswith('application/pdf'):
+        return True
+    return filename.endswith(('.pdf', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.txt'))
+
+
+def _normalize_tags(raw_tags: str) -> list[str]:
+    parts = [p.strip() for p in (raw_tags or '').replace(';', ',').split(',')]
+    cleaned = []
+    seen = set()
+    for item in parts:
+        if not item:
+            continue
+        normalized = ' '.join(item.split())[:64]
+        key = normalized.lower()
+        if not normalized or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(normalized)
+    return cleaned
+
+
+def _refresh_document_search_text(document: Document):
+    base = [document.filename or '', document.content_type or '']
+    tag_names = [t.name for t in (document.tags or []) if (t.name or '').strip()]
+    base.extend(tag_names)
+    document.search_text = ' '.join([b.strip() for b in base if (b or '').strip()])
+
+
+@bp.route('/document/<int:doc_id>/download')
+def download_document(doc_id):
+    """Download a document."""
+    from flask import send_file, abort
+    from app.services.azure_storage import AzureBlobStorageService
+    import io
+
+    try:
+        document = _authorized_org_document_or_404(int(doc_id))
+    except NotFound:
+        return ('', 404)
     
     try:
         storage_service = AzureBlobStorageService()
@@ -1744,6 +1876,197 @@ def download_document(doc_id):
     except Exception as e:
         print(f"Error downloading document: {e}")
         abort(500)
+
+
+@bp.route('/document/<int:doc_id>/preview')
+@login_required
+def preview_document(doc_id):
+    """Stream a secure inline preview for supported file types."""
+    from app.services.azure_storage import AzureBlobStorageService
+
+    document = _authorized_org_document_or_404(int(doc_id))
+    if not _is_previewable_document(document):
+        flash('Preview is only available for PDF, image, and text documents.', 'info')
+        return redirect(url_for('main.document_details', doc_id=int(document.id)))
+
+    try:
+        storage_service = AzureBlobStorageService()
+        result = storage_service.download_file(document.blob_name)
+        if not result.get('success'):
+            abort(404)
+        blob_data = result.get('data')
+        if not blob_data:
+            abort(404)
+
+        file_stream = io.BytesIO(blob_data)
+        file_stream.seek(0)
+        response = send_file(
+            file_stream,
+            mimetype=document.content_type or 'application/octet-stream',
+            as_attachment=False,
+            download_name=document.filename,
+        )
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        return response
+    except Exception:
+        current_app.logger.exception('Failed to preview document %s', doc_id)
+        abort(500)
+
+
+@bp.route('/documents/download-zip', methods=['POST'])
+@login_required
+def download_documents_zip():
+    """Bulk download selected documents as a ZIP archive."""
+    from app.services.azure_storage import AzureBlobStorageService
+
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    requested_ids = [int(v) for v in request.form.getlist('doc_ids') if str(v).isdigit()]
+    if not requested_ids:
+        flash('Select at least one document to download.', 'warning')
+        return redirect(url_for('main.evidence_repository'))
+
+    documents = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.id.in_(requested_ids),
+        )
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
+    if not documents:
+        flash('No valid documents found for ZIP export.', 'error')
+        return redirect(url_for('main.evidence_repository'))
+
+    storage_service = AzureBlobStorageService()
+    zip_buffer = io.BytesIO()
+    used_names = set()
+    added = 0
+
+    with zipfile.ZipFile(zip_buffer, mode='w', compression=zipfile.ZIP_DEFLATED) as archive:
+        for document in documents:
+            if not (document.blob_name or '').strip():
+                continue
+            result = storage_service.download_file(document.blob_name)
+            if not result.get('success'):
+                continue
+            blob_data = result.get('data')
+            if not blob_data:
+                continue
+
+            base_name = (document.filename or f'document_{document.id}').strip()
+            safe_name = base_name
+            suffix = 1
+            while safe_name in used_names:
+                name, ext = os.path.splitext(base_name)
+                safe_name = f"{name} ({suffix}){ext}"
+                suffix += 1
+            used_names.add(safe_name)
+            archive.writestr(safe_name, blob_data)
+            added += 1
+
+    if added == 0:
+        flash('Unable to package selected documents.', 'error')
+        return redirect(url_for('main.evidence_repository'))
+
+    zip_buffer.seek(0)
+    filename = f"documents_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@bp.route('/document/<int:doc_id>/tags', methods=['POST'])
+@login_required
+def add_document_tags(doc_id):
+    """Attach one or more tags to a document."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    document = db.session.get(Document, int(doc_id))
+    if not document or int(document.organization_id) != int(org_id):
+        abort(404)
+
+    parsed_tags = _normalize_tags(request.form.get('tags') or '')
+    if not parsed_tags:
+        flash('Add at least one valid tag.', 'warning')
+        return redirect(url_for('main.document_details', doc_id=int(doc_id)))
+
+    added_count = 0
+    for tag_name in parsed_tags:
+        normalized_name = tag_name.lower()
+        tag = DocumentTag.query.filter_by(
+            organization_id=int(org_id),
+            normalized_name=normalized_name,
+        ).first()
+        if not tag:
+            tag = DocumentTag(
+                organization_id=int(org_id),
+                name=tag_name,
+                normalized_name=normalized_name,
+            )
+            db.session.add(tag)
+            db.session.flush()
+
+        if not any(int(t.id) == int(tag.id) for t in (document.tags or [])):
+            document.tags.append(tag)
+            added_count += 1
+
+    _refresh_document_search_text(document)
+    db.session.commit()
+
+    if added_count > 0:
+        flash(f'Added {added_count} tag(s).', 'success')
+    else:
+        flash('All tags already exist on this document.', 'info')
+    return redirect(url_for('main.document_details', doc_id=int(doc_id)))
+
+
+@bp.route('/document/<int:doc_id>/tags/<int:tag_id>/delete', methods=['POST'])
+@login_required
+def remove_document_tag(doc_id, tag_id):
+    """Remove a tag from a document."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    document = db.session.get(Document, int(doc_id))
+    if not document or int(document.organization_id) != int(org_id):
+        abort(404)
+
+    tag = DocumentTag.query.filter_by(id=int(tag_id), organization_id=int(org_id)).first()
+    if not tag:
+        abort(404)
+
+    if any(int(t.id) == int(tag.id) for t in (document.tags or [])):
+        document.tags.remove(tag)
+        _refresh_document_search_text(document)
+        db.session.commit()
+        flash('Tag removed.', 'success')
+    else:
+        flash('Tag is not attached to this document.', 'info')
+
+    return redirect(url_for('main.document_details', doc_id=int(doc_id)))
 
 @bp.route('/document/<int:doc_id>/delete', methods=['POST'])
 @login_required
@@ -3355,16 +3678,57 @@ def audit_export():
     if maybe is not None:
         return maybe
 
+    available_reports = [
+        {
+            'id': 1,
+            'name': 'Gap Analysis Report',
+            'description': 'Current compliance status, requirement scores, and identified gaps.',
+            'status': 'Ready',
+            'format': ['PDF'],
+            'frameworks': ['NDIS'],
+            'file_size': 'Auto',
+            'estimated_time': '1-2 min',
+            'last_generated': datetime.now(),
+            'download_url': url_for('main.generate_report', report_type='gap-analysis'),
+        },
+        {
+            'id': 2,
+            'name': 'Accreditation Plan',
+            'description': 'Recommended actions and plan derived from current compliance gaps.',
+            'status': 'Ready',
+            'format': ['PDF'],
+            'frameworks': ['NDIS'],
+            'file_size': 'Auto',
+            'estimated_time': '1-2 min',
+            'last_generated': datetime.now(),
+            'download_url': url_for('main.generate_report', report_type='accreditation-plan'),
+        },
+        {
+            'id': 3,
+            'name': 'Audit Pack Export',
+            'description': 'Compiled evidence and summary data suitable for audit sharing.',
+            'status': 'Ready',
+            'format': ['PDF'],
+            'frameworks': ['NDIS'],
+            'file_size': 'Auto',
+            'estimated_time': '2-4 min',
+            'last_generated': datetime.now(),
+            'download_url': url_for('main.generate_report', report_type='audit-pack'),
+        },
+    ]
+
     export_stats = {
-        'total_reports': 12,
-        'ready_reports': 8,
-        'recent_exports': 5,
-        'total_size': '45.2 MB'
+        'total_reports': len(available_reports),
+        'ready_reports': len([r for r in available_reports if r.get('status') == 'Ready']),
+        'recent_exports': 0,
+        'total_size': 'Generated on demand',
     }
-    
+
     return render_template('main/audit_export.html',
                          title='Audit Export',
-                         export_stats=export_stats)
+                         export_stats=export_stats,
+                         available_reports=available_reports,
+                         recent_exports=[])
 
 
 @bp.route('/analytics')
