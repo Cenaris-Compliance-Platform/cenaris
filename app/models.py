@@ -284,15 +284,56 @@ class Document(db.Model):
     blob_name = db.Column(db.String(255))
     file_size = db.Column(db.Integer)
     content_type = db.Column(db.String(50))
+    search_text = db.Column(db.Text, nullable=True)
     uploaded_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
 
     uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='select')
+    tags = db.relationship(
+        'DocumentTag',
+        secondary='document_tag_map',
+        lazy='selectin',
+        back_populates='documents',
+    )
 
     __table_args__ = (
         db.Index('ix_documents_org_active_uploaded_at', 'organization_id', 'is_active', 'uploaded_at'),
+    )
+
+
+class DocumentTag(db.Model):
+    __tablename__ = 'document_tags'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    name = db.Column(db.String(64), nullable=False)
+    normalized_name = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    documents = db.relationship(
+        'Document',
+        secondary='document_tag_map',
+        lazy='selectin',
+        back_populates='tags',
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'normalized_name', name='uq_document_tags_org_normalized_name'),
+        db.Index('ix_document_tags_org_name', 'organization_id', 'name'),
+    )
+
+
+class DocumentTagMap(db.Model):
+    __tablename__ = 'document_tag_map'
+
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id', ondelete='CASCADE'), primary_key=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey('document_tags.id', ondelete='CASCADE'), primary_key=True)
+    linked_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_document_tag_map_tag_id', 'tag_id'),
     )
 
 
