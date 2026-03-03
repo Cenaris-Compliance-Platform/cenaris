@@ -47,6 +47,7 @@ _ORG_INVITE_TOKEN_SALT = 'org-invite'
 
 _ORG_LOGO_CACHE: dict[tuple[int, str], tuple[float, bytes, str | None]] = {}
 _ORG_LOGO_CACHE_LOCK = threading.Lock()
+_DOCUMENTS_SEARCH_TEXT_AVAILABLE: bool | None = None
 
 
 def _safe_int_env(name: str, default: int) -> int:
@@ -184,6 +185,19 @@ def _etag_matches_if_none_match(if_none_match: str | None, etag: str) -> bool:
     candidates = [part.strip() for part in value.split(',') if part.strip()]
     strong_etag = etag[2:] if etag.startswith('W/') else etag
     return (etag in candidates) or (strong_etag in candidates)
+
+
+def _documents_search_text_available() -> bool:
+    global _DOCUMENTS_SEARCH_TEXT_AVAILABLE
+    if _DOCUMENTS_SEARCH_TEXT_AVAILABLE is not None:
+        return bool(_DOCUMENTS_SEARCH_TEXT_AVAILABLE)
+    try:
+        inspector = db.inspect(db.engine)
+        cols = [c.get('name') for c in inspector.get_columns('documents')]
+        _DOCUMENTS_SEARCH_TEXT_AVAILABLE = 'search_text' in cols
+    except Exception:
+        _DOCUMENTS_SEARCH_TEXT_AVAILABLE = False
+    return bool(_DOCUMENTS_SEARCH_TEXT_AVAILABLE)
 
 
 def _get_cached_org_logo(org_id: int, blob_name: str) -> tuple[bytes, str | None] | None:
@@ -1832,6 +1846,8 @@ def _normalize_tags(raw_tags: str) -> list[str]:
 
 
 def _refresh_document_search_text(document: Document):
+    if not _documents_search_text_available():
+        return
     base = [document.filename or '', document.content_type or '']
     tag_names = [t.name for t in (document.tags or []) if (t.name or '').strip()]
     base.extend(tag_names)
