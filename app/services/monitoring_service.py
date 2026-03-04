@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timezone
 from threading import Thread
 from flask import Flask, request, g
+from werkzeug.exceptions import HTTPException
 from typing import Optional, Dict, Any
 
 # OpenTelemetry imports
@@ -348,6 +349,9 @@ class MonitoringService:
                         span.record_exception(error)
                 except Exception:
                     pass
+
+            if isinstance(error, HTTPException):
+                return error
             
             # Re-raise the exception for Flask's default error handling
             raise error
