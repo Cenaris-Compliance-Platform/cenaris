@@ -1524,56 +1524,6 @@ def set_theme():
     )
     return resp
 
-def get_mock_ml_summary():
-    """Get mock ML summary data"""
-    from datetime import datetime
-    
-    class FileSummary:
-        def __init__(self, data):
-            self.file_name = data['file_name']
-            self.overall_status = data['overall_status']
-            self.compliance_score = data['compliance_score']
-            self.compliancy_rate = data['compliance_score']  # Add this for templates
-            self.requirements_met = data['requirements_met']
-            self.requirements_total = data['requirements_total']
-            self.total_requirements = data['requirements_total']  # Add this for templates
-            self.last_analyzed = data['last_analyzed']
-    
-    class MLSummary:
-        def __init__(self):
-            self.total_files = (
-                Document.query.filter_by(uploaded_by=current_user.id, is_active=True).count()
-                if current_user.is_authenticated
-                else 3
-            )
-            self.avg_compliancy_rate = 85.5
-            self.total_complete = 3
-            self.total_needs_review = 1
-            self.total_missing = 1
-            self.last_updated = datetime.now()
-            self.connection_status = 'Connected'
-            self.adls_path = 'abfss://processed-doc-intel@cenarisblobstorage.dfs.core.windows.net/compliance-results'
-            self.file_summaries = [
-                FileSummary({
-                    'file_name': 'policy_document.csv',
-                    'overall_status': 'Complete',
-                    'compliance_score': 92,
-                    'requirements_met': 15,
-                    'requirements_total': 18,
-                    'last_analyzed': '2025-11-02'
-                }),
-                FileSummary({
-                    'file_name': 'access_control.csv',
-                    'overall_status': 'Needs Review',
-                    'compliance_score': 78,
-                    'requirements_met': 12,
-                    'requirements_total': 16,
-                    'last_analyzed': '2025-11-01'
-                })
-            ]
-    
-    return MLSummary()
-
 @bp.route('/')
 def index():
     """Home page route."""
@@ -1598,13 +1548,7 @@ def dashboard():
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
-    
-    # Progressive loading: render the page immediately and fetch ML/ADLS data via AJAX.
-    # `defer_ml=1` (default) prevents slow external calls from blocking the HTML response.
-    defer_ml = (request.args.get('defer_ml', '1') or '1') != '0'
-    ml_enabled = bool(current_app.config.get('ML_SUMMARY_ENABLED', False))
-    skip_adls = (not ml_enabled) or defer_ml or (request.args.get('quick') == '1')
-    
+
     # Parallel non-blocking queries: recent docs + count.
     from sqlalchemy.orm import joinedload
     recent_documents = (
@@ -1618,27 +1562,11 @@ def dashboard():
     # Avoid full table scan for count; use an approximate or limit scope.
     total_documents = Document.query.filter_by(organization_id=org_id, is_active=True).limit(1000).count()
     
-    # ML/ADLS data is deferred by default; provide a lightweight placeholder for the template.
-    if current_app.config.get('TESTING') or skip_adls:
-        ml_summary = {
-            'avg_compliancy_rate': 0,
-            'total_files': 0,
-            'total_complete': 0,
-            'total_needs_review': 0,
-            'total_missing': 0,
-            'file_summaries': [],
-            'connection_status': 'Loading…',
-        }
-    else:
-        ml_summary = azure_data_service.get_dashboard_summary(user_id=current_user.id, organization_id=org_id)
-    
+
     return render_template('main/dashboard.html', 
                          title='Dashboard',
                          recent_documents=recent_documents,
-                         total_documents=total_documents,
-                         ml_summary=ml_summary,
-                         skip_adls=skip_adls,
-                         ml_enabled=ml_enabled)
+                         total_documents=total_documents)
 
 @bp.route('/upload')
 @login_required
@@ -2160,7 +2088,7 @@ def document_details(doc_id):
 @bp.route('/ai-evidence')
 @login_required
 def ai_evidence():
-    """AI Evidence route to display AI-generated evidence entries."""
+    """AI Evidence route backed by real organisation documents and linked requirements."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -2169,36 +2097,82 @@ def ai_evidence():
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
 
-    # Get real ADLS data (org-scoped) — reuses cached result from dashboard if recent
-    summary = azure_data_service.get_dashboard_summary(
-        user_id=current_user.id,
-        organization_id=org_id,
+    documents = (
+        Document.query
+        .filter_by(organization_id=int(org_id), is_active=True)
+        .order_by(Document.uploaded_at.desc())
+        .all()
     )
-    
-    # Transform ADLS data into AI evidence entries
+
+    linked_counts = {
+        int(doc_id): int(count)
+        for doc_id, count in (
+            db.session.query(
+                RequirementEvidenceLink.document_id,
+                func.count(RequirementEvidenceLink.id),
+            )
+            .filter(RequirementEvidenceLink.organization_id == int(org_id))
+            .group_by(RequirementEvidenceLink.document_id)
+            .all()
+        )
+    }
+
+    avg_scores = {
+        int(doc_id): float(score)
+        for doc_id, score in (
+            db.session.query(
+                RequirementEvidenceLink.document_id,
+                func.avg(OrganizationRequirementAssessment.computed_score),
+            )
+            .join(
+                OrganizationRequirementAssessment,
+                and_(
+                    OrganizationRequirementAssessment.organization_id == RequirementEvidenceLink.organization_id,
+                    OrganizationRequirementAssessment.requirement_id == RequirementEvidenceLink.requirement_id,
+                ),
+            )
+            .filter(
+                RequirementEvidenceLink.organization_id == int(org_id),
+                OrganizationRequirementAssessment.computed_score.isnot(None),
+            )
+            .group_by(RequirementEvidenceLink.document_id)
+            .all()
+        )
+        if score is not None
+    }
+
     ai_evidence_entries = []
-    
-    if summary.get('file_summaries'):
-        for idx, file_summary in enumerate(summary['file_summaries'], 1):
-            # Get framework details from the file
-            frameworks_data = file_summary.get('frameworks', [])
-            
-            for framework_data in frameworks_data:
-                ai_evidence_entries.append({
-                    'id': idx,
-                    'document_title': f"{framework_data['name']} Compliance Analysis",
-                    'framework': framework_data['name'],
-                    'source': 'ADLS',
-                    'document_type': 'Compliance Summary',
-                    'confidence_score': round(framework_data['score'], 1),  # Score is already a percentage
-                    'status': framework_data['status'],
-                    'upload_date': file_summary.get('last_updated'),
-                    'summary': f"Compliance score: {framework_data['score']}% - Status: {framework_data['status']}"
-                })
+    for document in documents:
+        linked_requirement_count = int(linked_counts.get(int(document.id), 0))
+        confidence_score = round(float(avg_scores.get(int(document.id), 0.0)), 1)
+
+        if linked_requirement_count <= 0:
+            status = 'Not linked'
+        elif confidence_score >= 85:
+            status = 'Strong'
+        elif confidence_score >= 60:
+            status = 'Needs review'
+        else:
+            status = 'Weak'
+
+        ai_evidence_entries.append(
+            {
+                'id': int(document.id),
+                'document_title': document.filename,
+                'document_type': document.content_type or 'Unknown',
+                'source': 'Evidence Repository',
+                'confidence_score': confidence_score,
+                'status': status,
+                'upload_date': document.uploaded_at,
+                'linked_requirement_count': linked_requirement_count,
+                'summary': f'Linked to {linked_requirement_count} requirement(s).',
+                'is_previewable': _is_previewable_document(document),
+            }
+        )
     
     return render_template(
         'main/ai_evidence.html',
-        title='Upload Evidence',
+        title='AI Evidence',
         ai_evidence_entries=ai_evidence_entries,
     )
 
@@ -2727,38 +2701,100 @@ def organization_logo_by_id(org_id):
 @bp.route('/ai-evidence/<int:entry_id>')
 @login_required
 def ai_evidence_detail(entry_id):
-    """AI Evidence detail view."""
-    # Mock detailed data
-    ai_evidence_detail = {
-        'id': entry_id,
-        'document_title': 'SOX Compliance Report Q3 2025',
-        'framework': 'SOX',
-        'requirement': 'Section 404 - Internal Controls',
-        'confidence_score': 92,
-        'status': 'Complete',
-        'date_analyzed': '2025-11-01',
-        'evidence_type': 'Policy Document',
-        'key_findings': 'Strong internal control framework documented',
-        'summary': 'Comprehensive SOX compliance documentation covering internal control requirements and audit procedures.',
-        'detailed_analysis': 'The document provides comprehensive coverage of internal control requirements...',
-        'recommendations': ['Continue monitoring', 'Update quarterly']
-    }
-    
-    return render_template('main/ai_evidence_detail.html', 
-                         title='AI Evidence Detail',
-                         entry=ai_evidence_detail)
+    """AI Evidence detail view using real document + requirement link data."""
+    document = _authorized_org_document_or_404(int(entry_id))
+    org_id = _active_org_id()
 
-@bp.route('/document/<int:doc_id>')
-@login_required
-def document_detail(doc_id):
-    """Document detail route."""
-    document = db.session.get(Document, int(doc_id))
-    if not document or document.uploaded_by != current_user.id:
-        return redirect(url_for('main.documents'))
-    
-    return render_template('main/document_detail.html',
-                         title=f'Document: {document.filename}',
-                         document=document)
+    links = (
+        RequirementEvidenceLink.query
+        .filter_by(organization_id=int(org_id), document_id=int(document.id))
+        .order_by(RequirementEvidenceLink.linked_at.desc())
+        .all()
+    )
+
+    requirements = []
+    score_values = []
+    frameworks = set()
+    bucket_counts: dict[str, int] = {}
+
+    for link in links:
+        requirement = getattr(link, 'requirement', None)
+        framework_label = None
+        if requirement and requirement.framework_version:
+            scheme = (requirement.framework_version.scheme or 'NDIS').strip() or 'NDIS'
+            version = (requirement.framework_version.version_label or 'v1.0').strip() or 'v1.0'
+            framework_label = f'{scheme} {version}'
+            frameworks.add(framework_label)
+
+        assessment = None
+        if requirement is not None:
+            assessment = OrganizationRequirementAssessment.query.filter_by(
+                organization_id=int(org_id),
+                requirement_id=int(requirement.id),
+            ).first()
+
+        score = int(assessment.computed_score) if assessment and assessment.computed_score is not None else None
+        if score is not None:
+            score_values.append(score)
+
+        bucket = (link.evidence_bucket or 'unspecified').strip().lower() or 'unspecified'
+        bucket_counts[bucket] = int(bucket_counts.get(bucket, 0)) + 1
+
+        requirements.append(
+            {
+                'requirement_db_id': int(requirement.id) if requirement else None,
+                'requirement_id': (requirement.requirement_id if requirement else None) or f'Requirement #{link.requirement_id}',
+                'framework': framework_label or '—',
+                'bucket': link.evidence_bucket,
+                'note': link.rationale_note,
+                'score': score,
+                'flag': (assessment.computed_flag if assessment else None),
+                'linked_at': link.linked_at,
+            }
+        )
+
+    confidence_score = round((sum(score_values) / len(score_values)), 1) if score_values else 0.0
+    if confidence_score >= 85:
+        risk_level = 'Low'
+        status = 'Strong'
+    elif confidence_score >= 60:
+        risk_level = 'Medium'
+        status = 'Needs review'
+    elif requirements:
+        risk_level = 'High'
+        status = 'Weak'
+    else:
+        risk_level = 'Unknown'
+        status = 'Not linked'
+
+    bucket_summary_parts = [f'{count} {bucket}' for bucket, count in sorted(bucket_counts.items())]
+    ai_notes = 'No evidence buckets linked yet.'
+    if bucket_summary_parts:
+        ai_notes = 'Evidence buckets linked: ' + ', '.join(bucket_summary_parts) + '.'
+
+    entry = {
+        'id': int(document.id),
+        'document_title': document.filename,
+        'document_type': document.content_type or 'Unknown',
+        'source': 'Evidence Repository',
+        'confidence_score': confidence_score,
+        'status': status,
+        'risk_level': risk_level,
+        'summary': f'This document is linked to {len(requirements)} requirement(s).',
+        'ai_notes': ai_notes,
+        'compliance_frameworks': sorted(frameworks),
+        'upload_date': document.uploaded_at,
+        'file_size': document.file_size,
+        'is_previewable': _is_previewable_document(document),
+    }
+
+    return render_template(
+        'main/ai_evidence_detail.html',
+        title='AI Evidence Detail',
+        entry=entry,
+        document=document,
+        linked_requirements=requirements,
+    )
 
 @bp.route('/gap-analysis')
 @login_required
@@ -3574,117 +3610,6 @@ def mark_all_notifications_read():
     if marked > 0:
         flash(f'Marked {marked} notification(s) as read.', 'success')
     return redirect(url_for('main.notifications'))
-
-@bp.route('/ml-results')
-@login_required
-def ml_results():
-    """ML Results dashboard."""
-    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
-        abort(404)
-
-    maybe = _require_org_admin()
-    if maybe is not None:
-        return maybe
-
-    compliance_files = [
-        {
-            'file_name': 'policy_document.pdf',
-            'compliance_score': 85,
-            'status': 'Complete',
-            'last_analyzed': '2025-11-02'
-        }
-    ]
-    
-    return render_template('main/ml_results.html',
-                         title='ML Analysis Results',
-                         ml_summary=get_mock_ml_summary(),
-                         compliance_files=compliance_files)
-
-@bp.route('/ml-file-detail/<path:file_path>')
-@login_required
-def ml_file_detail(file_path):
-    """Detailed view of ML analysis file."""
-    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
-        abort(404)
-
-    maybe = _require_org_admin()
-    if maybe is not None:
-        return maybe
-
-    file_analysis = {
-        'file_name': file_path,
-        'compliance_score': 85,
-        'compliancy_rate': 85,  # Add this for templates
-        'requirements': [
-            {'name': 'Access Control', 'status': 'Met', 'confidence': 0.9}
-        ]
-    }
-    
-    return render_template('main/ml_file_detail.html',
-                         title=f'Analysis: {file_path}',
-                         file_analysis=file_analysis)
-
-@bp.route('/api/ml-summary')
-@login_required
-def api_ml_summary():
-    """API endpoint for ML summary data."""
-    maybe = _require_active_org()
-    if maybe is not None:
-        return jsonify({'error': 'No active organization'}), 400
-
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        return jsonify({'error': 'Forbidden'}), 403
-
-    if current_app.config.get('TESTING'):
-        return jsonify(get_mock_ml_summary())
-
-    # ML feature is not implemented yet; keep endpoint fast and predictable.
-    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
-        return jsonify({
-            'total_files': 0,
-            'avg_compliancy_rate': 0,
-            'total_requirements': 0,
-            'total_complete': 0,
-            'total_needs_review': 0,
-            'total_missing': 0,
-            'last_updated': None,
-            'file_summaries': [],
-            'connection_status': 'Coming soon',
-        })
-
-    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id, organization_id=org_id)
-    return jsonify(summary)
-
-@bp.route('/adls-raw-data')
-@login_required
-def adls_raw_data():
-    """Show raw ADLS data."""
-    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
-        abort(404)
-
-    maybe = _require_org_admin()
-    if maybe is not None:
-        return maybe
-
-    return render_template('main/adls_raw_data.html',
-                         title='ADLS Raw Data',
-                         ml_summary=get_mock_ml_summary())
-
-@bp.route('/adls-connection')
-@login_required
-def adls_connection():
-    """Show ADLS connection status."""
-    if not current_app.config.get('ML_SUMMARY_ENABLED', False):
-        abort(404)
-
-    maybe = _require_org_admin()
-    if maybe is not None:
-        return maybe
-
-    return render_template('main/adls_connection.html',
-                         title='ADLS Connection',
-                         ml_summary=get_mock_ml_summary())
 
 @bp.route('/audit-export')
 @login_required

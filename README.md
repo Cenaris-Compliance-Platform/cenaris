@@ -64,3 +64,74 @@ flask db upgrade
 - Configure Azure Storage env vars for uploads
 
 For the step-by-step credential walkthrough, use: [ENV_SETUP.md](ENV_SETUP.md)
+
+## QA Checklist (Document + Notifications)
+
+Use this checklist after each release affecting uploads, reports, or notifications.
+
+### Pre-check
+
+```bat
+venv\Scripts\activate
+python -m flask db upgrade
+python run.py
+```
+
+### Document Management
+
+1. **Bulk upload**
+	- Go to **Evidence Repository**.
+	- Click **Bulk Upload** and select 2+ files.
+	- Confirm all files appear in the table.
+
+2. **Tagging + filtering**
+	- Open a document via **View Details**.
+	- Add tags (example: `policy, ndis`).
+	- Return to **Evidence Repository** and filter by tag.
+	- Confirm matching documents appear.
+
+3. **Search + advanced filters**
+	- Search by filename/tag text.
+	- Apply `Type`, `Date from/to`, and `Min/Max bytes` filters.
+	- Confirm result list updates correctly.
+
+4. **Preview (secure)**
+	- Click **Preview** for a PDF/image/text file.
+	- Confirm file opens inline.
+	- Confirm unauthorized user cannot access another org’s preview/download URL.
+
+5. **Bulk download ZIP**
+	- Select multiple docs with checkboxes.
+	- Click **Download Selected (ZIP)**.
+	- Extract ZIP and verify expected filenames/content.
+
+### Notifications
+
+1. **In-app upload notification**
+	- Upload a document as an org member/admin.
+	- Open **Notifications** (admin view).
+	- Confirm a **Document uploaded** item appears.
+
+2. **Mark read / mark all read**
+	- Mark one notification as read.
+	- Use **Mark all read** and verify unread count updates.
+
+3. **Monthly report settings**
+	- Go to **Organization Settings** as admin.
+	- Enable monthly report delivery and set recipient email.
+	- Save and confirm setup confirmation email is sent.
+
+4. **Monthly digest CLI test**
+	- Run:
+
+```bat
+python -m flask send-monthly-notification-digest --org-id <ORG_ID> --year 2026 --month 2
+```
+
+	- Confirm digest email received by configured recipient.
+
+### Optional focused regression tests
+
+```bat
+python -m pytest -q tests/test_document_management.py tests/test_upload_flow.py tests/test_admin_notifications.py
+```
