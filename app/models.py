@@ -533,6 +533,71 @@ class AIUsageEvent(db.Model):
     )
 
 
+class APIKey(db.Model):
+    __tablename__ = 'api_keys'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    name = db.Column(db.String(120), nullable=False)
+    key_prefix = db.Column(db.String(20), nullable=False)
+    key_hash = db.Column(db.String(64), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('key_hash', name='uq_api_keys_hash'),
+        db.Index('ix_api_keys_org_active', 'organization_id', 'is_active'),
+        db.Index('ix_api_keys_prefix', 'key_prefix'),
+    )
+
+
+class WebhookEndpoint(db.Model):
+    __tablename__ = 'webhook_endpoints'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    name = db.Column(db.String(120), nullable=False)
+    target_url = db.Column(db.String(500), nullable=False)
+    events_csv = db.Column(db.Text, nullable=False, default='*')
+    secret = db.Column(db.String(128), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_webhook_endpoints_org_active', 'organization_id', 'is_active'),
+    )
+
+
+class WebhookDelivery(db.Model):
+    __tablename__ = 'webhook_deliveries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    webhook_endpoint_id = db.Column(db.Integer, db.ForeignKey('webhook_endpoints.id'), nullable=False)
+    event_type = db.Column(db.String(80), nullable=False)
+    payload_json = db.Column(db.Text, nullable=False)
+    success = db.Column(db.Boolean, default=False, nullable=False)
+    status_code = db.Column(db.Integer, nullable=True)
+    response_excerpt = db.Column(db.String(500), nullable=True)
+    attempted_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    endpoint = db.relationship('WebhookEndpoint', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_webhook_deliveries_endpoint_attempted_at', 'webhook_endpoint_id', 'attempted_at'),
+        db.Index('ix_webhook_deliveries_event_attempted_at', 'event_type', 'attempted_at'),
+    )
+
+
 class AdminNotification(db.Model):
     __tablename__ = 'admin_notifications'
 

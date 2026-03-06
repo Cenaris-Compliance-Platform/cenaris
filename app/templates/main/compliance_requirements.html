@@ -16,6 +16,37 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
+      <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>How to use this page</div>
+      <div class="small text-body-secondary">
+        Start by searching or filtering requirements. Open a requirement row to link supporting documents.
+        Inside each requirement detail screen, you can run AI tools: <strong>NDIS Citation Assistant</strong> and <strong>Policy Draft Assistant</strong>.
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
+        <div class="fw-semibold"><i class="bi bi-list-check me-1"></i>First-time setup checklist</div>
+        <a href="{{ url_for('main.org_admin_dashboard') }}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-people me-1"></i>Open Team Management
+        </a>
+      </div>
+      <ol class="small text-body-secondary mb-0 ps-3">
+        <li>Open <strong>Team Management</strong> and click <strong>Initialize NDIS Data</strong>.</li>
+        <li>Return to this page and click <strong>Reset</strong> to reload requirements.</li>
+        <li>Open a requirement row, then link uploaded documents as evidence.</li>
+      </ol>
+      {% if not requirement_rows %}
+      <div class="alert alert-warning mt-3 mb-0 py-2 px-3 small">
+        <strong>Setup not finished yet:</strong> no requirements are currently visible for this organisation.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
       <form method="GET" class="row g-2 align-items-end">
         <div class="col-md-6">
           <label for="q" class="form-label">Search</label>
@@ -100,7 +131,13 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="5" class="text-center py-4 text-body-secondary">No requirements found for the selected filters.</td>
+            <td colspan="5" class="text-center py-4 text-body-secondary">
+              <div class="fw-semibold mb-1">No requirements found.</div>
+              <div class="small">
+                If this is your first time, your organisation may not have imported the NDIS requirement list yet.
+                Ask an organisation admin to initialize compliance data from Team Management, then refresh this page.
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
