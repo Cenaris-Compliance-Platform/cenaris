@@ -471,6 +471,9 @@ def create_app(config_name=None):
 
     from app.onboarding import bp as onboarding_bp
     app.register_blueprint(onboarding_bp, url_prefix='/onboarding')
+
+    from app.api import bp as api_v1_bp
+    app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
     
     # Add CSP header for production
     if not app.debug:

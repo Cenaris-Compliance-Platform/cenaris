@@ -10,6 +10,8 @@ CCM is a Flask web app for compliance document management with:
 ## Documentation
 
 - Environment + credentials setup (Azure PostgreSQL, Azure Storage, SMTP, OAuth): [ENV_SETUP.md](ENV_SETUP.md)
+- Public API guide (auth, versioning, tenant isolation, security): [docs/PUBLIC_API.md](docs/PUBLIC_API.md)
+- Postman collection for `/api/v1`: [docs/Cenaris-Public-API.postman_collection.json](docs/Cenaris-Public-API.postman_collection.json)
 
 This README focuses on **how to run and work with the repo**.
 

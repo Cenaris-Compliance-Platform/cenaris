@@ -134,6 +134,15 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
+      <div class="alert alert-light border mb-3">
+        <div class="fw-semibold mb-1"><i class="bi bi-lightbulb me-1"></i>How to improve low score or not-linked evidence</div>
+        <ol class="small text-body-secondary mb-0 ps-3">
+          <li>Use <strong>NDIS Citation Assistant</strong> above to understand what this requirement expects.</li>
+          <li>If you already have a matching file, select it below and click <strong>Link</strong>.</li>
+          <li>If you do not have a suitable file, update/create the document offline, upload it, then come back and link it.</li>
+          <li>After linking better evidence, refresh this page to see updated score/flag status.</li>
+        </ol>
+      </div>
       <h5 class="card-title">Link Evidence</h5>
       <form method="POST" action="{{ url_for('main.compliance_requirement_link_evidence', requirement_db_id=requirement.id) }}" class="row g-2 align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
