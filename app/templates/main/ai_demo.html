@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+      <div>
+        <h1 class="h3 fw-bold mb-1">AI Demo Lab</h1>
+        <p class="text-body-secondary mb-0">Temporary test screen: upload one file, run RAG-style analysis, and inspect proposed status.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning border d-flex flex-column gap-1" role="alert">
+    <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Demo-only output</div>
+    <div class="small">
+      This screen is for product validation only. Results are decision-support, not final audit/legal outcomes.
+      Uploaded files here are processed in memory and are not saved as permanent evidence.
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-2 small text-body-secondary">
+        <div class="col-md-4"><strong>Provider:</strong> {{ demo_provider }}</div>
+        <div class="col-md-4"><strong>Model:</strong> {{ demo_model }}</div>
+        <div class="col-md-4"><strong>OpenRouter Key:</strong> {{ 'Configured' if has_openrouter_key else 'Missing (fallback mode)' }}</div>
+      </div>
+      <div class="mt-2 small text-body-secondary">
+        <strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form id="aiDemoForm" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-md-5">
+          <label for="demoFile" class="form-label">Document (TXT, PDF, DOCX)</label>
+          <input id="demoFile" name="file" type="file" class="form-control" accept=".txt,.pdf,.docx" required />
+          <div class="form-text">Max size 8MB. Temporary processing only.</div>
+        </div>
+        <div class="col-md-7">
+          <label for="demoQuestion" class="form-label">Question to AI</label>
+          <textarea id="demoQuestion" name="question" class="form-control" rows="3" placeholder="e.g., Does this document provide enough incident-management evidence for NDIS audit readiness?"></textarea>
+        </div>
+        <div class="col-md-4">
+          <label for="demoMode" class="form-label">Analysis mode</label>
+          <select id="demoMode" name="mode" class="form-select">
+            <option value="balanced" selected>Balanced (recommended demo mode)</option>
+            <option value="strict">Strict (conservative scoring)</option>
+          </select>
+          <div class="form-text">Balanced is less harsh. Strict is closer to audit-risk caution.</div>
+        </div>
+        <div class="col-12 d-flex gap-2 align-items-center">
+          <button id="runDemoBtn" type="submit" class="btn btn-primary">
+            <i class="bi bi-play-circle me-1"></i>Analyze Document
+          </button>
+          <span id="demoStatusText" class="small text-body-secondary d-none"></span>
+        </div>
+        <div class="col-12 d-none" id="demoProgressWrap">
+          <div class="progress" role="progressbar" aria-label="AI analysis progress" aria-valuemin="0" aria-valuemax="100">
+            <div id="demoProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="demoResultCard" class="card border-0 shadow-sm d-none">
+    <div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
+        <h5 class="card-title mb-0">Analysis Result</h5>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="text-body-secondary small">Proposed status:</span>
+          <span id="resultStatusBadge" class="badge bg-secondary">-</span>
+          <span id="resultConfidence" class="small text-body-secondary"></span>
+          <span id="resultMode" class="small text-body-secondary"></span>
+        </div>
+      </div>
+
+      <div class="small text-body-secondary mb-3" id="resultDiagnostics"></div>
+
+      <div id="resultWarnings" class="d-flex flex-column gap-2 mb-3"></div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">AI Summary</label>
+        <div id="resultSummary" class="border rounded p-3 small bg-body-tertiary" style="white-space: pre-wrap;"></div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Document Evidence Highlights</label>
+          <div id="resultSnippets" class="d-flex flex-column gap-2"></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">NDIS Citations (RAG)</label>
+          <div id="resultCitations" class="d-flex flex-column gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const form = document.getElementById('aiDemoForm');
+    const button = document.getElementById('runDemoBtn');
+    const statusText = document.getElementById('demoStatusText');
+    const resultCard = document.getElementById('demoResultCard');
+    const statusBadge = document.getElementById('resultStatusBadge');
+    const confidenceEl = document.getElementById('resultConfidence');
+    const summaryEl = document.getElementById('resultSummary');
+    const warningsEl = document.getElementById('resultWarnings');
+    const snippetsEl = document.getElementById('resultSnippets');
+    const citationsEl = document.getElementById('resultCitations');
+    const resultModeEl = document.getElementById('resultMode');
+    const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
+    const progressWrap = document.getElementById('demoProgressWrap');
+    const progressBar = document.getElementById('demoProgressBar');
+    const idleButtonHtml = '<i class="bi bi-play-circle me-1"></i>Analyze Document';
+    const loadingButtonHtml = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Analyzing...';
+    let progressTimer = null;
+    let progressValue = 0;
+    let requestInFlight = false;
+    let requestWatchdogTimer = null;
+
+    if (!form) {
+      return;
+    }
+
+    const setRunning = (running, text) => {
+      requestInFlight = !!running;
+      button.disabled = !!running;
+      button.classList.toggle('disabled', !!running);
+      button.innerHTML = running ? loadingButtonHtml : idleButtonHtml;
+      button.setAttribute('aria-busy', running ? 'true' : 'false');
+      statusText.classList.remove('d-none');
+      statusText.textContent = text || '';
+    };
+
+    const forceResetUi = (statusMessage) => {
+      if (requestWatchdogTimer) {
+        clearTimeout(requestWatchdogTimer);
+        requestWatchdogTimer = null;
+      }
+      requestInFlight = false;
+      button.disabled = false;
+      button.classList.remove('disabled');
+      button.innerHTML = idleButtonHtml;
+      button.setAttribute('aria-busy', 'false');
+      if (statusMessage) {
+        statusText.classList.remove('d-none');
+        statusText.textContent = statusMessage;
+      }
+      finishProgress();
+    };
+
+    const startProgress = () => {
+      if (!progressWrap || !progressBar) {
+        return;
+      }
+      progressValue = 8;
+      progressWrap.classList.remove('d-none');
+      progressBar.style.width = `${progressValue}%`;
+      progressBar.textContent = `${progressValue}%`;
+      progressBar.setAttribute('aria-valuenow', String(progressValue));
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
+      progressTimer = setInterval(function () {
+        progressValue = Math.min(progressValue + 7, 90);
+        progressBar.style.width = `${progressValue}%`;
+        progressBar.textContent = `${progressValue}%`;
+        progressBar.setAttribute('aria-valuenow', String(progressValue));
+      }, 300);
+    };
+
+    const finishProgress = () => {
+      if (!progressWrap || !progressBar) {
+        return;
+      }
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      progressValue = 100;
+      progressBar.style.width = '100%';
+      progressBar.textContent = '100%';
+      progressBar.setAttribute('aria-valuenow', '100');
+      window.setTimeout(function () {
+        progressWrap.classList.add('d-none');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.setAttribute('aria-valuenow', '0');
+      }, 450);
+    };
+
+    const renderBadge = (status) => {
+      statusBadge.className = 'badge';
+      const normalized = (status || '').toLowerCase();
+      if (normalized === 'mature') {
+        statusBadge.classList.add('bg-primary');
+      } else if (normalized === 'ok') {
+        statusBadge.classList.add('bg-success');
+      } else if (normalized === 'high risk gap') {
+        statusBadge.classList.add('bg-warning', 'text-dark');
+      } else if (normalized === 'critical gap') {
+        statusBadge.classList.add('bg-danger');
+      } else {
+        statusBadge.classList.add('bg-secondary');
+      }
+      statusBadge.textContent = status || 'Unknown';
+    };
+
+    const asCard = (text, meta) => {
+      const div = document.createElement('div');
+      div.className = 'border rounded p-2 small';
+      div.textContent = text || '-';
+      if (meta) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'text-body-secondary mt-1';
+        metaEl.textContent = meta;
+        div.appendChild(metaEl);
+      }
+      return div;
+    };
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (requestInFlight) {
+        return;
+      }
+      resultCard.classList.add('d-none');
+      warningsEl.innerHTML = '';
+      snippetsEl.innerHTML = '';
+      citationsEl.innerHTML = '';
+
+      const formData = new FormData(form);
+      setRunning(true, 'Analyzing document...');
+      startProgress();
+      requestWatchdogTimer = window.setTimeout(function () {
+        forceResetUi('Analysis timed out. Please retry.');
+      }, 35000);
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(function () {
+          controller.abort('timeout');
+        }, 30000);
+
+        const response = await fetch("{{ url_for('main.ai_demo_analyze_api') }}", {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+        window.clearTimeout(timeoutId);
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_e) {
+          payload = null;
+        }
+
+        if (!response.ok || !payload || !payload.success) {
+          throw new Error((payload && payload.error) || 'Analysis failed');
+        }
+
+        renderBadge(payload.status);
+        confidenceEl.textContent = `Confidence: ${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
+        const modeLabel = (((payload.meta || {}).analysis_mode) || 'balanced').toLowerCase();
+        resultModeEl.textContent = `Mode: ${modeLabel}`;
+        const provider = ((payload.meta || {}).provider) || 'deterministic';
+        const model = ((payload.meta || {}).model) || '-';
+        resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}`;
+        const summary = ((payload.summary || '') + '').trim();
+        if (summary.length > 0) {
+          summaryEl.textContent = summary;
+        } else {
+          summaryEl.textContent = 'Summary unavailable for this run. Please retry with a more specific question.';
+        }
+
+        const warningItems = payload.warning_items || [];
+        if (warningItems.length > 0) {
+          warningItems.forEach(function (item) {
+            const warning = document.createElement('div');
+            warning.className = 'alert alert-warning py-2 px-3 mb-0 small';
+            const source = ((item && item.source) || 'system').toUpperCase();
+            const message = (item && item.message) || '';
+            warning.textContent = `[${source}] ${message}`;
+            warningsEl.appendChild(warning);
+          });
+        } else {
+          warningsEl.innerHTML = '';
+        }
+
+        const snippets = payload.snippets || [];
+        if (snippets.length === 0) {
+          snippetsEl.appendChild(asCard('No strong evidence snippets found in this file.'));
+        } else {
+          snippets.forEach(function (item) {
+            snippetsEl.appendChild(asCard(item.text, `score: ${item.score}`));
+          });
+        }
+
+        const citations = payload.citations || [];
+        if (citations.length === 0) {
+          citationsEl.appendChild(asCard('No NDIS citations retrieved.'));
+        } else {
+          citations.forEach(function (item) {
+            const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'} | score ${item.score || 0}`;
+            citationsEl.appendChild(asCard(item.text, meta));
+          });
+        }
+
+        resultCard.classList.remove('d-none');
+        setRunning(false, 'Done.');
+      } catch (error) {
+        const fallbackMessage = (error && error.name === 'AbortError')
+          ? 'Analysis timed out. Please retry.'
+          : (error.message || 'Analysis failed.');
+        setRunning(false, fallbackMessage);
+      } finally {
+        // Force button back to idle state regardless of any previous branch.
+        forceResetUi();
+      }
+    });
+
+    window.addEventListener('pagehide', function () {
+      forceResetUi();
+    });
+  })();
+</script>
+{% endblock %}
