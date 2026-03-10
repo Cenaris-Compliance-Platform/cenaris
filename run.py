@@ -6,6 +6,7 @@ This script starts the Flask development server.
 
 from app import create_app
 import os
+import logging
 
 # Create the Flask application
 app = create_app(os.getenv('FLASK_CONFIG') or 'development')
@@ -13,15 +14,13 @@ app = create_app(os.getenv('FLASK_CONFIG') or 'development')
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', '8080'))
     debug = bool(app.config.get('DEBUG', False))
+    logger = logging.getLogger('startup')
 
-    print("🚀 Starting Cenaris Compliance Management System...")
-    print(f"📊 Dashboard will be available at: http://localhost:{port}")
-    print("🔐 Create an account or use sample users:")
-    print("   • admin@compliance.com / admin123")
-    print("   • user@compliance.com / user123")
-    print("\n✅ Azure Storage is configured and ready!")
-    print("   Files will be stored in: cenarisblobstorage/user-uploads")
-    print("\n🛑 Press Ctrl+C to stop the server\n")
+    logger.info('Starting Cenaris Compliance Management System')
+    logger.info(f'Dashboard URL: http://localhost:{port}')
+    logger.info('Sample users: admin@compliance.com / admin123, user@compliance.com / user123')
+    logger.info('Azure Storage target: cenarisblobstorage/user-uploads')
+    logger.info('Press Ctrl+C to stop the server')
     
     app.run(
         host='0.0.0.0',  # Allow external connections

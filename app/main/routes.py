@@ -1818,7 +1818,7 @@ def download_document(doc_id):
             download_name=document.filename
         )
     except Exception as e:
-        print(f"Error downloading document: {e}")
+        current_app.logger.exception(f'Error downloading document {doc_id}: {e}')
         abort(500)
 
 
@@ -2054,7 +2054,7 @@ def delete_document(doc_id):
         flash(f'Document "{document.filename}" deleted successfully.', 'success')
     except Exception as e:
         db.session.rollback()
-        print(f"Error deleting document: {e}")
+        current_app.logger.exception(f'Error deleting document {doc_id}: {e}')
         flash('Error deleting document. Please try again.', 'error')
     
     return redirect(url_for('main.evidence_repository'))
@@ -3127,6 +3127,492 @@ def compliance_requirement_unlink_evidence(requirement_db_id, link_id):
     return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
 
 
+def _extract_demo_document_text(file_storage) -> tuple[str, str | None]:
+    """Extract text from an uploaded file for demo-only analysis (in-memory)."""
+    filename = (getattr(file_storage, 'filename', '') or '').strip().lower()
+    if not filename:
+        return '', 'A file is required.'
+
+    try:
+        raw_bytes = file_storage.read()
+    except Exception:
+        return '', 'Unable to read uploaded file.'
+
+    if not raw_bytes:
+        return '', 'Uploaded file is empty.'
+
+    max_size = 8 * 1024 * 1024
+    if len(raw_bytes) > max_size:
+        return '', 'File is too large for demo analysis (max 8MB).'
+
+    try:
+        if filename.endswith('.txt'):
+            text = raw_bytes.decode('utf-8', errors='ignore')
+            return text.strip(), None
+
+        if filename.endswith('.pdf'):
+            from pypdf import PdfReader
+
+            reader = PdfReader(io.BytesIO(raw_bytes))
+            pages = []
+            for page in reader.pages:
+                pages.append((page.extract_text() or '').strip())
+            return '\n\n'.join([p for p in pages if p]).strip(), None
+
+        if filename.endswith('.docx'):
+            from docx import Document as DocxDocument
+
+            doc = DocxDocument(io.BytesIO(raw_bytes))
+            paragraphs = [(p.text or '').strip() for p in doc.paragraphs]
+            return '\n\n'.join([p for p in paragraphs if p]).strip(), None
+    except Exception:
+        return '', 'Unable to parse file. Use TXT, PDF, or DOCX for demo analysis.'
+
+    return '', 'Unsupported file type. Use TXT, PDF, or DOCX.'
+
+
+def _tokenize_demo_text(text: str) -> list[str]:
+    import re
+
+    stop_words = {
+        'the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'your', 'what', 'when', 'where',
+        'which', 'into', 'about', 'they', 'them', 'their', 'will', 'would', 'should', 'there', 'here',
+        'been', 'also', 'only', 'than', 'then', 'each', 'very', 'more', 'most', 'such', 'some', 'using',
+        'does', 'did', 'not', 'are', 'was', 'were', 'is', 'it', 'to', 'of', 'in', 'on', 'by', 'as',
+    }
+    terms = [t for t in re.findall(r"[a-z0-9]+", (text or '').lower()) if len(t) >= 3 and t not in stop_words]
+    unique = []
+    seen = set()
+    for t in terms:
+        if t in seen:
+            continue
+        seen.add(t)
+        unique.append(t)
+    return unique[:30]
+
+
+def _rank_demo_snippets(document_text: str, query_text: str, top_k: int = 4) -> list[dict]:
+    blocks = []
+    for part in (document_text or '').split('\n'):
+        cleaned = (part or '').strip()
+        if len(cleaned) >= 30:
+            blocks.append(cleaned)
+
+    if not blocks:
+        return []
+
+    query_terms = _tokenize_demo_text(query_text)
+    scored = []
+    for block in blocks:
+        lower = block.lower()
+        score = 0
+        for term in query_terms:
+            if term in lower:
+                score += 1
+        if score > 0:
+            scored.append((score, block))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    selected = scored[:max(1, min(int(top_k or 4), 6))]
+    return [
+        {
+            'score': int(score),
+            'text': (text[:420].rstrip() + '...') if len(text) > 420 else text,
+        }
+        for score, text in selected
+    ]
+
+
+def _derive_demo_status(document_text: str, query_text: str, snippets: list[dict], *, mode: str = 'balanced') -> tuple[str, float]:
+    query_terms = _tokenize_demo_text(query_text)
+    if not query_terms:
+        query_terms = _tokenize_demo_text('compliance evidence policy process review audit monitoring')
+
+    lower_text = (document_text or '').lower()
+    doc_len = len((document_text or '').strip())
+    snippet_count = len(snippets or [])
+    hits = sum(1 for term in query_terms if term in lower_text)
+    coverage = (float(hits) / float(len(query_terms))) if query_terms else 0.0
+    score = (coverage * 0.65) + (min(float(snippet_count) / 4.0, 1.0) * 0.2) + (min(float(doc_len) / 1800.0, 1.0) * 0.15)
+    confidence = max(0.0, min(score, 1.0))
+
+    normalized_mode = (mode or 'balanced').strip().lower()
+    if normalized_mode not in {'strict', 'balanced'}:
+        normalized_mode = 'balanced'
+
+    # Strict mode is intentionally conservative to avoid over-claiming readiness.
+    if normalized_mode == 'strict':
+        # In strict mode, we intentionally deflate confidence to reflect higher audit caution.
+        confidence = max(0.0, min(confidence * 0.90, 1.0))
+        if doc_len < 220 or coverage < 0.12:
+            return 'Critical gap', round(confidence, 3)
+        if score >= 0.90 and snippet_count >= 4 and doc_len >= 900:
+            return 'Mature', round(confidence, 3)
+        if score >= 0.58 and snippet_count >= 2:
+            return 'OK', round(confidence, 3)
+        if score >= 0.30:
+            return 'High risk gap', round(confidence, 3)
+        return 'Critical gap', round(confidence, 3)
+
+    # Balanced mode reduces false-critical outcomes for short but relevant policy docs.
+    confidence = max(0.0, min(confidence * 1.05, 1.0))
+    if doc_len < 120 and coverage < 0.20:
+        return 'Critical gap', round(confidence, 3)
+    if score >= 0.72 and snippet_count >= 3:
+        return 'Mature', round(confidence, 3)
+    if score >= 0.48 and snippet_count >= 2:
+        return 'OK', round(confidence, 3)
+    if score >= 0.22:
+        return 'High risk gap', round(confidence, 3)
+    return 'Critical gap', round(confidence, 3)
+
+
+def _ensure_demo_summary_text(
+    summary_text: str | None,
+    *,
+    status: str,
+    analysis_mode: str,
+    snippets: list[dict],
+    citations: list[dict],
+) -> str:
+    value = (summary_text or '').replace('\r\n', '\n').strip()
+    if value and _is_complete_demo_summary(value):
+        return value
+    if value:
+        coerced = _coerce_demo_summary_text(value)
+        if coerced and _is_complete_demo_summary(coerced):
+            return coerced
+
+    first_snippet = ((snippets or [{}])[0] or {}).get('text') if snippets else None
+    first_citation = ((citations or [{}])[0] or {}) if citations else {}
+    citation_ref = ''
+    if first_citation:
+        citation_ref = f"{first_citation.get('source_id', 'ndis')} p.{first_citation.get('page_number') or '?'}"
+
+    parts = [
+        f"Proposed status: {status} (mode: {analysis_mode}).",
+        (f"Top supporting evidence: {first_snippet}" if first_snippet else 'No strong evidence snippet was extracted from the uploaded file.'),
+        (f"Top NDIS citation: {citation_ref}." if citation_ref else 'No NDIS citation was retrieved for this run.'),
+        'Recommendation: review missing controls and add clearer operational evidence (ownership, timelines, monitoring, and participant communication).',
+    ]
+    return '\n\n'.join(parts)
+
+
+def _normalize_demo_summary_text(text: str | None) -> str:
+    value = (text or '').replace('\r\n', '\n').strip()
+    if not value:
+        return ''
+
+    # Remove common code-fence wrappers if the model returns markdown blocks.
+    if value.startswith('```') and value.endswith('```'):
+        lines = value.split('\n')
+        if len(lines) >= 3:
+            value = '\n'.join(lines[1:-1]).strip()
+
+    if 'END_SUMMARY' in value:
+        value = value.split('END_SUMMARY', 1)[0].strip()
+
+    return value
+
+
+def _is_complete_demo_summary(text: str | None) -> bool:
+    value = _normalize_demo_summary_text(text)
+    if len(value) < 80:
+        return False
+
+    lower = value.lower()
+    has_why = ('1)' in lower and 'why this status' in lower) or ('why this status' in lower)
+    has_missing = ('2)' in lower and 'missing evidence' in lower) or ('missing evidence' in lower)
+    has_action = ('3)' in lower and 'recommended next action' in lower) or ('recommended next action' in lower)
+    return bool(has_why and has_missing and has_action)
+
+
+def _coerce_demo_summary_text(text: str | None) -> str | None:
+    """Coerce partially structured LLM output into required 3-section demo format."""
+    value = _normalize_demo_summary_text(text)
+    if not value:
+        return None
+    if _is_complete_demo_summary(value):
+        return value
+
+    import re
+
+    lines = [ln.strip(' -\t') for ln in value.split('\n') if ln.strip()]
+    if not lines:
+        return None
+
+    def _find_idx(patterns: list[str]) -> int | None:
+        for i, ln in enumerate(lines):
+            low = ln.lower()
+            if any(re.search(p, low) for p in patterns):
+                return i
+        return None
+
+    idx_why = _find_idx([r'why this status', r'rationale', r'reason'])
+    idx_missing = _find_idx([r'missing evidence', r'gap', r'limitation', r'missing'])
+    idx_action = _find_idx([r'recommended next action', r'next action', r'recommend', r'action'])
+
+    def _slice(start: int | None, end: int | None) -> str:
+        if start is None:
+            return ''
+        a = max(0, start + 1)
+        b = end if end is not None else len(lines)
+        return ' '.join(lines[a:b]).strip(' .')
+
+    why = _slice(idx_why, idx_missing if idx_missing is not None else idx_action)
+    missing = _slice(idx_missing, idx_action)
+    action = _slice(idx_action, None)
+
+    # If headings are missing, heuristically split by sentences.
+    if not (why and missing and action):
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', value) if s.strip()]
+        if not why:
+            why = ' '.join(sentences[:2]).strip(' .')
+        if not missing:
+            missing = ' '.join(sentences[2:4]).strip(' .')
+        if not action:
+            action = ' '.join(sentences[4:]).strip(' .')
+
+    if not why:
+        why = 'Status is based on detected evidence relevance and citation overlap.'
+    if not missing:
+        missing = 'Specific control ownership, timelines, and monitoring detail are not fully evidenced.'
+    if not action:
+        action = 'Add explicit control owners, due dates, review cadence, and participant communication pathways.'
+
+    coerced = (
+        '1) Why this status\n'
+        f'{why}.\n\n'
+        '2) Missing evidence\n'
+        f'{missing}.\n\n'
+        '3) Recommended next action\n'
+        f'{action}.'
+    )
+    return _normalize_demo_summary_text(coerced)
+
+
+def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict], citations: list[dict]) -> tuple[str | None, str | None, str | None]:
+    api_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()
+    configured_model = (current_app.config.get('OPENROUTER_MODEL') or '').strip() or 'mistralai/mistral-7b-instruct:free'
+    fallback_models = [configured_model, 'openrouter/auto']
+    # Preserve order but remove duplicates.
+    model_candidates = []
+    seen = set()
+    for model_name in fallback_models:
+        key = (model_name or '').strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        model_candidates.append(model_name)
+
+    if not api_key:
+        return None, 'OPENROUTER_API_KEY is not set. Using deterministic explanation.', None
+
+    evidence_points = '\n'.join([f"- {item.get('text', '')}" for item in snippets[:4]]) or '- No strong document snippets found.'
+    citation_points = '\n'.join([
+        f"- {c.get('source_id', 'ndis')} p.{c.get('page_number') or '?'}: {c.get('text', '')}"
+        for c in citations[:3]
+    ]) or '- No NDIS citations retrieved.'
+
+    prompt = (
+        'You are an NDIS compliance demo assistant. '
+        'Given the proposed status, document evidence snippets, and NDIS citations, produce a concise explanation. '
+        'Return plain text only (no markdown, no bullet symbols, no code fences). '
+        'Use this exact structure with all sections present:\n'
+        '1) Why this status\n'
+        '2) Missing evidence\n'
+        '3) Recommended next action\n'
+        'End with the line END_SUMMARY\n\n'
+        f'Proposed status: {status}\n'
+        f'Question: {question}\n\n'
+        f'Document evidence snippets:\n{evidence_points}\n\n'
+        f'NDIS citations:\n{citation_points}'
+    )
+
+    try:
+        import requests
+
+        last_warning = None
+        attempt_messages = []
+        for model in model_candidates:
+            response = requests.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': 'https://cenaris.local',
+                    'X-Title': 'Cenaris AI Demo',
+                },
+                json={
+                    'model': model,
+                    'messages': [
+                        {'role': 'system', 'content': 'You are precise and practical. Do not claim final legal compliance.'},
+                        {'role': 'user', 'content': prompt},
+                    ],
+                    'temperature': 0.1,
+                    'max_tokens': 700,
+                },
+                timeout=20,
+            )
+
+            if response.status_code >= 400:
+                snippet = ((response.text or '').strip()[:140])
+                last_warning = f'OpenRouter model {model} failed ({response.status_code}){": " + snippet if snippet else ""}.'
+                attempt_messages.append(f'{model}: {response.status_code}')
+                # 404/400 are often model-routing issues; try next candidate.
+                if response.status_code in {400, 404}:
+                    continue
+                return None, f'{last_warning} Using deterministic explanation.', None
+
+            payload = response.json() if response.content else {}
+            choices = payload.get('choices') or []
+            if not choices:
+                last_warning = f'OpenRouter model {model} returned no choices.'
+                attempt_messages.append(f'{model}: no choices')
+                continue
+
+            message = ((choices[0] or {}).get('message') or {}).get('content') or ''
+            answer = _normalize_demo_summary_text(message)
+            if not answer:
+                last_warning = f'OpenRouter model {model} returned empty content.'
+                attempt_messages.append(f'{model}: empty content')
+                continue
+            if not _is_complete_demo_summary(answer):
+                coerced = _coerce_demo_summary_text(answer)
+                if coerced and _is_complete_demo_summary(coerced):
+                    return coerced, None, model
+                last_warning = f'OpenRouter model {model} returned incomplete summary format.'
+                attempt_messages.append(f'{model}: incomplete format')
+                continue
+            return answer, None, model
+
+        if last_warning:
+            attempts = '; '.join(attempt_messages[-3:]) if attempt_messages else 'unknown'
+            return None, f'OpenRouter summary unavailable ({attempts}). Using deterministic explanation.', None
+        return None, 'OpenRouter call failed. Using deterministic explanation.', None
+    except Exception:
+        return None, 'OpenRouter request failed. Using deterministic explanation.', None
+
+
+@bp.route('/ai-demo')
+@login_required
+def ai_demo():
+    """Temporary AI demo lab for upload + analysis validation."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
+    corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
+    return render_template(
+        'main/ai_demo.html',
+        title='AI Demo Lab',
+        demo_provider='OpenRouter',
+        demo_model=current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free',
+        has_openrouter_key=bool((current_app.config.get('OPENROUTER_API_KEY') or '').strip()),
+        has_ndis_corpus=bool(os.path.exists(corpus_abs)),
+    )
+
+
+@bp.route('/api/ai/demo/analyze', methods=['POST'])
+@login_required
+@limiter.limit('8 per minute', key_func=_ai_rate_limit_key)
+def ai_demo_analyze_api():
+    """Analyze an uploaded file in-memory for demo validation."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    uploaded = request.files.get('file')
+    question = _limit_text((request.form.get('question') or '').strip(), max_chars=700)
+    analysis_mode = (request.form.get('mode') or 'balanced').strip().lower()
+    if analysis_mode not in {'strict', 'balanced'}:
+        analysis_mode = 'balanced'
+    if not uploaded:
+        return jsonify({'success': False, 'error': 'Please upload a file first.'}), 400
+
+    if not question:
+        question = 'Assess this document against NDIS-style compliance evidence expectations.'
+
+    doc_text, extraction_error = _extract_demo_document_text(uploaded)
+    if extraction_error:
+        return jsonify({'success': False, 'error': extraction_error}), 400
+
+    snippets = _rank_demo_snippets(doc_text, question, top_k=4)
+    status, confidence = _derive_demo_status(doc_text, question, snippets, mode=analysis_mode)
+
+    rag_citations = []
+    rag_warning = None
+    warning_items: list[dict] = []
+    corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
+    corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
+    try:
+        rag_result = rag_query_service.query(corpus_path=corpus_abs, query_text=question, requirement_id='', top_k=3)
+        rag_citations = [
+            {
+                'chunk_id': c.chunk_id,
+                'source_id': c.source_id,
+                'page_number': c.page_number,
+                'score': c.score,
+                'text': c.text,
+            }
+            for c in rag_result.citations
+        ]
+    except FileNotFoundError:
+        rag_warning = 'NDIS corpus is not built yet; showing document-only analysis.'
+        warning_items.append({'source': 'rag', 'message': rag_warning})
+    except Exception:
+        rag_warning = 'Could not retrieve NDIS citations; showing document-only analysis.'
+        warning_items.append({'source': 'rag', 'message': rag_warning})
+
+    ai_summary, llm_warning, used_model = _openrouter_demo_summary(
+        status=status,
+        question=question,
+        snippets=snippets,
+        citations=rag_citations,
+    )
+    if llm_warning:
+        warning_items.append({'source': 'llm', 'message': llm_warning})
+
+    ai_summary = _ensure_demo_summary_text(
+        ai_summary,
+        status=status,
+        analysis_mode=analysis_mode,
+        snippets=snippets,
+        citations=rag_citations,
+    )
+
+    warnings = [w.get('message', '') for w in warning_items if (w.get('message') or '').strip()]
+    return jsonify(
+        {
+            'success': True,
+            'status': status,
+            'confidence': confidence,
+            'summary': ai_summary,
+            'snippets': snippets,
+            'citations': rag_citations,
+            'warnings': warnings,
+            'warning_items': warning_items,
+            'meta': {
+                'provider': 'openrouter' if not llm_warning else 'deterministic',
+                'model': used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free',
+                'analysis_mode': analysis_mode,
+                'scoring_version': 'demo-v2',
+                'document_chars': len(doc_text or ''),
+                'temporary_processing_only': True,
+            },
+        }
+    )
+
+
 @bp.route('/api/rag/query', methods=['POST'])
 @login_required
 @limiter.limit(_rag_rate_limit_value, key_func=_ai_rate_limit_key)
@@ -3884,9 +4370,7 @@ def generate_report(report_type):
             download_name=filename
         )
     except Exception as e:
-        print(f"Error generating report: {e}")
-        import traceback
-        traceback.print_exc()
+        current_app.logger.exception(f'Error generating report {report_type}: {e}')
         return f"Error generating report: {str(e)}", 500
 
 

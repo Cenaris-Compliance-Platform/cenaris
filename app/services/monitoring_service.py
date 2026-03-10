@@ -84,37 +84,35 @@ class MonitoringService:
 
     def init_app(self, app: Flask):
         """Initialize monitoring service with Flask app"""
-        print('[DEBUG] MonitoringService.init_app() called')
         self.app = app
         self.connection_string = app.config.get('APPINSIGHTS_CONNECTION_STRING')
-        print(f'[DEBUG] Connection string found: {bool(self.connection_string)}')
+        logger.debug(f'[MONITORING] init_app called, connection string found: {bool(self.connection_string)}')
         
         if not self.connection_string:
             logger.warning('[MONITORING] No Application Insights connection string configured')
-            print('[DEBUG] No connection string, returning early')
             return
 
         if not self._ensure_exporters_loaded():
-            print('[DEBUG] Azure Monitor exporters unavailable, monitoring disabled')
+            logger.warning('[MONITORING] Azure Monitor exporters unavailable, monitoring disabled')
             return
         
         try:
-            print('[DEBUG] Starting monitoring setup...')
+            logger.debug('[MONITORING] Starting monitoring setup')
             # Create resource with service information
             resource = Resource.create({
                 "service.name": "cenaris-compliance",
                 "service.version": "1.0.0",
                 "deployment.environment": os.getenv('FLASK_ENV', 'production'),
             })
-            print('[DEBUG] Resource created')
+            logger.debug('[MONITORING] Resource created')
             
             # Reuse existing tracer if already set up (by logging_service)
             try:
                 self.tracer = trace.get_tracer(__name__)
-                print('[DEBUG] Reusing existing tracer')
+                logger.debug('[MONITORING] Reusing existing tracer')
                 logger.info('[MONITORING] Reusing existing tracer from logging service')
             except Exception as te:
-                print(f'[DEBUG] Creating new tracer, error was: {te}')
+                logger.debug(f'[MONITORING] Creating new tracer, prior error: {te}')
                 # Set up tracing only if not already configured
                 trace_provider = TracerProvider(resource=resource)
                 trace_exporter = self._trace_exporter_cls(connection_string=self.connection_string)
@@ -126,7 +124,7 @@ class MonitoringService:
                 self.tracer = trace.get_tracer(__name__)
                 logger.info('[MONITORING] Created new tracer with custom processors')
             
-            print('[DEBUG] About to set up metrics...')
+            logger.debug('[MONITORING] Setting up metrics')
             # Set up metrics (for performance counters)
             metric_provider = MeterProvider(resource=resource)
             metric_exporter = self._metric_exporter_cls(connection_string=self.connection_string)
@@ -136,33 +134,30 @@ class MonitoringService:
             metric_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
             metrics.set_meter_provider(metric_provider)
             self.meter = metrics.get_meter(__name__)
-            print('[DEBUG] Metrics set up complete')
+            logger.debug('[MONITORING] Metrics setup complete')
             
             # Create metric instruments
             self._create_metrics()
-            print('[DEBUG] Metric instruments created')
+            logger.debug('[MONITORING] Metric instruments created')
             
             # Auto-instrument Flask, Requests, and SQLAlchemy
             self._instrument_libraries(app)
-            print('[DEBUG] Libraries instrumented')
+            logger.debug('[MONITORING] Libraries instrumented')
             
             # Register Flask hooks for custom tracking
             self._register_flask_hooks(app)
-            print('[DEBUG] Flask hooks registered')
+            logger.debug('[MONITORING] Flask hooks registered')
             
             # Start system monitoring thread
             self._start_system_monitoring()
-            print('[DEBUG] System monitoring started')
+            logger.debug('[MONITORING] System monitoring started')
             
             self.enabled = True
             logger.info('[MONITORING] Enhanced monitoring initialized successfully')
             logger.info('[MONITORING] Tracking: Performance, System Health, Database, Errors')
             
         except Exception as e:
-            print(f'[DEBUG] ERROR in monitoring setup: {e}')
-            import traceback
-            traceback.print_exc()
-            logger.error(f'[MONITORING] Failed to initialize: {e}')
+            logger.exception(f'[MONITORING] Failed to initialize: {e}')
             self.enabled = False
 
     def _create_metrics(self):

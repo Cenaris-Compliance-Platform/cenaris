@@ -28,6 +28,14 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _resolve_log_level(app, fallback='INFO') -> int:
+    """Resolve configured log level from Flask config/environment."""
+    level_name = fallback
+    if app is not None:
+        level_name = str(app.config.get('LOG_LEVEL', fallback) or fallback)
+    return getattr(logging, level_name.upper(), logging.INFO)
+
+
 class SecurityEventLogger:
     """Logs security-related events for audit trails."""
     
@@ -68,9 +76,11 @@ class SecurityEventLogger:
     
     def _configure_logger(self):
         """Configure the security logger with appropriate handlers."""
+        log_level = _resolve_log_level(self.app, 'INFO')
+
         # Console handler for local development
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(log_level)
         formatter = logging.Formatter(
             '[%(asctime)s] [SECURITY] %(levelname)s: %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -79,6 +89,8 @@ class SecurityEventLogger:
         
         # Clear existing handlers
         self.logger.handlers = []
+        self.logger.propagate = False
+        self.logger.setLevel(log_level)
         self.logger.addHandler(console_handler)
         
         # Azure Monitor handler (if enabled)
@@ -93,11 +105,11 @@ class SecurityEventLogger:
                     
                     # Create and add OpenTelemetry logging handler
                     handler = LoggingHandler(logger_provider=logger_provider)
-                    handler.setLevel(logging.INFO)
+                    handler.setLevel(log_level)
                     self.logger.addHandler(handler)
-                    print("[INFO] Security logger Azure Monitor integration enabled")
+                    logger.info('Security logger Azure Monitor integration enabled')
             except Exception as e:
-                print(f"[WARNING] Could not initialize Azure logging for security logger: {str(e)}")
+                logger.warning(f'Could not initialize Azure logging for security logger: {str(e)}')
     
     def log_event(self, event_type, user_id=None, org_id=None, details=None, ip_address=None):
         """
@@ -133,7 +145,7 @@ class SecurityEventLogger:
             self.logger.info(json.dumps(event_data))
         except Exception as e:
             # Silently handle errors to prevent breaking the application
-            print(f"[ERROR] Failed to log security event: {str(e)}")
+            logger.error(f'Failed to log security event: {str(e)}')
 
 
 class AccessLogger:
@@ -155,9 +167,11 @@ class AccessLogger:
     
     def _configure_logger(self):
         """Configure the access logger with appropriate handlers."""
+        log_level = _resolve_log_level(self.app, 'INFO')
+
         # Console handler
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(log_level)
         formatter = logging.Formatter(
             '[%(asctime)s] [ACCESS] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -166,6 +180,8 @@ class AccessLogger:
         
         # Clear existing handlers
         self.logger.handlers = []
+        self.logger.propagate = False
+        self.logger.setLevel(log_level)
         self.logger.addHandler(console_handler)
         
         # Azure Monitor handler (if enabled)
@@ -178,10 +194,10 @@ class AccessLogger:
                     logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
                     
                     handler = LoggingHandler(logger_provider=logger_provider)
-                    handler.setLevel(logging.INFO)
+                    handler.setLevel(log_level)
                     self.logger.addHandler(handler)
             except Exception as e:
-                print(f"[WARNING] Could not initialize Azure logging for access logger: {str(e)}")
+                logger.warning(f'Could not initialize Azure logging for access logger: {str(e)}')
     
     def _register_middleware(self):
         """Register Flask before/after request handlers."""
@@ -224,7 +240,7 @@ class AccessLogger:
             
             self.logger.info(json.dumps(log_data))
         except Exception as e:
-            print(f"[ERROR] Failed to log access request: {str(e)}")
+            logger.error(f'Failed to log access request: {str(e)}')
 
 
 class ErrorLogger:
@@ -246,9 +262,11 @@ class ErrorLogger:
     
     def _configure_logger(self):
         """Configure the error logger with appropriate handlers."""
+        error_level = logging.ERROR
+
         # Console handler
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.ERROR)
+        console_handler.setLevel(error_level)
         formatter = logging.Formatter(
             '[%(asctime)s] [ERROR] %(levelname)s: %(message)s\n%(exc_info)s',
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -257,6 +275,8 @@ class ErrorLogger:
         
         # Clear existing handlers
         self.logger.handlers = []
+        self.logger.propagate = False
+        self.logger.setLevel(error_level)
         self.logger.addHandler(console_handler)
         
         # Azure Monitor handler (if enabled)
@@ -269,10 +289,10 @@ class ErrorLogger:
                     logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
                     
                     handler = LoggingHandler(logger_provider=logger_provider)
-                    handler.setLevel(logging.ERROR)
+                    handler.setLevel(error_level)
                     self.logger.addHandler(handler)
             except Exception as e:
-                print(f"[WARNING] Could not initialize Azure logging for error logger: {str(e)}")
+                logger.warning(f'Could not initialize Azure logging for error logger: {str(e)}')
     
     def _register_error_handlers(self):
         """Register Flask error handlers."""
@@ -332,10 +352,10 @@ class ErrorLogger:
                     alert_critical_error(error, error_data)
                 except Exception as alert_error:
                     # Don't let alert failures break error logging
-                    print(f"[WARNING] Failed to send error alert: {alert_error}")
+                    logger.warning(f'Failed to send error alert: {alert_error}')
                     
         except Exception as e:
-            print(f"[ERROR] Failed to log error: {str(e)}")
+            logger.error(f'Failed to log error: {str(e)}')
     
     def _is_critical_error(self, error):
         """Determine if error is critical enough for immediate alert"""
@@ -361,6 +381,7 @@ class ApplicationLogger:
     def init_app(self, app):
         """Initialize all loggers with Flask app."""
         self.app = app
+        self._configure_root_logger(app)
         
         # Initialize all component loggers
         self.security_logger.init_app(app)
@@ -382,12 +403,30 @@ class ApplicationLogger:
                     trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
                     trace.set_tracer_provider(trace_provider)
                     self.tracer = trace.get_tracer(__name__)
-                    
-                    print("[INFO] Application Insights integration enabled")
+
+                    logger.info('Application Insights integration enabled')
             except Exception as e:
-                print(f"[WARNING] Could not initialize Azure tracing: {str(e)}")
-        
-        print("[INFO] Application logging system initialized")
+                logger.warning(f'Could not initialize Azure tracing: {str(e)}')
+
+        logger.info('Application logging system initialized')
+
+    def _configure_root_logger(self, app):
+        """Ensure a single, level-controlled root logger for application startup/runtime logs."""
+        root_logger = logging.getLogger()
+        root_level = _resolve_log_level(app, 'INFO')
+        root_logger.setLevel(root_level)
+
+        if not root_logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setLevel(root_level)
+            handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
+            root_logger.addHandler(handler)
+
+        werkzeug_level_name = str(os.environ.get('WERKZEUG_LOG_LEVEL') or 'WARNING').upper()
+        werkzeug_level = getattr(logging, werkzeug_level_name, logging.WARNING)
+        logging.getLogger('werkzeug').setLevel(werkzeug_level)
+        logging.getLogger('opentelemetry').setLevel(logging.WARNING)
+        logging.getLogger('azure').setLevel(logging.WARNING)
     
     def log_security_event(self, event_type, **kwargs):
         """Convenience method to log security events."""
