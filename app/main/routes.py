@@ -3341,6 +3341,13 @@ def _coerce_demo_summary_text(text: str | None) -> str | None:
     if not lines:
         return None
 
+    def _as_sentence(fragment: str) -> str:
+        cleaned = re.sub(r'\s+', ' ', (fragment or '').strip())
+        cleaned = re.sub(r'[.?!]+$', '', cleaned).strip()
+        if not cleaned:
+            return ''
+        return f'{cleaned}.'
+
     def _find_idx(patterns: list[str]) -> int | None:
         for i, ln in enumerate(lines):
             low = ln.lower()
@@ -3380,13 +3387,17 @@ def _coerce_demo_summary_text(text: str | None) -> str | None:
     if not action:
         action = 'Add explicit control owners, due dates, review cadence, and participant communication pathways.'
 
+    why = _as_sentence(why)
+    missing = _as_sentence(missing)
+    action = _as_sentence(action)
+
     coerced = (
         '1) Why this status\n'
-        f'{why}.\n\n'
+        f'{why}\n\n'
         '2) Missing evidence\n'
-        f'{missing}.\n\n'
+        f'{missing}\n\n'
         '3) Recommended next action\n'
-        f'{action}.'
+        f'{action}'
     )
     return _normalize_demo_summary_text(coerced)
 
@@ -3533,9 +3544,8 @@ def ai_demo_analyze_api():
 
     uploaded = request.files.get('file')
     question = _limit_text((request.form.get('question') or '').strip(), max_chars=700)
-    analysis_mode = (request.form.get('mode') or 'balanced').strip().lower()
-    if analysis_mode not in {'strict', 'balanced'}:
-        analysis_mode = 'balanced'
+    # Demo mode is intentionally fixed to balanced for consistent client-facing behavior.
+    analysis_mode = 'balanced'
     if not uploaded:
         return jsonify({'success': False, 'error': 'Please upload a file first.'}), 400
 
