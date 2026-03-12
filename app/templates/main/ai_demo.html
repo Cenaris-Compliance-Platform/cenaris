@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+      <div>
+        <h1 class="h3 fw-bold mb-1">AI Demo Lab</h1>
+        <p class="text-body-secondary mb-0">Temporary test screen: upload one file, run RAG-style analysis, and inspect proposed status.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning border d-flex flex-column gap-1" role="alert">
+    <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Demo-only output</div>
+    <div class="small">
+      This screen is for product validation only. Results are decision-support, not final audit/legal outcomes.
+      Uploaded files here are processed in memory and are not saved as permanent evidence.
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-2 small text-body-secondary">
+        <div class="col-md-4"><strong>Provider:</strong> {{ demo_provider }}</div>
+        <div class="col-md-4"><strong>Model:</strong> {{ demo_model }}</div>
+        <div class="col-md-4"><strong>OpenRouter Key:</strong> {{ 'Configured' if has_openrouter_key else 'Missing (fallback mode)' }}</div>
+      </div>
+      <div class="mt-2 small text-body-secondary">
+        <strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form id="aiDemoForm" class="row g-3" data-skip-loading="1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-md-5">
+          <label for="demoFile" class="form-label">Document (TXT, PDF, DOCX)</label>
+          <input id="demoFile" name="file" type="file" class="form-control" accept=".txt,.pdf,.docx" required />
+          <div class="form-text">Max size 8MB. Temporary processing only.</div>
+        </div>
+        <div class="col-md-7">
+          <label for="demoQuestion" class="form-label">Question to AI</label>
+          <textarea id="demoQuestion" name="question" class="form-control" rows="3" placeholder="e.g., Does this document provide enough incident-management evidence for NDIS audit readiness?"></textarea>
+          <div class="mt-2">
+            <label for="demoQuestionPreset" class="form-label small mb-1">Use a common question</label>
+            <select id="demoQuestionPreset" class="form-select form-select-sm">
+              <option value="">Select a sample question...</option>
+              <option value="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident reporting readiness</option>
+              <option value="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Evidence and gap summary</option>
+              <option value="Does this policy clearly assign control owners, review cadence, and monitoring responsibilities?">Governance and ownership check</option>
+              <option value="How well does this document support audit readiness, and what are the top 3 remediation actions?">Audit readiness and actions</option>
+              <option value="Which sections of this document align with participant rights, safeguarding, and quality management obligations?">Participant rights and safeguarding alignment</option>
+            </select>
+          </div>
+          <div class="mt-2 d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident Readiness</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Evidence Gaps</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="How well does this document support audit readiness, and what are the top 3 remediation actions?">Audit Actions</button>
+          </div>
+        </div>
+        <input type="hidden" name="mode" value="balanced" />
+        <div class="col-12">
+          <div class="small text-body-secondary">Analysis mode: <strong>Balanced</strong> (fixed for demo consistency)</div>
+        </div>
+        <div class="col-12 d-flex gap-2 align-items-center">
+          <button id="runDemoBtn" type="submit" class="btn btn-primary">
+            <span id="runDemoLabel">Analyze Document</span>
+          </button>
+          <span id="demoStatusText" class="small text-body-secondary d-none"></span>
+        </div>
+        <div class="col-12 d-none" id="demoProgressWrap">
+          <div class="progress" role="progressbar" aria-label="AI analysis progress" aria-valuemin="0" aria-valuemax="100">
+            <div id="demoProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="demoResultCard" class="card border-0 shadow-sm d-none">
+    <div class="card-body">
+      <div class="mb-3">
+        <h5 class="card-title mb-2">Analysis Result</h5>
+        <div class="row g-2 align-items-stretch">
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100 bg-body-tertiary">
+              <div class="text-body-secondary small mb-1">Proposed Status</div>
+              <div id="resultStatusBadge" class="badge bg-secondary fs-5 px-3 py-2">-</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100 bg-body-tertiary">
+              <div class="text-body-secondary small mb-1">Confidence</div>
+              <div id="resultConfidence" class="fw-semibold fs-4">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="small text-body-secondary mb-3" id="resultDiagnostics"></div>
+
+      <div id="resultWarnings" class="d-flex flex-column gap-2 mb-3"></div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">AI Summary</label>
+        <div id="resultSummary" class="border rounded p-3 small bg-body-tertiary" style="white-space: pre-wrap;"></div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Document Evidence Highlights</label>
+          <div id="resultSnippets" class="d-flex flex-column gap-2"></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">NDIS Citations (RAG)</label>
+          <div id="resultCitations" class="d-flex flex-column gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const form = document.getElementById('aiDemoForm');
+    const button = document.getElementById('runDemoBtn');
+    const buttonLabel = document.getElementById('runDemoLabel');
+    const statusText = document.getElementById('demoStatusText');
+    const questionInput = document.getElementById('demoQuestion');
+    const questionPreset = document.getElementById('demoQuestionPreset');
+    const questionChips = document.querySelectorAll('.demo-question-chip');
+    const resultCard = document.getElementById('demoResultCard');
+    const statusBadge = document.getElementById('resultStatusBadge');
+    const confidenceEl = document.getElementById('resultConfidence');
+    const summaryEl = document.getElementById('resultSummary');
+    const warningsEl = document.getElementById('resultWarnings');
+    const snippetsEl = document.getElementById('resultSnippets');
+    const citationsEl = document.getElementById('resultCitations');
+    const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
+    const progressWrap = document.getElementById('demoProgressWrap');
+    const progressBar = document.getElementById('demoProgressBar');
+    let progressTimer = null;
+    let progressValue = 0;
+    let requestInFlight = false;
+    let requestWatchdogTimer = null;
+
+    if (!form) {
+      return;
+    }
+
+    const renderIdleButton = () => {
+      if (buttonLabel) {
+        buttonLabel.textContent = 'Analyze Document';
+      } else if (button) {
+        button.textContent = 'Analyze Document';
+      }
+    };
+
+    const renderLoadingButton = () => {
+      if (buttonLabel) {
+        buttonLabel.textContent = 'Analyzing...';
+      } else if (button) {
+        button.textContent = 'Analyzing...';
+      }
+    };
+
+    renderIdleButton();
+
+    const setRunning = (running, text) => {
+      requestInFlight = !!running;
+      button.disabled = !!running;
+      button.classList.remove('loading');
+      button.classList.toggle('disabled', !!running);
+      if (running) {
+        renderLoadingButton();
+      } else {
+        renderIdleButton();
+      }
+      button.setAttribute('aria-busy', running ? 'true' : 'false');
+      statusText.classList.remove('d-none');
+      statusText.textContent = text || '';
+    };
+
+    const forceResetUi = (statusMessage) => {
+      if (requestWatchdogTimer) {
+        clearTimeout(requestWatchdogTimer);
+        requestWatchdogTimer = null;
+      }
+      requestInFlight = false;
+      button.disabled = false;
+      button.classList.remove('loading');
+      button.classList.remove('disabled');
+      renderIdleButton();
+      button.setAttribute('aria-busy', 'false');
+      if (statusMessage) {
+        statusText.classList.remove('d-none');
+        statusText.textContent = statusMessage;
+      }
+      finishProgress();
+    };
+
+    const startProgress = () => {
+      if (!progressWrap || !progressBar) {
+        return;
+      }
+      progressValue = 8;
+      progressWrap.classList.remove('d-none');
+      progressBar.style.width = `${progressValue}%`;
+      progressBar.textContent = `${progressValue}%`;
+      progressBar.setAttribute('aria-valuenow', String(progressValue));
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
+      progressTimer = setInterval(function () {
+        progressValue = Math.min(progressValue + 7, 90);
+        progressBar.style.width = `${progressValue}%`;
+        progressBar.textContent = `${progressValue}%`;
+        progressBar.setAttribute('aria-valuenow', String(progressValue));
+      }, 300);
+    };
+
+    const finishProgress = () => {
+      if (!progressWrap || !progressBar) {
+        return;
+      }
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      progressValue = 100;
+      progressBar.style.width = '100%';
+      progressBar.textContent = '100%';
+      progressBar.setAttribute('aria-valuenow', '100');
+      window.setTimeout(function () {
+        progressWrap.classList.add('d-none');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.setAttribute('aria-valuenow', '0');
+      }, 450);
+    };
+
+    const renderBadge = (status) => {
+      statusBadge.className = 'badge';
+      const normalized = (status || '').toLowerCase();
+      if (normalized === 'mature') {
+        statusBadge.classList.add('bg-primary');
+      } else if (normalized === 'ok') {
+        statusBadge.classList.add('bg-success');
+      } else if (normalized === 'high risk gap') {
+        statusBadge.classList.add('bg-warning', 'text-dark');
+      } else if (normalized === 'critical gap') {
+        statusBadge.classList.add('bg-danger');
+      } else {
+        statusBadge.classList.add('bg-secondary');
+      }
+      statusBadge.textContent = status || 'Unknown';
+    };
+
+    const asCard = (text, options) => {
+      const div = document.createElement('div');
+      div.className = 'border rounded p-2';
+
+      const topRow = document.createElement('div');
+      topRow.className = 'd-flex justify-content-between align-items-start gap-2';
+
+      const textEl = document.createElement('div');
+      textEl.className = 'small';
+      textEl.textContent = text || '-';
+      topRow.appendChild(textEl);
+
+      const scoreValue = options && typeof options.score !== 'undefined' ? Number(options.score) : null;
+      if (scoreValue !== null && !Number.isNaN(scoreValue)) {
+        const scoreBadge = document.createElement('span');
+        scoreBadge.className = 'badge bg-dark-subtle text-dark-emphasis border';
+        scoreBadge.textContent = `Score ${scoreValue}`;
+        topRow.appendChild(scoreBadge);
+      }
+
+      div.appendChild(topRow);
+
+      if (options && options.meta) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'text-body-secondary small mt-2';
+        metaEl.textContent = options.meta;
+        div.appendChild(metaEl);
+      }
+
+      return div;
+    };
+
+    if (questionPreset && questionInput) {
+      questionPreset.addEventListener('change', function () {
+        const selected = (questionPreset.value || '').trim();
+        if (!selected) {
+          return;
+        }
+        questionInput.value = selected;
+        questionInput.focus();
+      });
+    }
+
+    if (questionChips && questionInput) {
+      questionChips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          const selected = (chip.getAttribute('data-question') || '').trim();
+          if (!selected) {
+            return;
+          }
+          questionInput.value = selected;
+          if (questionPreset) {
+            questionPreset.value = selected;
+          }
+          questionInput.focus();
+        });
+      });
+    }
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (requestInFlight) {
+        return;
+      }
+      resultCard.classList.add('d-none');
+      warningsEl.innerHTML = '';
+      snippetsEl.innerHTML = '';
+      citationsEl.innerHTML = '';
+
+      const formData = new FormData(form);
+      setRunning(true, 'Analyzing document...');
+      startProgress();
+      requestWatchdogTimer = window.setTimeout(function () {
+        forceResetUi('Analysis timed out. Please retry.');
+      }, 35000);
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(function () {
+          controller.abort('timeout');
+        }, 30000);
+
+        const response = await fetch("{{ url_for('main.ai_demo_analyze_api') }}", {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+        window.clearTimeout(timeoutId);
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_e) {
+          payload = null;
+        }
+
+        if (!response.ok || !payload || !payload.success) {
+          throw new Error((payload && payload.error) || 'Analysis failed');
+        }
+
+        renderBadge(payload.status);
+        confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
+        const provider = ((payload.meta || {}).provider) || 'deterministic';
+        const model = ((payload.meta || {}).model) || '-';
+        resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}`;
+        const summary = ((payload.summary || '') + '').trim();
+        if (summary.length > 0) {
+          summaryEl.textContent = summary;
+        } else {
+          summaryEl.textContent = 'Summary unavailable for this run. Please retry with a more specific question.';
+        }
+
+        const warningItems = payload.warning_items || [];
+        if (warningItems.length > 0) {
+          warningItems.forEach(function (item) {
+            const warning = document.createElement('div');
+            warning.className = 'alert alert-warning py-2 px-3 mb-0 small';
+            const source = ((item && item.source) || 'system').toUpperCase();
+            const message = (item && item.message) || '';
+            warning.textContent = `[${source}] ${message}`;
+            warningsEl.appendChild(warning);
+          });
+        } else {
+          warningsEl.innerHTML = '';
+        }
+
+        const snippets = payload.snippets || [];
+        if (snippets.length === 0) {
+          snippetsEl.appendChild(asCard('No strong evidence snippets found in this file.', { score: 0 }));
+        } else {
+          snippets.forEach(function (item) {
+            snippetsEl.appendChild(asCard(item.text, { score: item.score }));
+          });
+        }
+
+        const citations = payload.citations || [];
+        if (citations.length === 0) {
+          citationsEl.appendChild(asCard('No NDIS citations retrieved.', { score: 0 }));
+        } else {
+          citations.forEach(function (item) {
+            const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'}`;
+            citationsEl.appendChild(asCard(item.text, { score: item.score || 0, meta: meta }));
+          });
+        }
+
+        resultCard.classList.remove('d-none');
+        setRunning(false, 'Done.');
+      } catch (error) {
+        const fallbackMessage = (error && error.name === 'AbortError')
+          ? 'Analysis timed out. Please retry.'
+          : (error.message || 'Analysis failed.');
+        setRunning(false, fallbackMessage);
+      } finally {
+        // Force button back to idle state regardless of any previous branch.
+        forceResetUi();
+      }
+    });
+
+    window.addEventListener('pagehide', function () {
+      forceResetUi();
+    });
+  })();
+</script>
+{% endblock %}
