@@ -12,10 +12,59 @@
                 </div>
                 <div class="d-flex gap-2">
                     <button onclick="document.getElementById('quickUploadInput').click()" class="btn btn-outline-primary">
-                        <i class="bi bi-plus-lg me-2"></i>Upload New
+                        <i class="bi bi-plus-lg me-2"></i>Bulk Upload
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-lg-3">
+                    <label class="form-label" for="q">Search</label>
+                    <input id="q" name="q" type="search" class="form-control" value="{{ q or '' }}" placeholder="Filename, type, tag" />
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="tag">Tag</label>
+                    <select id="tag" name="tag" class="form-select">
+                        <option value="">All tags</option>
+                        {% for tag in available_tags %}
+                        <option value="{{ tag.name }}" {% if selected_tag == tag.name %}selected{% endif %}>{{ tag.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="file_type">Type</label>
+                    <select id="file_type" name="file_type" class="form-select">
+                        <option value="">All</option>
+                        <option value="pdf" {% if file_type == 'pdf' %}selected{% endif %}>PDF</option>
+                        <option value="word" {% if file_type == 'word' %}selected{% endif %}>Word</option>
+                        <option value="image" {% if file_type == 'image' %}selected{% endif %}>Image</option>
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="date_from">Date from</label>
+                    <input id="date_from" name="date_from" type="date" class="form-control" value="{{ date_from or '' }}" />
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="date_to">Date to</label>
+                    <input id="date_to" name="date_to" type="date" class="form-control" value="{{ date_to or '' }}" />
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="size_min">Min bytes</label>
+                    <input id="size_min" name="size_min" type="number" min="0" class="form-control" value="{{ size_min or '' }}" />
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="size_max">Max bytes</label>
+                    <input id="size_max" name="size_max" type="number" min="0" class="form-control" value="{{ size_max or '' }}" />
+                </div>
+                <div class="col-lg-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1">Apply Filters</button>
+                    <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary">Reset</a>
+                </div>
+            </form>
         </div>
     </div>
     
@@ -31,12 +80,12 @@
                         </h5>
                         {% if documents %}
                             <div class="d-flex gap-2">
-                                <div class="input-group input-group-sm" style="max-width: 260px;">
-                                    <span class="input-group-text">
-                                        <i class="bi bi-search"></i>
-                                    </span>
-                                    <input type="search" class="form-control" id="docSearch" placeholder="Search documents" aria-label="Search documents" />
-                                </div>
+                                <form method="POST" action="{{ url_for('main.download_documents_zip') }}" id="bulkZipForm" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary" id="bulkDownloadBtn" disabled>
+                                        <i class="bi bi-file-earmark-zip me-1"></i>Download Selected (ZIP)
+                                    </button>
+                                </form>
                                 <button class="btn btn-sm btn-outline-secondary" onclick="toggleView()">
                                     <i class="bi bi-grid-3x3-gap" id="viewToggleIcon"></i>
                                 </button>
@@ -52,6 +101,9 @@
                                 <table class="table table-hover align-middle">
                                     <thead>
                                         <tr>
+                                            <th scope="col" class="border-0" style="width: 44px;">
+                                                <input type="checkbox" class="form-check-input" id="selectAllDocs" />
+                                            </th>
                                             <th scope="col" class="border-0">
                                                 <i class="bi bi-file-earmark me-1"></i>Document
                                             </th>
@@ -62,6 +114,9 @@
                                                 <i class="bi bi-calendar me-1"></i>Upload Date
                                             </th>
                                             <th scope="col" class="border-0">
+                                                <i class="bi bi-tags me-1"></i>Tags
+                                            </th>
+                                            <th scope="col" class="border-0">
                                                 <i class="bi bi-gear me-1"></i>Actions
                                             </th>
                                         </tr>
@@ -69,6 +124,9 @@
                                     <tbody>
                                         {% for document in documents %}
                                             <tr>
+                                                <td>
+                                                    <input type="checkbox" class="form-check-input doc-select" value="{{ document.id }}" />
+                                                </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
                                                         <div class="flex-shrink-0 me-3">
@@ -104,12 +162,28 @@
                                                     <small class="text-body-secondary">{{ document.uploaded_at | datetime_format('%I:%M %p') }}</small>
                                                 </td>
                                                 <td>
+                                                    {% if document.tags %}
+                                                        <div class="d-flex flex-wrap gap-1">
+                                                            {% for tag in document.tags %}
+                                                            <span class="badge bg-body-tertiary text-body border">{{ tag.name }}</span>
+                                                            {% endfor %}
+                                                        </div>
+                                                    {% else %}
+                                                        <small class="text-body-secondary">No tags</small>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
                                                     <div class="dropdown">
                                                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
                                                                 type="button" data-bs-toggle="dropdown" data-doc-actions-dropdown>
                                                             <i class="bi bi-three-dots"></i>
                                                         </button>
                                                         <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item" target="_blank" href="{{ url_for('main.preview_document', doc_id=document.id) }}">
+                                                                    <i class="bi bi-eye me-2"></i>Preview
+                                                                </a>
+                                                            </li>
                                                             <li>
                                                                 <a class="dropdown-item" href="{{ url_for('main.download_document', doc_id=document.id) }}">
                                                                     <i class="bi bi-download me-2"></i>Download
@@ -167,6 +241,11 @@
                                                         Actions
                                                     </button>
                                                     <ul class="dropdown-menu">
+                                                        <li>
+                                                            <a class="dropdown-item" target="_blank" href="{{ url_for('main.preview_document', doc_id=document.id) }}">
+                                                                <i class="bi bi-eye me-2"></i>Preview
+                                                            </a>
+                                                        </li>
                                                         <li>
                                                             <a class="dropdown-item" href="{{ url_for('main.download_document', doc_id=document.id) }}">
                                                                 <i class="bi bi-download me-2"></i>Download
@@ -255,7 +334,7 @@
 <!-- Hidden Upload Form -->
 <form id="quickUploadForm" action="{{ url_for('upload.upload_file') }}" method="post" enctype="multipart/form-data" style="display: none;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-    <input type="file" id="quickUploadInput" name="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onchange="if(this.files.length > 0) document.getElementById('quickUploadForm').submit();" />
+    <input type="file" id="quickUploadInput" name="files" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onchange="if(this.files.length > 0) document.getElementById('quickUploadForm').submit();" />
 </form>
 
 {% endblock %}
@@ -263,24 +342,6 @@
 {% block extra_js %}
 <script>
     let isGridView = false;
-
-    function applySearchFilter(queryRaw) {
-        const q = (queryRaw || '').toLowerCase().trim();
-
-        // Table view rows
-        document.querySelectorAll('#tableView tbody tr').forEach((row) => {
-            const nameEl = row.querySelector('[data-doc-filename]');
-            const name = (nameEl?.textContent || '').toLowerCase();
-            row.style.display = (!q || name.includes(q)) ? '' : 'none';
-        });
-
-        // Grid view cards
-        document.querySelectorAll('#gridView [data-doc-card]').forEach((card) => {
-            const titleEl = card.querySelector('.card-title');
-            const name = (titleEl?.textContent || '').toLowerCase();
-            card.style.display = (!q || name.includes(q)) ? '' : 'none';
-        });
-    }
     
     function toggleView() {
         const tableView = document.getElementById('tableView');
@@ -362,10 +423,45 @@
 
     // Prevent dropdown menus from being clipped inside scroll/overflow containers.
     document.addEventListener('DOMContentLoaded', function () {
-        const searchInput = document.getElementById('docSearch');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => applySearchFilter(e.target.value));
+        const bulkForm = document.getElementById('bulkZipForm');
+        const bulkButton = document.getElementById('bulkDownloadBtn');
+        const selectAll = document.getElementById('selectAllDocs');
+        const rowChecks = Array.from(document.querySelectorAll('.doc-select'));
+
+        function refreshBulkState() {
+            const selected = rowChecks.filter((c) => c.checked);
+            if (bulkButton) {
+                bulkButton.disabled = selected.length === 0;
+            }
+            if (selectAll) {
+                selectAll.checked = rowChecks.length > 0 && selected.length === rowChecks.length;
+            }
+
+            if (bulkForm) {
+                bulkForm.querySelectorAll('input[name="doc_ids"]').forEach((node) => node.remove());
+                selected.forEach((checkbox) => {
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = 'doc_ids';
+                    hidden.value = checkbox.value;
+                    bulkForm.appendChild(hidden);
+                });
+            }
         }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', () => {
+                rowChecks.forEach((c) => {
+                    c.checked = selectAll.checked;
+                });
+                refreshBulkState();
+            });
+        }
+
+        rowChecks.forEach((checkbox) => {
+            checkbox.addEventListener('change', refreshBulkState);
+        });
+        refreshBulkState();
 
         document.querySelectorAll('[data-doc-actions-dropdown]').forEach((toggle) => {
             try {

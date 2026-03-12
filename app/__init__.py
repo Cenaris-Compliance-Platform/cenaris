@@ -471,6 +471,9 @@ def create_app(config_name=None):
 
     from app.onboarding import bp as onboarding_bp
     app.register_blueprint(onboarding_bp, url_prefix='/onboarding')
+
+    from app.api import bp as api_v1_bp
+    app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
     
     # Add CSP header for production
     if not app.debug:
@@ -569,6 +572,8 @@ def create_app(config_name=None):
             can_manage_org = False
             can_manage_roles = False
             active_role_name = None
+            admin_notifications_unread = 0
+            admin_notifications_recent = []
             available_roles = []
             user_departments = []
             
@@ -585,6 +590,33 @@ def create_app(config_name=None):
                     can_manage_org = current_user.has_permission('org.manage', org_id=int(active_org_id))
                     can_manage_roles = current_user.has_permission('roles.manage', org_id=int(active_org_id))
                     is_org_admin_active = bool(can_manage_team)
+
+                    if can_manage_team:
+                        try:
+                            from app.services.notification_service import notification_service
+
+                            admin_notifications_unread = int(
+                                notification_service.unread_count(organization_id=int(active_org_id))
+                            )
+                            recent_rows = notification_service.list_admin_notifications(
+                                organization_id=int(active_org_id),
+                                unread_only=False,
+                                limit=5,
+                            )
+                            admin_notifications_recent = [
+                                {
+                                    'id': int(getattr(n, 'id', 0) or 0),
+                                    'title': (getattr(n, 'title', '') or '').strip() or 'Notification',
+                                    'message': (getattr(n, 'message', '') or '').strip() or '',
+                                    'severity': (getattr(n, 'severity', 'info') or 'info').strip().lower(),
+                                    'is_read': bool(getattr(n, 'is_read', False)),
+                                    'created_at': getattr(n, 'created_at', None),
+                                }
+                                for n in (recent_rows or [])
+                            ]
+                        except Exception:
+                            admin_notifications_unread = 0
+                            admin_notifications_recent = []
 
                     # Load roles/departments if the user has invite permissions (for the floating invite modal).
                     if can_invite_member:
@@ -631,6 +663,8 @@ def create_app(config_name=None):
                 'can_manage_org': can_manage_org,
                 'can_manage_roles': can_manage_roles,
                 'active_role_name': active_role_name,
+                'admin_notifications_unread': int(admin_notifications_unread),
+                'admin_notifications_recent': admin_notifications_recent,
                 'available_roles': [{'id': r.id, 'name': r.name} for r in (available_roles or [])],
                 'user_departments': [{'id': d.id, 'name': d.name} for d in (user_departments or [])],
             }
@@ -940,5 +974,222 @@ def create_app(config_name=None):
             raise click.ClickException(f'Failed committing purge: {e}')
 
         click.echo(f'Done. Purged users: {deleted_users}')
+
+    @app.cli.command('import-master-mapping')
+    @click.option('--file-path', required=True, type=click.Path(exists=True, dir_okay=False), help='Path to CSV/XLSX mapping file.')
+    @click.option('--org-id', type=int, required=False, help='Optional organization ID for org-scoped assessments.')
+    @click.option('--imported-by-user-id', type=int, required=False, help='Optional user ID for audit trail.')
+    @click.option('--version-label', default='v1.0', show_default=True, help='Framework version label to import into.')
+    def import_master_mapping(file_path: str, org_id: int | None, imported_by_user_id: int | None, version_label: str):
+        """Import the NDIS master mapping spreadsheet (CSV/XLSX) into canonical compliance tables."""
+        from app.services.compliance_mapping_service import (
+            compliance_mapping_service,
+            ComplianceMappingImportError,
+        )
+
+        try:
+            result = compliance_mapping_service.import_master_mapping(
+                file_path,
+                organization_id=org_id,
+                imported_by_user_id=imported_by_user_id,
+                version_label=version_label,
+            )
+        except ComplianceMappingImportError as e:
+            raise click.ClickException(str(e))
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Unexpected import failure: {e}')
+
+        click.echo('Import completed successfully.')
+        click.echo(f'- Framework version ID: {result.framework_version_id}')
+        click.echo(f'- Rows parsed:          {result.total_rows}')
+        click.echo(f'- Requirements loaded:  {result.imported_requirements}')
+        click.echo(f'- Assessments loaded:   {result.imported_assessments}')
+
+    @app.cli.command('recompute-compliance-scores')
+    @click.option('--org-id', type=int, required=True, help='Organization ID to recompute scores for.')
+    @click.option('--assessed-by-user-id', type=int, required=False, help='Optional user ID recorded as last assessor.')
+    def recompute_compliance_scores(org_id: int, assessed_by_user_id: int | None):
+        """Recompute computed_score/computed_flag for all visible requirements in an organization."""
+        from app.models import Organization
+        from app.services.compliance_scoring_service import compliance_scoring_service
+
+        org = db.session.get(Organization, int(org_id))
+        if org is None:
+            raise click.ClickException(f'Organization not found: {org_id}')
+
+        try:
+            total = compliance_scoring_service.recompute_for_organization(
+                organization_id=int(org_id),
+                assessed_by_user_id=assessed_by_user_id,
+                commit=True,
+            )
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Failed to recompute scores: {e}')
+
+        click.echo('Compliance score recomputation completed.')
+        click.echo(f'- Organization ID: {org_id}')
+        click.echo(f'- Requirements processed: {total}')
+        click.echo('- Flags now use canonical values: Critical gap / High risk gap / OK / Mature')
+
+    @app.cli.command('build-ndis-rag-corpus')
+    @click.option(
+        '--pdf-path',
+        default='data/sources/ndis/regulatory/ndis-practice-standards-and-quality-indicators.pdf',
+        show_default=True,
+        type=click.Path(exists=True, dir_okay=False),
+        help='Path to the NDIS regulatory PDF.',
+    )
+    @click.option(
+        '--output-path',
+        default='data/rag/ndis/ndis_chunks.jsonl',
+        show_default=True,
+        type=click.Path(dir_okay=False),
+        help='Output JSONL file for chunked corpus.',
+    )
+    @click.option('--chunk-chars', default=1200, show_default=True, type=int)
+    @click.option('--overlap-chars', default=180, show_default=True, type=int)
+    def build_ndis_rag_corpus(pdf_path: str, output_path: str, chunk_chars: int, overlap_chars: int):
+        """Chunk the NDIS PDF into a JSONL corpus for downstream vector indexing."""
+        from app.services.rag_ingestion_service import rag_ingestion_service
+
+        try:
+            result = rag_ingestion_service.build_pdf_corpus(
+                pdf_path=pdf_path,
+                output_path=output_path,
+                chunk_chars=chunk_chars,
+                overlap_chars=overlap_chars,
+            )
+        except Exception as e:
+            raise click.ClickException(f'Failed to build RAG corpus: {e}')
+
+        click.echo('RAG corpus build completed.')
+        click.echo(f'- Pages processed:  {result.total_pages}')
+        click.echo(f'- Chunks created:   {result.total_chunks}')
+        click.echo(f'- Output JSONL:     {result.output_path}')
+
+    @app.cli.command('compile-ndis-policy-prompt')
+    @click.option(
+        '--source-path',
+        default='data/sources/ndis/reference/FINAL Cenaris NDIS Compliance Source of Truth.docx',
+        show_default=True,
+        type=click.Path(exists=True, dir_okay=False),
+        help='Path to source-of-truth prompt guidance (.docx or .txt).',
+    )
+    @click.option(
+        '--output-path',
+        default='app/ai/prompts/ndis_policy_system_prompt.txt',
+        show_default=True,
+        type=click.Path(dir_okay=False),
+        help='Output prompt file path used by policy generation pipeline.',
+    )
+    def compile_ndis_policy_prompt(source_path: str, output_path: str):
+        """Compile NDIS source-of-truth text into a reusable system prompt file."""
+        from app.services.policy_prompt_service import policy_prompt_service
+
+        try:
+            written = policy_prompt_service.compile_prompt_file(
+                source_path=source_path,
+                output_path=output_path,
+            )
+        except Exception as e:
+            raise click.ClickException(f'Failed to compile policy prompt: {e}')
+
+        click.echo('NDIS policy system prompt compiled successfully.')
+        click.echo(f'- Output prompt: {written}')
+
+    @app.cli.command('prune-ai-usage-events')
+    @click.option('--days', type=int, required=False, help='Delete events older than N days. Defaults to AI_USAGE_RETENTION_DAYS.')
+    @click.option('--org-id', type=int, required=False, help='Optional organization ID scope.')
+    @click.option('--dry-run', is_flag=True, help='Show how many rows would be deleted without deleting.')
+    @click.option('--yes', is_flag=True, help='Skip confirmation prompt.')
+    def prune_ai_usage_events(days: int | None, org_id: int | None, dry_run: bool, yes: bool):
+        """Prune old AI usage telemetry rows for data retention governance."""
+        from datetime import datetime, timezone, timedelta
+        from app.models import AIUsageEvent, Organization
+
+        retention_days = int(days if days is not None else (app.config.get('AI_USAGE_RETENTION_DAYS') or 90))
+        retention_days = max(1, retention_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        q = AIUsageEvent.query.filter(AIUsageEvent.created_at < cutoff)
+
+        if org_id is not None:
+            org = db.session.get(Organization, int(org_id))
+            if org is None:
+                raise click.ClickException(f'Organization not found: {org_id}')
+            q = q.filter(AIUsageEvent.organization_id == int(org_id))
+
+        to_delete = int(q.count())
+        click.echo('AI usage retention prune summary:')
+        click.echo(f'- Retention days: {retention_days}')
+        click.echo(f'- Cutoff (UTC):   {cutoff.isoformat()}')
+        click.echo(f'- Candidate rows: {to_delete}')
+        if org_id is not None:
+            click.echo(f'- Organization:   {org_id}')
+
+        if dry_run:
+            click.echo('Dry run only. No rows deleted.')
+            return
+
+        if not yes:
+            if not click.confirm('Delete these rows now?', default=False):
+                click.echo('Aborted.')
+                return
+
+        try:
+            deleted = q.delete(synchronize_session=False)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise click.ClickException(f'Failed pruning AI usage events: {e}')
+
+        click.echo(f'Deleted AI usage rows: {deleted}')
+
+    @app.cli.command('send-monthly-notification-digest')
+    @click.option('--org-id', type=int, required=False, help='Optional organization ID. If omitted, sends for all organizations.')
+    @click.option('--year', type=int, required=False, help='Digest year. Defaults to previous month year (UTC).')
+    @click.option('--month', type=int, required=False, help='Digest month 1-12. Defaults to previous month (UTC).')
+    def send_monthly_notification_digest(org_id: int | None, year: int | None, month: int | None):
+        """Send monthly admin notification summaries via configured email provider."""
+        from datetime import datetime, timezone
+        from app.models import Organization
+        from app.services.notification_service import notification_service
+
+        now = datetime.now(timezone.utc)
+        if year is None or month is None:
+            y = now.year
+            m = now.month - 1
+            if m == 0:
+                y -= 1
+                m = 12
+            year = year or y
+            month = month or m
+
+        if int(month) < 1 or int(month) > 12:
+            raise click.ClickException('Month must be between 1 and 12.')
+
+        if org_id is not None:
+            orgs = Organization.query.filter_by(id=int(org_id)).all()
+            if not orgs:
+                raise click.ClickException(f'Organization not found: {org_id}')
+        else:
+            orgs = Organization.query.order_by(Organization.id.asc()).all()
+
+        total_sent = 0
+        for org in orgs:
+            try:
+                sent = notification_service.send_monthly_digest(
+                    organization_id=int(org.id),
+                    year=int(year),
+                    month=int(month),
+                )
+                total_sent += int(sent)
+                click.echo(f'Org {org.id} ({org.name}): sent {sent} digest email(s).')
+            except Exception as e:
+                click.echo(f'Org {org.id} ({org.name}): failed - {e}')
+
+        click.echo(f'Done. Total digest emails sent: {total_sent}')
     
     return app

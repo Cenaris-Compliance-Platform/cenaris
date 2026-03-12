@@ -2,7 +2,6 @@
 
 {% block content %}
 <div class="fade-in position-relative">
-    <div style="pointer-events: none; user-select: none;">
     <!-- Header -->
     <div class="row mb-4">
         <div class="col-12">
@@ -10,14 +9,6 @@
                 <div>
                     <h1 class="h2 fw-bold mb-1">Audit Export & Reporting</h1>
                     <p class="text-body-secondary mb-0">Generate and export comprehensive compliance reports and audit documentation</p>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-outline-primary" onclick="showComingSoon('Schedule Export')">
-                        <i class="bi bi-calendar-plus me-2"></i>Schedule Export
-                    </button>
-                    <button class="btn btn-primary" onclick="showComingSoon('Custom Report')">
-                        <i class="bi bi-plus-lg me-2"></i>Custom Report
-                    </button>
                 </div>
             </div>
         </div>
@@ -148,7 +139,7 @@
                                                 <ul class="dropdown-menu">
                                                     {% for format in report.format %}
                                                         <li>
-                                                            <a class="dropdown-item" href="#" onclick="exportReport({{ report.id }}, '{{ format }}')">
+                                                            <a class="dropdown-item" href="{{ report.download_url }}">
                                                                 <i class="bi bi-file-earmark-{{ format.lower() }} me-2"></i>Export as {{ format }}
                                                             </a>
                                                         </li>
@@ -187,16 +178,16 @@
                                         <div class="d-grid gap-2">
                                             {% if report.status == 'Ready' %}
                                                 <div class="btn-group" role="group">
-                                                    <button class="btn btn-primary btn-sm" onclick="exportReport({{ report.id }}, 'PDF')">
+                                                    <a class="btn btn-primary btn-sm" href="{{ report.download_url }}">
                                                         <i class="bi bi-download me-1"></i>Export PDF
-                                                    </button>
+                                                    </a>
                                                     <div class="btn-group" role="group">
                                                         <button class="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" 
                                                                 data-bs-toggle="dropdown"></button>
                                                         <ul class="dropdown-menu">
                                                             {% for format in report.format %}
                                                                 <li>
-                                                                    <a class="dropdown-item" href="#" onclick="exportReport({{ report.id }}, '{{ format }}')">
+                                                                    <a class="dropdown-item" href="{{ report.download_url }}">
                                                                         {{ format }}
                                                                     </a>
                                                                 </li>
@@ -363,19 +354,27 @@
         </div>
     </div>
 
-    </div>
-
-    <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-body bg-opacity-75" style="z-index: 5;">
-        <div class="text-center p-4 rounded-3 border bg-body" style="max-width: 520px;">
-            <div class="h4 fw-bold mb-2">Coming soon</div>
-            <div class="text-body-secondary">Audit Export is not implemented yet.</div>
-        </div>
-    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    function showComingSoon(feature) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-info alert-dismissible fade show position-fixed';
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alertDiv.innerHTML = `
+            <i class="bi bi-info-circle me-2"></i>${feature} is coming soon.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alertDiv);
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 4000);
+    }
+
     function filterReports(status) {
         const cards = document.querySelectorAll('[data-status]');
         cards.forEach(card => {

@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.models import User, Organization, OrganizationMembership, LoginEvent, SuspiciousIP
 from app import db, oauth, mail, limiter
 from app.services.logging_service import log_security_event
+from app.services.microsoft_oauth2_email import create_oauth2_email_service
 
 
 _RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS = 60
@@ -242,7 +243,18 @@ def _send_email_verification_email(user: User, verify_url: str) -> None:
 
 
 def _send_email(to_email: str, subject: str, body: str) -> None:
-    """Send email via SMTP (Flask-Mail)."""
+    """Send email via OAuth2 (if configured) or SMTP fallback."""
+    # Try OAuth2 first (for Microsoft 365 with modern authentication)
+    oauth2_service = create_oauth2_email_service()
+    if oauth2_service:
+        current_app.logger.info('Using OAuth2 for email to %s', to_email)
+        success = oauth2_service.send_email(to_email, subject, body)
+        if success:
+            return
+        else:
+            current_app.logger.warning('OAuth2 email failed, falling back to SMTP')
+    
+    # Fallback to regular SMTP (Flask-Mail)
     try:
         msg = Message(
             subject=subject,
@@ -421,7 +433,18 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
 
 
 def _send_email_html(to_email: str, subject: str, body: str, html: str) -> None:
-    """Send HTML email via SMTP (Flask-Mail)."""
+    """Send HTML email via OAuth2 (if configured) or SMTP fallback."""
+    # Try OAuth2 first (for Microsoft 365 with modern authentication)
+    oauth2_service = create_oauth2_email_service()
+    if oauth2_service:
+        current_app.logger.info('Using OAuth2 for HTML email to %s', to_email)
+        success = oauth2_service.send_email(to_email, subject, body, body_html=html)
+        if success:
+            return
+        else:
+            current_app.logger.warning('OAuth2 email failed, falling back to SMTP')
+    
+    # Fallback to regular SMTP (Flask-Mail)
     try:
         msg = Message(
             subject=subject,

@@ -1,6 +1,5 @@
 {% extends "base.html" %} {% block content %}
 <div class="fade-in position-relative">
-  <div style="pointer-events: none; user-select: none;">
   <!-- Header -->
   <div class="row mb-4">
     <div class="col-12">
@@ -45,6 +44,20 @@
           <div class="d-none d-md-block">
             <i class="bi bi-graph-up text-primary" style="font-size: 2.5rem"></i>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-12">
+      <div class="alert alert-info border-0 shadow-sm mb-0">
+        <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>How to use this page</div>
+        <div class="small">
+          <strong>Requirements Met</strong> means evidence is sufficient.
+          <strong>Pending Review</strong> means evidence exists but needs validation.
+          <strong>Gaps Identified</strong> means missing or weak evidence.
+          Use this page to see what to fix first, then open Requirements to link better evidence.
         </div>
       </div>
     </div>
@@ -476,12 +489,6 @@
     </div>
   </div>
 
-  <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-body bg-opacity-75" style="z-index: 5;">
-    <div class="text-center p-4 rounded-3 border bg-body" style="max-width: 520px;">
-      <div class="h4 fw-bold mb-2">Coming soon</div>
-      <div class="text-body-secondary">Gap Analysis is not implemented yet.</div>
-    </div>
-  </div>
 </div>
 {% endblock %} {% block extra_js %}
 <script>

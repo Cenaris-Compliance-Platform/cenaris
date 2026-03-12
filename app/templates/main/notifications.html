@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Admin Notifications</h1>
+      <p class="text-body-secondary mb-0">Important organisation events for admins</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('main.notifications') }}" class="btn btn-outline-secondary {% if not unread_only %}active{% endif %}">All</a>
+      <a href="{{ url_for('main.notifications', status='unread') }}" class="btn btn-outline-secondary {% if unread_only %}active{% endif %}">Unread ({{ unread_count }})</a>
+      <form method="POST" action="{{ url_for('main.mark_all_notifications_read') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn btn-primary" {% if unread_count == 0 %}disabled{% endif %}>Mark all read</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="list-group list-group-flush">
+      {% for item in notifications %}
+      <div class="list-group-item py-3 {% if not item.is_read %}bg-body-tertiary{% endif %}">
+        <div class="d-flex justify-content-between align-items-start gap-3">
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <strong>{{ item.title }}</strong>
+              {% if item.severity == 'critical' %}
+              <span class="badge text-bg-danger">Critical</span>
+              {% elif item.severity == 'warning' %}
+              <span class="badge text-bg-warning">Warning</span>
+              {% else %}
+              <span class="badge text-bg-info">Info</span>
+              {% endif %}
+              {% if not item.is_read %}
+              <span class="badge text-bg-primary">Unread</span>
+              {% endif %}
+            </div>
+            <div class="text-body-secondary mb-1">{{ item.message }}</div>
+            <div class="small text-body-secondary">
+              {{ item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else '' }}
+              {% if item.actor and item.actor.display_name() %}
+                • by {{ item.actor.display_name() }}
+              {% endif %}
+              • {{ item.event_type }}
+            </div>
+            {% if item.link_url %}
+            <div class="mt-2">
+              <a href="{{ item.link_url }}" class="link-primary">Open related page</a>
+            </div>
+            {% endif %}
+          </div>
+          {% if not item.is_read %}
+          <form method="POST" action="{{ url_for('main.mark_notification_read', notification_id=item.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="btn btn-sm btn-outline-primary">Mark read</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="list-group-item py-5 text-center text-body-secondary">No notifications yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

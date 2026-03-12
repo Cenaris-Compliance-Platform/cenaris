@@ -60,7 +60,7 @@
 
   <!-- Stats Cards -->
   <div class="row mb-4">
-    <div class="col-md-6 col-lg-3 mb-3">
+    <div class="col-md-6 col-lg-6 mb-3">
       <div class="card border-0 shadow h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
@@ -81,7 +81,7 @@
       </div>
     </div>
 
-    <div class="col-md-6 col-lg-3 mb-3">
+    <div class="col-md-6 col-lg-6 mb-3">
       <div class="card border-0 shadow h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
@@ -102,65 +102,6 @@
       </div>
     </div>
 
-    <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card border-0 shadow h-100">
-        <div class="card-body">
-          <div class="d-flex align-items-center">
-            <div class="flex-shrink-0">
-              <div class="bg-info bg-opacity-10 rounded-3 p-3">
-                <i
-                  class="bi bi-shield-check text-info"
-                  style="font-size: 1.5rem"
-                ></i>
-              </div>
-            </div>
-            <div class="flex-grow-1 ms-3">
-              {% if not ml_enabled %}
-              <div class="fw-bold h4 mb-0">—</div>
-              <div class="mt-1"><span class="badge bg-body-tertiary text-body border">Coming soon</span></div>
-              {% elif skip_adls %}
-              <div class="placeholder-glow">
-                <span class="placeholder col-4"></span>
-              </div>
-              {% else %}
-              <div class="fw-bold h4 mb-0" id="mlComplianceRateValue">{{ ml_summary.avg_compliancy_rate }}%</div>
-              {% endif %}
-              <div class="text-body-secondary small">ML Compliance Rate</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card border-0 shadow h-100">
-        <div class="card-body">
-          <div class="d-flex align-items-center">
-            <div class="flex-shrink-0">
-              <div class="bg-warning bg-opacity-10 rounded-3 p-3">
-                <i
-                  class="bi bi-files text-warning"
-                  style="font-size: 1.5rem"
-                ></i>
-              </div>
-            </div>
-            <div class="flex-grow-1 ms-3">
-              {% if not ml_enabled %}
-              <div class="fw-bold h4 mb-0">—</div>
-              <div class="mt-1"><span class="badge bg-body-tertiary text-body border">Coming soon</span></div>
-              {% elif skip_adls %}
-              <div class="placeholder-glow">
-                <span class="placeholder col-3"></span>
-              </div>
-              {% else %}
-              <div class="fw-bold h4 mb-0" id="mlTotalFilesValue">{{ ml_summary.total_files }}</div>
-              {% endif %}
-              <div class="text-body-secondary small">ML Analysis Files</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- Compliance Readiness Dashboard -->
@@ -528,170 +469,6 @@
             <small class="text-body-secondary"
               >Upload your first document to get started</small
             >
-          </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ML Results Summary (progressive loading) -->
-  <div class="row mb-4" id="mlResultsSection">
-    <div class="col-12">
-      <div class="card border-0 shadow">
-        <div class="card-header bg-body-tertiary border-bottom">
-          <div class="d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">
-              <i class="bi bi-cpu me-2 text-primary"></i>ML Compliance Analysis
-            </h5>
-            {% if ml_enabled %}
-              <a href="{{ url_for('main.ml_results') }}" class="btn btn-sm btn-outline-primary">
-                View Details
-              </a>
-            {% else %}
-              <span class="badge bg-body-tertiary text-body border">Coming soon</span>
-            {% endif %}
-          </div>
-        </div>
-        <div class="card-body" id="mlResultsBody">
-          {% if not ml_enabled %}
-          <div class="text-center py-4">
-            <i class="bi bi-clock-history text-body-secondary" style="font-size: 2.25rem; opacity: 0.6"></i>
-            <p class="text-body-secondary mt-3 mb-0">ML compliance insights are coming soon</p>
-            <small class="text-body-secondary">This section will populate automatically once analysis is enabled.</small>
-          </div>
-          {% elif skip_adls %}
-          <div class="row">
-            <div class="col-lg-8">
-              <div class="row g-3">
-                {% for _ in range(4) %}
-                <div class="col-md-6">
-                  <div class="border rounded p-3 h-100 placeholder-glow">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                      <div class="flex-grow-1">
-                        <span class="placeholder col-6"></span>
-                        <div><span class="placeholder col-8"></span></div>
-                      </div>
-                      <span class="placeholder col-3"></span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <span class="placeholder col-3"></span>
-                      <span class="placeholder col-4"></span>
-                    </div>
-                    <div class="progress mb-2" style="height: 6px;">
-                      <div class="progress-bar" style="width: 50%"></div>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                      <span class="placeholder col-2"></span>
-                      <span class="placeholder col-2"></span>
-                      <span class="placeholder col-2"></span>
-                    </div>
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-            </div>
-            <div class="col-lg-4">
-              <div class="text-center placeholder-glow">
-                <div class="position-relative d-inline-block mb-3">
-                  <svg width="150" height="150">
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"/>
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"
-                            stroke-dasharray="188, 377" stroke-linecap="round" transform="rotate(-90 75 75)"/>
-                  </svg>
-                  <div class="position-absolute top-50 start-50 translate-middle text-center">
-                    <div class="h3 fw-bold mb-0 text-primary"><span class="placeholder col-4"></span></div>
-                    <small class="text-body-secondary">Overall</small>
-                  </div>
-                </div>
-                <div class="row g-2">
-                  <div class="col-4"><span class="placeholder col-6"></span></div>
-                  <div class="col-4"><span class="placeholder col-6"></span></div>
-                  <div class="col-4"><span class="placeholder col-6"></span></div>
-                </div>
-                <div class="mt-3 text-body-secondary small">Loading analysis…</div>
-              </div>
-            </div>
-          </div>
-          {% else %}
-          <div class="row">
-            <div class="col-lg-8">
-              <div class="row g-3">
-                {% for file_summary in ml_summary.file_summaries[:4] %}
-                <div class="col-md-6">
-                  <div class="border rounded p-3 h-100">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                      <div class="flex-grow-1">
-                        <h6 class="fw-bold mb-1">{{ file_summary.framework }}</h6>
-                        <small class="text-body-secondary">{{ file_summary.file_name[:30] }}...</small>
-                      </div>
-                      {% if file_summary.overall_status == 'Excellent' %}
-                        <span class="badge bg-success">{{ file_summary.overall_status }}</span>
-                      {% elif file_summary.overall_status == 'Good' %}
-                        <span class="badge bg-info">{{ file_summary.overall_status }}</span>
-                      {% elif file_summary.overall_status == 'Needs Attention' %}
-                        <span class="badge bg-warning">{{ file_summary.overall_status }}</span>
-                      {% else %}
-                        <span class="badge bg-danger">{{ file_summary.overall_status }}</span>
-                      {% endif %}
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <span class="fw-bold h5 mb-0">{{ file_summary.compliancy_rate }}%</span>
-                      <small class="text-body-secondary">{{ file_summary.total_requirements }} requirements</small>
-                    </div>
-                    <div class="progress mb-2" style="height: 6px;">
-                      {% if file_summary.compliancy_rate >= 90 %}
-                        <div class="progress-bar bg-success" style="width: {{ file_summary.compliancy_rate }}%"></div>
-                      {% elif file_summary.compliancy_rate >= 70 %}
-                        <div class="progress-bar bg-info" style="width: {{ file_summary.compliancy_rate }}%"></div>
-                      {% elif file_summary.compliancy_rate >= 50 %}
-                        <div class="progress-bar bg-warning" style="width: {{ file_summary.compliancy_rate }}%"></div>
-                      {% else %}
-                        <div class="progress-bar bg-danger" style="width: {{ file_summary.compliancy_rate }}%"></div>
-                      {% endif %}
-                    </div>
-                    <div class="d-flex justify-content-between">
-                      <small class="text-success">✓ {{ file_summary.complete_count }}</small>
-                      <small class="text-warning">⏳ {{ file_summary.needs_review_count }}</small>
-                      <small class="text-danger">✗ {{ file_summary.missing_count }}</small>
-                    </div>
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-            </div>
-            <div class="col-lg-4">
-              <div class="text-center">
-                <div class="position-relative d-inline-block mb-3">
-                  <svg width="150" height="150">
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"/>
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#28a745" stroke-width="15"
-                            stroke-dasharray="{{ (ml_summary.avg_compliancy_rate / 100 * 377)|round }}, 377"
-                            stroke-linecap="round" transform="rotate(-90 75 75)"/>
-                  </svg>
-                  <div class="position-absolute top-50 start-50 translate-middle text-center">
-                    <div class="h3 fw-bold mb-0 text-primary">{{ ml_summary.avg_compliancy_rate }}%</div>
-                    <small class="text-body-secondary">Overall</small>
-                  </div>
-                </div>
-                <div class="text-center">
-                  <div class="row g-2">
-                    <div class="col-4">
-                      <div class="fw-bold text-success">{{ ml_summary.total_complete }}</div>
-                      <small class="text-body-secondary d-block">Complete</small>
-                    </div>
-                    <div class="col-4">
-                      <div class="fw-bold text-warning">{{ ml_summary.total_needs_review }}</div>
-                      <small class="text-body-secondary d-block">Review</small>
-                    </div>
-                    <div class="col-4">
-                      <div class="fw-bold text-danger">{{ ml_summary.total_missing }}</div>
-                      <small class="text-body-secondary d-block">Missing</small>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
           {% endif %}
         </div>
@@ -1074,61 +851,6 @@
       </div>
     `;
   }
-
-  // Progressive-load ML data on first paint
-  {% if skip_adls and ml_enabled %}
-  fetch('{{ url_for("main.api_ml_summary") }}')
-    .then((r) => r.json())
-    .then((data) => {
-      renderMlSummary(data);
-      window.__mlSummarySnapshot = {
-        total_files: Number(data.total_files || 0),
-        last_updated: data.last_updated || null,
-      };
-    })
-    .catch(() => {
-      const body = document.getElementById('mlResultsBody');
-      if (body) {
-        body.innerHTML = `
-          <div class="alert alert-warning mb-0">
-            Could not load ML analysis data right now.
-          </div>
-        `;
-      }
-    });
-  {% endif %}
-
-  // Auto-refresh ML data every 2 minutes (preserve existing behavior)
-  {% if ml_enabled %}
-  window.__mlSummarySnapshot = window.__mlSummarySnapshot || {
-    total_files: Number({{ ml_summary.total_files or 0 }}),
-    last_updated: {% if ml_summary.last_updated %}'{{ ml_summary.last_updated.isoformat() }}'{% else %}null{% endif %}
-  };
-
-  setInterval(() => {
-    fetch('{{ url_for("main.api_ml_summary") }}')
-      .then(response => response.json())
-      .then(data => {
-        const snapshot = window.__mlSummarySnapshot || { total_files: 0, last_updated: null };
-        const nextTotal = Number(data.total_files || 0);
-        const nextUpdated = data.last_updated || null;
-
-        // If we didn't have an initial snapshot (deferred), initialize it without reloading.
-        if (!snapshot.last_updated && nextUpdated) {
-          window.__mlSummarySnapshot = { total_files: nextTotal, last_updated: nextUpdated };
-          return;
-        }
-
-        if (snapshot.total_files !== nextTotal || (snapshot.last_updated && nextUpdated && snapshot.last_updated !== nextUpdated)) {
-          showToast('New ML analysis results available!', 'success');
-          setTimeout(() => {
-            window.location.reload();
-          }, 3000);
-        }
-      })
-      .catch(() => {});
-  }, 120000);
-  {% endif %}
 
   function showToast(message, type = 'info') {
     const toastDiv = document.createElement('div');

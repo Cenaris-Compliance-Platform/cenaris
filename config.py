@@ -93,6 +93,35 @@ class Config:
     # Feature flags
     # ML/ADLS summary is not shipped yet; keep disabled unless explicitly enabled.
     ML_SUMMARY_ENABLED = (os.environ.get('ML_SUMMARY_ENABLED') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+    # RAG corpus source (JSONL built from NDIS regulatory PDF)
+    NDIS_RAG_CORPUS_PATH = os.environ.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
+    NDIS_POLICY_PROMPT_PATH = os.environ.get('NDIS_POLICY_PROMPT_PATH') or 'app/ai/prompts/ndis_policy_system_prompt.txt'
+
+    # Policy draft generation mode (deterministic fallback remains default-safe)
+    POLICY_DRAFT_USE_LLM = (os.environ.get('POLICY_DRAFT_USE_LLM') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+    # AI runtime guardrails (cost + safety)
+    AI_ENVIRONMENT = (os.environ.get('AI_ENVIRONMENT') or 'development').strip().lower()
+    AI_MAX_QUERY_CHARS = int(os.environ.get('AI_MAX_QUERY_CHARS') or 1200)
+    AI_MAX_TOP_K = int(os.environ.get('AI_MAX_TOP_K') or 5)
+    AI_MAX_CITATION_TEXT_CHARS = int(os.environ.get('AI_MAX_CITATION_TEXT_CHARS') or 600)
+    AI_MAX_ANSWER_CHARS = int(os.environ.get('AI_MAX_ANSWER_CHARS') or 2000)
+    AI_MAX_POLICY_DRAFT_CHARS = int(os.environ.get('AI_MAX_POLICY_DRAFT_CHARS') or 6000)
+    AI_POLICY_LLM_ALLOW_IN_DEVELOPMENT = (os.environ.get('AI_POLICY_LLM_ALLOW_IN_DEVELOPMENT') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
+    AI_RAG_RATE_LIMIT = os.environ.get('AI_RAG_RATE_LIMIT') or '20 per minute'
+    AI_POLICY_RATE_LIMIT = os.environ.get('AI_POLICY_RATE_LIMIT') or '10 per minute'
+    AI_USAGE_RETENTION_DAYS = int(os.environ.get('AI_USAGE_RETENTION_DAYS') or 90)
+
+    # Azure OpenAI (used when POLICY_DRAFT_USE_LLM=true)
+    AZURE_OPENAI_ENDPOINT = os.environ.get('AZURE_OPENAI_ENDPOINT')
+    AZURE_OPENAI_API_KEY = os.environ.get('AZURE_OPENAI_API_KEY')
+    AZURE_OPENAI_API_VERSION = os.environ.get('AZURE_OPENAI_API_VERSION') or '2024-10-21'
+    AZURE_OPENAI_CHAT_DEPLOYMENT = os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT')
+    AZURE_OPENAI_CHAT_DEPLOYMENT_MINI = os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI')
+    AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER = os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER')
+    AZURE_OPENAI_TIMEOUT_SECONDS = int(os.environ.get('AZURE_OPENAI_TIMEOUT_SECONDS') or 30)
+    AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS = int(os.environ.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS') or 1400)
     
     # Azure Application Insights (Milestone 2: System Logging)
     APPINSIGHTS_CONNECTION_STRING = os.environ.get('APPLICATIONINSIGHTS_CONNECTION_STRING')
