@@ -44,14 +44,26 @@
         <div class="col-md-7">
           <label for="demoQuestion" class="form-label">Question to AI</label>
           <textarea id="demoQuestion" name="question" class="form-control" rows="3" placeholder="e.g., Does this document provide enough incident-management evidence for NDIS audit readiness?"></textarea>
+          <div class="mt-2">
+            <label for="demoQuestionPreset" class="form-label small mb-1">Use a common question</label>
+            <select id="demoQuestionPreset" class="form-select form-select-sm">
+              <option value="">Select a sample question...</option>
+              <option value="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident reporting readiness</option>
+              <option value="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Evidence and gap summary</option>
+              <option value="Does this policy clearly assign control owners, review cadence, and monitoring responsibilities?">Governance and ownership check</option>
+              <option value="How well does this document support audit readiness, and what are the top 3 remediation actions?">Audit readiness and actions</option>
+              <option value="Which sections of this document align with participant rights, safeguarding, and quality management obligations?">Participant rights and safeguarding alignment</option>
+            </select>
+          </div>
+          <div class="mt-2 d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident Readiness</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Evidence Gaps</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="How well does this document support audit readiness, and what are the top 3 remediation actions?">Audit Actions</button>
+          </div>
         </div>
-        <div class="col-md-4">
-          <label for="demoMode" class="form-label">Analysis mode</label>
-          <select id="demoMode" name="mode" class="form-select">
-            <option value="balanced" selected>Balanced (recommended demo mode)</option>
-            <option value="strict">Strict (conservative scoring)</option>
-          </select>
-          <div class="form-text">Balanced is less harsh. Strict is closer to audit-risk caution.</div>
+        <input type="hidden" name="mode" value="balanced" />
+        <div class="col-12">
+          <div class="small text-body-secondary">Analysis mode: <strong>Balanced</strong> (fixed for demo consistency)</div>
         </div>
         <div class="col-12 d-flex gap-2 align-items-center">
           <button id="runDemoBtn" type="submit" class="btn btn-primary">
@@ -70,13 +82,21 @@
 
   <div id="demoResultCard" class="card border-0 shadow-sm d-none">
     <div class="card-body">
-      <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
-        <h5 class="card-title mb-0">Analysis Result</h5>
-        <div class="d-flex gap-2 align-items-center">
-          <span class="text-body-secondary small">Proposed status:</span>
-          <span id="resultStatusBadge" class="badge bg-secondary">-</span>
-          <span id="resultConfidence" class="small text-body-secondary"></span>
-          <span id="resultMode" class="small text-body-secondary"></span>
+      <div class="mb-3">
+        <h5 class="card-title mb-2">Analysis Result</h5>
+        <div class="row g-2 align-items-stretch">
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100 bg-body-tertiary">
+              <div class="text-body-secondary small mb-1">Proposed Status</div>
+              <div id="resultStatusBadge" class="badge bg-secondary fs-5 px-3 py-2">-</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100 bg-body-tertiary">
+              <div class="text-body-secondary small mb-1">Confidence</div>
+              <div id="resultConfidence" class="fw-semibold fs-4">-</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -110,6 +130,9 @@
     const form = document.getElementById('aiDemoForm');
     const button = document.getElementById('runDemoBtn');
     const statusText = document.getElementById('demoStatusText');
+    const questionInput = document.getElementById('demoQuestion');
+    const questionPreset = document.getElementById('demoQuestionPreset');
+    const questionChips = document.querySelectorAll('.demo-question-chip');
     const resultCard = document.getElementById('demoResultCard');
     const statusBadge = document.getElementById('resultStatusBadge');
     const confidenceEl = document.getElementById('resultConfidence');
@@ -117,12 +140,9 @@
     const warningsEl = document.getElementById('resultWarnings');
     const snippetsEl = document.getElementById('resultSnippets');
     const citationsEl = document.getElementById('resultCitations');
-    const resultModeEl = document.getElementById('resultMode');
     const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
     const progressWrap = document.getElementById('demoProgressWrap');
     const progressBar = document.getElementById('demoProgressBar');
-    const idleButtonHtml = '<i class="bi bi-play-circle me-1"></i>Analyze Document';
-    const loadingButtonHtml = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Analyzing...';
     let progressTimer = null;
     let progressValue = 0;
     let requestInFlight = false;
@@ -132,11 +152,33 @@
       return;
     }
 
+    const renderIdleButton = () => {
+      button.innerHTML = '';
+      const icon = document.createElement('i');
+      icon.className = 'bi bi-play-circle me-1';
+      button.appendChild(icon);
+      button.appendChild(document.createTextNode('Analyze Document'));
+    };
+
+    const renderLoadingButton = () => {
+      button.innerHTML = '';
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner-border spinner-border-sm me-2';
+      spinner.setAttribute('role', 'status');
+      spinner.setAttribute('aria-hidden', 'true');
+      button.appendChild(spinner);
+      button.appendChild(document.createTextNode('Analyzing...'));
+    };
+
     const setRunning = (running, text) => {
       requestInFlight = !!running;
       button.disabled = !!running;
       button.classList.toggle('disabled', !!running);
-      button.innerHTML = running ? loadingButtonHtml : idleButtonHtml;
+      if (running) {
+        renderLoadingButton();
+      } else {
+        renderIdleButton();
+      }
       button.setAttribute('aria-busy', running ? 'true' : 'false');
       statusText.classList.remove('d-none');
       statusText.textContent = text || '';
@@ -150,7 +192,7 @@
       requestInFlight = false;
       button.disabled = false;
       button.classList.remove('disabled');
-      button.innerHTML = idleButtonHtml;
+      renderIdleButton();
       button.setAttribute('aria-busy', 'false');
       if (statusMessage) {
         statusText.classList.remove('d-none');
@@ -216,18 +258,64 @@
       statusBadge.textContent = status || 'Unknown';
     };
 
-    const asCard = (text, meta) => {
+    const asCard = (text, options) => {
       const div = document.createElement('div');
-      div.className = 'border rounded p-2 small';
-      div.textContent = text || '-';
-      if (meta) {
+      div.className = 'border rounded p-2';
+
+      const topRow = document.createElement('div');
+      topRow.className = 'd-flex justify-content-between align-items-start gap-2';
+
+      const textEl = document.createElement('div');
+      textEl.className = 'small';
+      textEl.textContent = text || '-';
+      topRow.appendChild(textEl);
+
+      const scoreValue = options && typeof options.score !== 'undefined' ? Number(options.score) : null;
+      if (scoreValue !== null && !Number.isNaN(scoreValue)) {
+        const scoreBadge = document.createElement('span');
+        scoreBadge.className = 'badge bg-dark-subtle text-dark-emphasis border';
+        scoreBadge.textContent = `Score ${scoreValue}`;
+        topRow.appendChild(scoreBadge);
+      }
+
+      div.appendChild(topRow);
+
+      if (options && options.meta) {
         const metaEl = document.createElement('div');
-        metaEl.className = 'text-body-secondary mt-1';
-        metaEl.textContent = meta;
+        metaEl.className = 'text-body-secondary small mt-2';
+        metaEl.textContent = options.meta;
         div.appendChild(metaEl);
       }
+
       return div;
     };
+
+    if (questionPreset && questionInput) {
+      questionPreset.addEventListener('change', function () {
+        const selected = (questionPreset.value || '').trim();
+        if (!selected) {
+          return;
+        }
+        questionInput.value = selected;
+        questionInput.focus();
+      });
+    }
+
+    if (questionChips && questionInput) {
+      questionChips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          const selected = (chip.getAttribute('data-question') || '').trim();
+          if (!selected) {
+            return;
+          }
+          questionInput.value = selected;
+          if (questionPreset) {
+            questionPreset.value = selected;
+          }
+          questionInput.focus();
+        });
+      });
+    }
 
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -270,9 +358,7 @@
         }
 
         renderBadge(payload.status);
-        confidenceEl.textContent = `Confidence: ${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
-        const modeLabel = (((payload.meta || {}).analysis_mode) || 'balanced').toLowerCase();
-        resultModeEl.textContent = `Mode: ${modeLabel}`;
+        confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
         const provider = ((payload.meta || {}).provider) || 'deterministic';
         const model = ((payload.meta || {}).model) || '-';
         resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}`;
@@ -299,20 +385,20 @@
 
         const snippets = payload.snippets || [];
         if (snippets.length === 0) {
-          snippetsEl.appendChild(asCard('No strong evidence snippets found in this file.'));
+          snippetsEl.appendChild(asCard('No strong evidence snippets found in this file.', { score: 0 }));
         } else {
           snippets.forEach(function (item) {
-            snippetsEl.appendChild(asCard(item.text, `score: ${item.score}`));
+            snippetsEl.appendChild(asCard(item.text, { score: item.score }));
           });
         }
 
         const citations = payload.citations || [];
         if (citations.length === 0) {
-          citationsEl.appendChild(asCard('No NDIS citations retrieved.'));
+          citationsEl.appendChild(asCard('No NDIS citations retrieved.', { score: 0 }));
         } else {
           citations.forEach(function (item) {
-            const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'} | score ${item.score || 0}`;
-            citationsEl.appendChild(asCard(item.text, meta));
+            const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'}`;
+            citationsEl.appendChild(asCard(item.text, { score: item.score || 0, meta: meta }));
           });
         }
 
