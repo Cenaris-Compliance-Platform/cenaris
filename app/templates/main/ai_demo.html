@@ -34,7 +34,7 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <form id="aiDemoForm" class="row g-3">
+      <form id="aiDemoForm" class="row g-3" data-skip-loading="1">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="col-md-5">
           <label for="demoFile" class="form-label">Document (TXT, PDF, DOCX)</label>
@@ -67,7 +67,7 @@
         </div>
         <div class="col-12 d-flex gap-2 align-items-center">
           <button id="runDemoBtn" type="submit" class="btn btn-primary">
-            <i class="bi bi-play-circle me-1"></i>Analyze Document
+            <span id="runDemoLabel">Analyze Document</span>
           </button>
           <span id="demoStatusText" class="small text-body-secondary d-none"></span>
         </div>
@@ -129,6 +129,7 @@
   (function () {
     const form = document.getElementById('aiDemoForm');
     const button = document.getElementById('runDemoBtn');
+    const buttonLabel = document.getElementById('runDemoLabel');
     const statusText = document.getElementById('demoStatusText');
     const questionInput = document.getElementById('demoQuestion');
     const questionPreset = document.getElementById('demoQuestionPreset');
@@ -153,26 +154,27 @@
     }
 
     const renderIdleButton = () => {
-      button.innerHTML = '';
-      const icon = document.createElement('i');
-      icon.className = 'bi bi-play-circle me-1';
-      button.appendChild(icon);
-      button.appendChild(document.createTextNode('Analyze Document'));
+      if (buttonLabel) {
+        buttonLabel.textContent = 'Analyze Document';
+      } else if (button) {
+        button.textContent = 'Analyze Document';
+      }
     };
 
     const renderLoadingButton = () => {
-      button.innerHTML = '';
-      const spinner = document.createElement('span');
-      spinner.className = 'spinner-border spinner-border-sm me-2';
-      spinner.setAttribute('role', 'status');
-      spinner.setAttribute('aria-hidden', 'true');
-      button.appendChild(spinner);
-      button.appendChild(document.createTextNode('Analyzing...'));
+      if (buttonLabel) {
+        buttonLabel.textContent = 'Analyzing...';
+      } else if (button) {
+        button.textContent = 'Analyzing...';
+      }
     };
+
+    renderIdleButton();
 
     const setRunning = (running, text) => {
       requestInFlight = !!running;
       button.disabled = !!running;
+      button.classList.remove('loading');
       button.classList.toggle('disabled', !!running);
       if (running) {
         renderLoadingButton();
@@ -191,6 +193,7 @@
       }
       requestInFlight = false;
       button.disabled = false;
+      button.classList.remove('loading');
       button.classList.remove('disabled');
       renderIdleButton();
       button.setAttribute('aria-busy', 'false');
