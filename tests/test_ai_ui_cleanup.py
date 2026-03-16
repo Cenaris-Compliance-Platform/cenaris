@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-def test_dashboard_nav_hides_redundant_ai_links(client, app, seed_org_user):
+def test_dashboard_nav_shows_ai_review_but_hides_legacy_ai_links(client, app, seed_org_user):
     from tests.conftest import login
 
     resp = login(client)
@@ -10,6 +10,7 @@ def test_dashboard_nav_hides_redundant_ai_links(client, app, seed_org_user):
     dashboard_resp = client.get('/dashboard', follow_redirects=True)
     assert dashboard_resp.status_code == 200
     assert b'Evidence Repository' in dashboard_resp.data
+    assert b'AI Review' in dashboard_resp.data
     assert b'AI Evidence' not in dashboard_resp.data
     assert b'AI Demo' not in dashboard_resp.data
 
