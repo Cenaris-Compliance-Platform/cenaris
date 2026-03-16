@@ -3745,7 +3745,7 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
 @bp.route('/ai-demo')
 @login_required
 def ai_demo():
-    """Temporary AI demo lab for upload + analysis validation."""
+    """Dedicated AI review workspace for uploaded or repository documents."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -3753,6 +3753,22 @@ def ai_demo():
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
+
+    requested_ids = [int(v) for v in request.args.getlist('doc_ids') if str(v).isdigit()]
+    selected_documents = []
+    selected_document_ids = []
+    if requested_ids:
+        selected_documents = (
+            Document.query
+            .filter(
+                Document.organization_id == int(org_id),
+                Document.is_active.is_(True),
+                Document.id.in_(requested_ids),
+            )
+            .order_by(Document.uploaded_at.desc())
+            .all()
+        )
+        selected_document_ids = [int(document.id) for document in selected_documents]
 
     corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
     corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
@@ -3769,12 +3785,14 @@ def ai_demo():
         recent_analyses = []
     return render_template(
         'main/ai_demo.html',
-        title='AI Demo Lab',
+        title='AI Review Workspace',
         demo_provider='OpenRouter',
         demo_model=current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free',
         has_openrouter_key=bool((current_app.config.get('OPENROUTER_API_KEY') or '').strip()),
         has_ndis_corpus=bool(os.path.exists(corpus_abs)),
         recent_analyses=recent_analyses,
+        selected_documents=selected_documents,
+        selected_document_ids=selected_document_ids,
     )
 
 
@@ -3782,7 +3800,7 @@ def ai_demo():
 @login_required
 @limiter.limit('8 per minute', key_func=_ai_rate_limit_key)
 def ai_demo_analyze_api():
-    """Analyze an uploaded file in-memory for demo validation."""
+    """Analyze an uploaded file or stored repository document in the AI workspace."""
     maybe = _require_active_org()
     if maybe is not None:
         return jsonify({'success': False, 'error': 'No active organization'}), 400
@@ -3792,16 +3810,31 @@ def ai_demo_analyze_api():
         return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
     uploaded = request.files.get('file')
+    stored_doc_id = (request.form.get('stored_doc_id') or '').strip()
     question = _limit_text((request.form.get('question') or '').strip(), max_chars=700)
     # Demo mode is intentionally fixed to balanced for consistent client-facing behavior.
     analysis_mode = 'balanced'
-    if not uploaded:
-        return jsonify({'success': False, 'error': 'Please upload a file first.'}), 400
 
     if not question:
         question = 'Assess this document against NDIS-style compliance evidence expectations.'
 
-    doc_text, extraction_error = _extract_demo_document_text(uploaded)
+    source_filename = (getattr(uploaded, 'filename', '') or '').strip()
+    if stored_doc_id:
+        if not stored_doc_id.isdigit():
+            return jsonify({'success': False, 'error': 'Invalid stored document selection.'}), 400
+        from app.services.azure_storage import AzureBlobStorageService
+
+        document = _authorized_org_document_or_404(int(stored_doc_id))
+        storage_service = AzureBlobStorageService()
+        result = storage_service.download_file(document.blob_name)
+        if not result.get('success') or not result.get('data'):
+            return jsonify({'success': False, 'error': 'Could not load stored document for AI review.'}), 400
+        source_filename = (document.filename or '').strip()
+        doc_text, extraction_error = document_analysis_service.extract_text_from_bytes(source_filename, result.get('data') or b'')
+    else:
+        if not uploaded:
+            return jsonify({'success': False, 'error': 'Choose a repository document or upload a file first.'}), 400
+        doc_text, extraction_error = _extract_demo_document_text(uploaded)
     if extraction_error:
         return jsonify({'success': False, 'error': extraction_error}), 400
 
@@ -3863,7 +3896,7 @@ def ai_demo_analyze_api():
         record = DemoAnalysisResult(
             organization_id=int(org_id),
             user_id=int(current_user.id),
-            filename=(getattr(uploaded, 'filename', '') or '')[:255] or None,
+            filename=(source_filename or '')[:255] or None,
             question=(question or '')[:700] or None,
             status=status,
             confidence=confidence,
@@ -3899,7 +3932,10 @@ def ai_demo_analyze_api():
                 'scoring_version': 'demo-v3',
                 'retrieval_mode': _demo_retrieval_mode,
                 'document_chars': len(doc_text or ''),
-                'temporary_processing_only': True,
+                'temporary_processing_only': not bool(stored_doc_id),
+                'filename': source_filename,
+                'source': 'repository' if stored_doc_id else 'upload',
+                'stored_doc_id': int(stored_doc_id) if stored_doc_id.isdigit() else None,
             },
         }
     )
