@@ -11,6 +11,9 @@
                     <p class="text-body-secondary mb-0">Manage and view your uploaded compliance documents</p>
                 </div>
                 <div class="d-flex gap-2">
+                    <a href="{{ url_for('main.ai_demo') }}" class="btn btn-primary">
+                        <i class="bi bi-stars me-2"></i>Open AI Review
+                    </a>
                     <button onclick="document.getElementById('quickUploadInput').click()" class="btn btn-outline-primary">
                         <i class="bi bi-plus-lg me-2"></i>Bulk Upload
                     </button>
@@ -84,6 +87,13 @@
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                                     <button type="submit" class="btn btn-sm btn-primary" id="bulkAnalyzeBtn" disabled>
                                         <i class="bi bi-cpu me-1"></i>Analyze Selected
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('main.delete_selected_documents') }}" id="bulkDeleteForm" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                    <input type="hidden" name="confirmation_text" id="bulkDeleteConfirmationText" value="" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" id="bulkDeleteBtn" disabled>
+                                        <i class="bi bi-trash me-1"></i>Delete Selected
                                     </button>
                                 </form>
                                 <form method="POST" action="{{ url_for('main.download_documents_zip') }}" id="bulkZipForm" class="d-inline">
@@ -209,6 +219,11 @@
                                                                     </button>
                                                                 </form>
                                                             </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="{{ url_for('main.ai_demo') }}">
+                                                                    <i class="bi bi-stars me-2"></i>Open AI Review
+                                                                </a>
+                                                            </li>
                                                             <li><hr class="dropdown-divider"></li>
                                                             <li>
                                                                 <a class="dropdown-item" target="_blank" href="{{ url_for('main.preview_document', doc_id=document.id) }}">
@@ -287,6 +302,11 @@
                                                                     <i class="bi bi-cpu me-2"></i>Analyze
                                                                 </button>
                                                             </form>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item" href="{{ url_for('main.ai_demo') }}">
+                                                                <i class="bi bi-stars me-2"></i>Open AI Review
+                                                            </a>
                                                         </li>
                                                         <li><hr class="dropdown-divider"></li>
                                                         <li>
@@ -473,6 +493,9 @@
     document.addEventListener('DOMContentLoaded', function () {
         const bulkAnalyzeForm = document.getElementById('bulkAnalyzeForm');
         const bulkAnalyzeButton = document.getElementById('bulkAnalyzeBtn');
+        const bulkDeleteForm = document.getElementById('bulkDeleteForm');
+        const bulkDeleteButton = document.getElementById('bulkDeleteBtn');
+        const bulkDeleteConfirmationText = document.getElementById('bulkDeleteConfirmationText');
         const bulkForm = document.getElementById('bulkZipForm');
         const bulkButton = document.getElementById('bulkDownloadBtn');
         const selectAll = document.getElementById('selectAllDocs');
@@ -497,6 +520,9 @@
             if (bulkAnalyzeButton) {
                 bulkAnalyzeButton.disabled = selected.length === 0;
             }
+            if (bulkDeleteButton) {
+                bulkDeleteButton.disabled = selected.length === 0;
+            }
             if (bulkButton) {
                 bulkButton.disabled = selected.length === 0;
             }
@@ -505,7 +531,79 @@
             }
 
             syncSelectedDocIds(bulkAnalyzeForm, selected);
+            syncSelectedDocIds(bulkDeleteForm, selected);
             syncSelectedDocIds(bulkForm, selected);
+        }
+
+        function showBulkDeleteModal(selected) {
+            const selectedCount = selected.length;
+            const selectedNames = selected
+                .map((checkbox) => checkbox.closest('tr, [data-doc-card]'))
+                .map((node) => node ? node.querySelector('[data-doc-filename], .card-title') : null)
+                .map((node) => node ? node.textContent.trim() : '')
+                .filter(Boolean)
+                .slice(0, 5);
+            const extraCount = Math.max(0, selectedCount - selectedNames.length);
+            const modalHtml = `
+                <div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                                    Confirm Bulk Delete
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="mb-2">You are about to permanently delete <strong>${selectedCount}</strong> document(s).</p>
+                                <div class="alert alert-warning small mb-3">
+                                    <div class="fw-semibold mb-1">Selected documents</div>
+                                    <div>${selectedNames.join('<br>')}${extraCount > 0 ? `<br>and ${extraCount} more...` : ''}</div>
+                                </div>
+                                <label for="bulkDeleteConfirmInput" class="form-label">Type <strong>DELETE</strong> to confirm</label>
+                                <input id="bulkDeleteConfirmInput" type="text" class="form-control" autocomplete="off" />
+                                <p class="text-body-secondary small mt-2 mb-0">This action cannot be undone.</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-danger" id="confirmBulkDeleteSubmit" disabled>
+                                    <i class="bi bi-trash me-1"></i>Delete Documents
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const existingModal = document.getElementById('bulkDeleteModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            const modalElement = document.getElementById('bulkDeleteModal');
+            const modal = new bootstrap.Modal(modalElement);
+            const confirmInput = document.getElementById('bulkDeleteConfirmInput');
+            const confirmButton = document.getElementById('confirmBulkDeleteSubmit');
+
+            confirmInput.addEventListener('input', () => {
+                confirmButton.disabled = confirmInput.value.trim() !== 'DELETE';
+            });
+            confirmButton.addEventListener('click', () => {
+                if (bulkDeleteConfirmationText) {
+                    bulkDeleteConfirmationText.value = confirmInput.value.trim();
+                }
+                modal.hide();
+                if (bulkDeleteForm) {
+                    bulkDeleteForm.submit();
+                }
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                this.remove();
+            });
+            modal.show();
         }
 
         if (selectAll) {
@@ -521,6 +619,20 @@
             checkbox.addEventListener('change', refreshBulkState);
         });
         refreshBulkState();
+
+        if (bulkDeleteForm) {
+            bulkDeleteForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const selected = rowChecks.filter((c) => c.checked);
+                if (selected.length === 0) {
+                    return;
+                }
+                if (bulkDeleteConfirmationText) {
+                    bulkDeleteConfirmationText.value = '';
+                }
+                showBulkDeleteModal(selected);
+            });
+        }
 
         document.querySelectorAll('[data-doc-actions-dropdown]').forEach((toggle) => {
             try {

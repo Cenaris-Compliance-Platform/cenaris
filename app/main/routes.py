@@ -2034,24 +2034,30 @@ def delete_document(doc_id):
     if maybe is not None:
         return maybe
 
-    from flask import flash, redirect
-    from app.services.azure_storage import AzureBlobStorageService
-    
     org_id = _active_org_id()
     if not current_user.has_permission('documents.delete', org_id=int(org_id)):
         abort(403)
 
-    # Get document from database
     document = db.session.get(Document, int(doc_id))
-
-    # Check if document exists and belongs to user
     if not document:
         flash('Document not found or access denied.', 'error')
         return redirect(url_for('main.evidence_repository'))
     if document.organization_id != org_id:
         flash('Document not found or access denied.', 'error')
         return redirect(url_for('main.evidence_repository'))
+
+    success, error_message = _soft_delete_document(document)
+    if success:
+        flash(f'Document "{document.filename}" deleted successfully.', 'success')
+    else:
+        flash(error_message or 'Error deleting document. Please try again.', 'error')
     
+    return redirect(url_for('main.evidence_repository'))
+
+
+def _soft_delete_document(document: Document) -> tuple[bool, str | None]:
+    from app.services.azure_storage import AzureBlobStorageService
+
     try:
         if getattr(document, 'blob_name', None):
             storage_service = AzureBlobStorageService()
@@ -2060,17 +2066,69 @@ def delete_document(doc_id):
                 raise Exception(delete_result.get('error') or 'Delete failed')
         else:
             current_app.logger.warning('Document %s has no blob_name; skipping Azure deletion', document.id)
-        
-        # Soft delete from database
+
         document.is_active = False
         db.session.commit()
-        
-        flash(f'Document "{document.filename}" deleted successfully.', 'success')
-    except Exception as e:
+        return True, None
+    except Exception as exc:
         db.session.rollback()
-        current_app.logger.exception(f'Error deleting document {doc_id}: {e}')
-        flash('Error deleting document. Please try again.', 'error')
-    
+        current_app.logger.exception('Error deleting document %s: %s', getattr(document, 'id', None), exc)
+        return False, 'Error deleting document. Please try again.'
+
+
+@bp.route('/documents/delete-selected', methods=['POST'])
+@login_required
+def delete_selected_documents():
+    """Bulk delete selected repository documents after explicit confirmation."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.delete', org_id=int(org_id)):
+        abort(403)
+
+    requested_ids = [int(v) for v in request.form.getlist('doc_ids') if str(v).isdigit()]
+    if not requested_ids:
+        flash('Select at least one document to delete.', 'warning')
+        return redirect(url_for('main.evidence_repository'))
+
+    confirmation_text = (request.form.get('confirmation_text') or '').strip()
+    if confirmation_text != 'DELETE':
+        flash('Type DELETE exactly to confirm bulk deletion.', 'warning')
+        return redirect(url_for('main.evidence_repository'))
+
+    documents = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.id.in_(requested_ids),
+        )
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
+    if not documents:
+        flash('No valid documents found for deletion.', 'error')
+        return redirect(url_for('main.evidence_repository'))
+
+    deleted_count = 0
+    failed_documents: list[str] = []
+    for document in documents:
+        success, _error_message = _soft_delete_document(document)
+        if success:
+            deleted_count += 1
+        else:
+            failed_documents.append(document.filename or f'Document {document.id}')
+
+    if deleted_count > 0:
+        flash(f'Deleted {deleted_count} document(s).', 'success')
+    if failed_documents:
+        shown = ', '.join(failed_documents[:3])
+        if len(failed_documents) > 3:
+            shown = f'{shown}, and {len(failed_documents) - 3} more'
+        flash(f'Could not delete {len(failed_documents)} document(s): {shown}.', 'warning')
+
     return redirect(url_for('main.evidence_repository'))
 
 @bp.route('/document/<int:doc_id>/details')
