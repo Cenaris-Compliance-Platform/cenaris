@@ -22,11 +22,12 @@ from app.services.policy_draft_service import policy_draft_service
 from app.services.compliance_scoring_service import compliance_scoring_service
 from app.services.notification_service import notification_service
 from app.services.rag_query_service import rag_query_service
+from app.services.document_analysis_service import document_analysis_service
 from sqlalchemy import and_, or_, func
 
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
@@ -1559,6 +1560,18 @@ def dashboard():
         .limit(5)
         .all()
     )
+    recent_analysed_documents = (
+        Document.query
+        .options(joinedload(Document.uploader))
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.ai_analysis_at.isnot(None),
+        )
+        .order_by(Document.ai_analysis_at.desc())
+        .limit(5)
+        .all()
+    )
     # Avoid full table scan for count; use an approximate or limit scope.
     total_documents = Document.query.filter_by(organization_id=org_id, is_active=True).limit(1000).count()
     
@@ -1566,6 +1579,7 @@ def dashboard():
     return render_template('main/dashboard.html', 
                          title='Dashboard',
                          recent_documents=recent_documents,
+                         recent_analysed_documents=recent_analysed_documents,
                          total_documents=total_documents)
 
 @bp.route('/upload')
@@ -1776,7 +1790,7 @@ def _normalize_tags(raw_tags: str) -> list[str]:
 def _refresh_document_search_text(document: Document):
     if not _documents_search_text_available():
         return
-    base = [document.filename or '', document.content_type or '']
+    base = [document.filename or '', document.content_type or '', document.extracted_text or '']
     tag_names = [t.name for t in (document.tags or []) if (t.name or '').strip()]
     base.extend(tag_names)
     document.search_text = ' '.join([b.strip() for b in base if (b or '').strip()])
@@ -2080,15 +2094,150 @@ def document_details(doc_id):
         abort(404)
     if document.organization_id != org_id:
         abort(404)
+
+    linked_requirements = (
+        db.session.query(RequirementEvidenceLink, ComplianceRequirement, OrganizationRequirementAssessment)
+        .join(ComplianceRequirement, ComplianceRequirement.id == RequirementEvidenceLink.requirement_id)
+        .outerjoin(
+            OrganizationRequirementAssessment,
+            and_(
+                OrganizationRequirementAssessment.organization_id == RequirementEvidenceLink.organization_id,
+                OrganizationRequirementAssessment.requirement_id == RequirementEvidenceLink.requirement_id,
+            ),
+        )
+        .filter(
+            RequirementEvidenceLink.organization_id == int(org_id),
+            RequirementEvidenceLink.document_id == int(document.id),
+        )
+        .order_by(RequirementEvidenceLink.linked_at.desc())
+        .all()
+    )
+
+    summary_sections = _split_document_ai_summary(document.ai_summary)
     
     return render_template('main/document_details.html',
                          title=f'Document: {document.filename}',
-                         document=document)
+                         document=document,
+                         linked_requirements=linked_requirements,
+                         summary_sections=summary_sections)
 
-@bp.route('/ai-evidence')
+
+def _split_document_ai_summary(summary_text: str | None) -> dict[str, str]:
+    value = (summary_text or '').replace('\r\n', '\n').strip()
+    sections = {
+        'why': '',
+        'missing': '',
+        'next_action': '',
+    }
+    if not value:
+        return sections
+
+    patterns = [
+        ('why', r'1\)\s*Why this status'),
+        ('missing', r'2\)\s*Missing evidence'),
+        ('next_action', r'3\)\s*Recommended next action'),
+    ]
+    import re
+    matches = []
+    for key, pattern in patterns:
+        match = re.search(pattern, value, flags=re.IGNORECASE)
+        if match:
+            matches.append((key, match.start(), match.end()))
+    if not matches:
+        sections['why'] = value
+        return sections
+    for index, (key, _start, end) in enumerate(matches):
+        next_start = matches[index + 1][1] if index + 1 < len(matches) else len(value)
+        sections[key] = value[end:next_start].strip()
+    return sections
+
+
+def _analyze_and_persist_document(document: Document, *, org_id: int, user_id: int) -> tuple[bool, str | None, int]:
+    """Analyze one stored document and persist review/mapping fields."""
+    from app.services.azure_storage import AzureBlobStorageService
+
+    try:
+        storage_service = AzureBlobStorageService()
+        result = storage_service.download_file(document.blob_name)
+        if not result.get('success') or not result.get('data'):
+            return False, 'Could not load the document from storage for analysis.', 0
+
+        analysis = document_analysis_service.analyze_document_bytes(
+            filename=document.filename,
+            raw_bytes=result.get('data') or b'',
+            organization_id=int(org_id),
+        )
+        if not analysis.get('success'):
+            return False, analysis.get('error') or 'Document analysis failed.', 0
+
+        old_requirement_ids = {
+            int(req_id)
+            for req_id, in (
+                db.session.query(RequirementEvidenceLink.requirement_id)
+                .filter_by(organization_id=int(org_id), document_id=int(document.id))
+                .all()
+            )
+        }
+
+        RequirementEvidenceLink.query.filter_by(
+            organization_id=int(org_id),
+            document_id=int(document.id),
+        ).delete(synchronize_session=False)
+
+        matched_requirements = analysis.get('matched_requirements') or []
+        new_requirement_ids = set()
+        for item in matched_requirements:
+            requirement_db_id = item.get('requirement_db_id')
+            if not requirement_db_id:
+                continue
+            new_requirement_ids.add(int(requirement_db_id))
+            db.session.add(
+                RequirementEvidenceLink(
+                    organization_id=int(org_id),
+                    requirement_id=int(requirement_db_id),
+                    document_id=int(document.id),
+                    evidence_bucket=(item.get('evidence_bucket') or 'system')[:30],
+                    rationale_note=item.get('rationale_note'),
+                    linked_by_user_id=int(user_id),
+                )
+            )
+
+        document.extracted_text = analysis.get('extracted_text') or None
+        _refresh_document_search_text(document)
+        document.ai_status = analysis.get('status')
+        document.ai_confidence = analysis.get('confidence')
+        document.ai_focus_area = analysis.get('focus_area')
+        document.ai_question = analysis.get('question')
+        document.ai_summary = analysis.get('summary')
+        document.ai_provider = analysis.get('provider')
+        document.ai_model = analysis.get('model_used')
+        document.ai_retrieval_mode = analysis.get('retrieval_mode')
+        document.ai_analysis_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        for requirement_id in old_requirement_ids.union(new_requirement_ids):
+            try:
+                compliance_scoring_service.recompute_requirement_assessment(
+                    organization_id=int(org_id),
+                    requirement_id=int(requirement_id),
+                    assessed_by_user_id=int(user_id),
+                    commit=False,
+                )
+            except Exception:
+                current_app.logger.exception('Failed recomputing requirement assessment for requirement %s', requirement_id)
+        db.session.commit()
+
+        return True, None, len(matched_requirements)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to analyze document %s for org %s', getattr(document, 'id', None), org_id)
+        return False, 'Unexpected error while analyzing this document.', 0
+
+
+@bp.route('/document/<int:doc_id>/analyze', methods=['POST'])
 @login_required
-def ai_evidence():
-    """AI Evidence route backed by real organisation documents and linked requirements."""
+def analyze_document(doc_id):
+    """Run explicit AI-assisted review for a stored document."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -2097,84 +2246,96 @@ def ai_evidence():
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
 
+    document = _authorized_org_document_or_404(int(doc_id))
+
+    success, error_message, matched_count = _analyze_and_persist_document(
+        document,
+        org_id=int(org_id),
+        user_id=int(current_user.id),
+    )
+    if not success:
+        flash(error_message or 'Document analysis failed.', 'error')
+        return redirect(url_for('main.document_details', doc_id=int(document.id)))
+
+    if matched_count:
+        flash(f'Analysis complete. Mapped this document to {matched_count} requirement(s).', 'success')
+    else:
+        flash('Analysis complete, but no explicit requirement matches were found yet.', 'warning')
+    return redirect(url_for('main.document_details', doc_id=int(document.id)))
+
+
+@bp.route('/documents/analyze-selected', methods=['POST'])
+@login_required
+def analyze_selected_documents():
+    """Run analysis for selected repository documents."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    requested_ids = [int(v) for v in request.form.getlist('doc_ids') if str(v).isdigit()]
+    if not requested_ids:
+        flash('Select at least one document to analyze.', 'warning')
+        return redirect(url_for('main.evidence_repository'))
+
     documents = (
         Document.query
-        .filter_by(organization_id=int(org_id), is_active=True)
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.id.in_(requested_ids),
+        )
         .order_by(Document.uploaded_at.desc())
         .all()
     )
+    if not documents:
+        flash('No valid documents found for analysis.', 'error')
+        return redirect(url_for('main.evidence_repository'))
 
-    linked_counts = {
-        int(doc_id): int(count)
-        for doc_id, count in (
-            db.session.query(
-                RequirementEvidenceLink.document_id,
-                func.count(RequirementEvidenceLink.id),
-            )
-            .filter(RequirementEvidenceLink.organization_id == int(org_id))
-            .group_by(RequirementEvidenceLink.document_id)
-            .all()
-        )
-    }
-
-    avg_scores = {
-        int(doc_id): float(score)
-        for doc_id, score in (
-            db.session.query(
-                RequirementEvidenceLink.document_id,
-                func.avg(OrganizationRequirementAssessment.computed_score),
-            )
-            .join(
-                OrganizationRequirementAssessment,
-                and_(
-                    OrganizationRequirementAssessment.organization_id == RequirementEvidenceLink.organization_id,
-                    OrganizationRequirementAssessment.requirement_id == RequirementEvidenceLink.requirement_id,
-                ),
-            )
-            .filter(
-                RequirementEvidenceLink.organization_id == int(org_id),
-                OrganizationRequirementAssessment.computed_score.isnot(None),
-            )
-            .group_by(RequirementEvidenceLink.document_id)
-            .all()
-        )
-        if score is not None
-    }
-
-    ai_evidence_entries = []
+    analyzed_count = 0
+    total_mapped = 0
+    failed_documents: list[str] = []
     for document in documents:
-        linked_requirement_count = int(linked_counts.get(int(document.id), 0))
-        confidence_score = round(float(avg_scores.get(int(document.id), 0.0)), 1)
-
-        if linked_requirement_count <= 0:
-            status = 'Not linked'
-        elif confidence_score >= 85:
-            status = 'Strong'
-        elif confidence_score >= 60:
-            status = 'Needs review'
-        else:
-            status = 'Weak'
-
-        ai_evidence_entries.append(
-            {
-                'id': int(document.id),
-                'document_title': document.filename,
-                'document_type': document.content_type or 'Unknown',
-                'source': 'Evidence Repository',
-                'confidence_score': confidence_score,
-                'status': status,
-                'upload_date': document.uploaded_at,
-                'linked_requirement_count': linked_requirement_count,
-                'summary': f'Linked to {linked_requirement_count} requirement(s).',
-                'is_previewable': _is_previewable_document(document),
-            }
+        success, _error_message, matched_count = _analyze_and_persist_document(
+            document,
+            org_id=int(org_id),
+            user_id=int(current_user.id),
         )
-    
-    return render_template(
-        'main/ai_evidence.html',
-        title='AI Evidence',
-        ai_evidence_entries=ai_evidence_entries,
-    )
+        if success:
+            analyzed_count += 1
+            total_mapped += int(matched_count or 0)
+        else:
+            failed_documents.append(document.filename or f'Document {document.id}')
+
+    if analyzed_count > 0:
+        flash(
+            f'Analysis completed for {analyzed_count} document(s) with {total_mapped} total requirement match(es).',
+            'success',
+        )
+    if failed_documents:
+        shown = ', '.join(failed_documents[:3])
+        if len(failed_documents) > 3:
+            shown = f'{shown}, and {len(failed_documents) - 3} more'
+        flash(f'Could not analyze {len(failed_documents)} document(s): {shown}.', 'warning')
+
+    return redirect(url_for('main.evidence_repository'))
+
+@bp.route('/ai-evidence')
+@login_required
+def ai_evidence():
+    """Legacy AI Evidence entry point; redirect to the primary repository review flow."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+    flash('AI evidence review now lives in the Evidence Repository and each document details page.', 'info')
+    return redirect(url_for('main.evidence_repository'))
 
 
 @bp.route('/organization/settings', methods=['GET', 'POST'])
@@ -2701,100 +2862,10 @@ def organization_logo_by_id(org_id):
 @bp.route('/ai-evidence/<int:entry_id>')
 @login_required
 def ai_evidence_detail(entry_id):
-    """AI Evidence detail view using real document + requirement link data."""
+    """Legacy AI Evidence detail entry point; redirect to canonical document details."""
     document = _authorized_org_document_or_404(int(entry_id))
-    org_id = _active_org_id()
-
-    links = (
-        RequirementEvidenceLink.query
-        .filter_by(organization_id=int(org_id), document_id=int(document.id))
-        .order_by(RequirementEvidenceLink.linked_at.desc())
-        .all()
-    )
-
-    requirements = []
-    score_values = []
-    frameworks = set()
-    bucket_counts: dict[str, int] = {}
-
-    for link in links:
-        requirement = getattr(link, 'requirement', None)
-        framework_label = None
-        if requirement and requirement.framework_version:
-            scheme = (requirement.framework_version.scheme or 'NDIS').strip() or 'NDIS'
-            version = (requirement.framework_version.version_label or 'v1.0').strip() or 'v1.0'
-            framework_label = f'{scheme} {version}'
-            frameworks.add(framework_label)
-
-        assessment = None
-        if requirement is not None:
-            assessment = OrganizationRequirementAssessment.query.filter_by(
-                organization_id=int(org_id),
-                requirement_id=int(requirement.id),
-            ).first()
-
-        score = int(assessment.computed_score) if assessment and assessment.computed_score is not None else None
-        if score is not None:
-            score_values.append(score)
-
-        bucket = (link.evidence_bucket or 'unspecified').strip().lower() or 'unspecified'
-        bucket_counts[bucket] = int(bucket_counts.get(bucket, 0)) + 1
-
-        requirements.append(
-            {
-                'requirement_db_id': int(requirement.id) if requirement else None,
-                'requirement_id': (requirement.requirement_id if requirement else None) or f'Requirement #{link.requirement_id}',
-                'framework': framework_label or '—',
-                'bucket': link.evidence_bucket,
-                'note': link.rationale_note,
-                'score': score,
-                'flag': (assessment.computed_flag if assessment else None),
-                'linked_at': link.linked_at,
-            }
-        )
-
-    confidence_score = round((sum(score_values) / len(score_values)), 1) if score_values else 0.0
-    if confidence_score >= 85:
-        risk_level = 'Low'
-        status = 'Strong'
-    elif confidence_score >= 60:
-        risk_level = 'Medium'
-        status = 'Needs review'
-    elif requirements:
-        risk_level = 'High'
-        status = 'Weak'
-    else:
-        risk_level = 'Unknown'
-        status = 'Not linked'
-
-    bucket_summary_parts = [f'{count} {bucket}' for bucket, count in sorted(bucket_counts.items())]
-    ai_notes = 'No evidence buckets linked yet.'
-    if bucket_summary_parts:
-        ai_notes = 'Evidence buckets linked: ' + ', '.join(bucket_summary_parts) + '.'
-
-    entry = {
-        'id': int(document.id),
-        'document_title': document.filename,
-        'document_type': document.content_type or 'Unknown',
-        'source': 'Evidence Repository',
-        'confidence_score': confidence_score,
-        'status': status,
-        'risk_level': risk_level,
-        'summary': f'This document is linked to {len(requirements)} requirement(s).',
-        'ai_notes': ai_notes,
-        'compliance_frameworks': sorted(frameworks),
-        'upload_date': document.uploaded_at,
-        'file_size': document.file_size,
-        'is_previewable': _is_previewable_document(document),
-    }
-
-    return render_template(
-        'main/ai_evidence_detail.html',
-        title='AI Evidence Detail',
-        entry=entry,
-        document=document,
-        linked_requirements=requirements,
-    )
+    flash('AI evidence detail has moved into the document details view.', 'info')
+    return redirect(url_for('main.document_details', doc_id=int(document.id)))
 
 @bp.route('/gap-analysis')
 @login_required
@@ -3191,24 +3262,107 @@ def _tokenize_demo_text(text: str) -> list[str]:
     return unique[:30]
 
 
+def _is_demo_noise_block(text: str) -> bool:
+    import re
+
+    value = (text or '').strip()
+    if not value:
+        return True
+
+    lower = value.lower()
+    noise_phrases = {
+        'uncontrolled document',
+        'document control',
+        'sharepoint',
+        'file path',
+        'all rights reserved',
+        'printed copies',
+        'this document is uncontrolled',
+        'authorised by',
+        'approved by',
+        'reviewed by',
+        'controlled copy',
+        'version history',
+    }
+    if any(phrase in lower for phrase in noise_phrases):
+        return True
+
+    if re.match(r'^(page\s+\d+|version\b|review date\b|effective date\b|document owner\b)', lower):
+        return True
+
+    if re.search(r'[a-z]:\\|/sites/|https?://|\.pdf\b|\.docx\b|\.xlsx\b', lower):
+        return True
+
+    alpha_chars = sum(1 for ch in value if ch.isalpha())
+    separator_chars = sum(1 for ch in value if ch in '._/\\|')
+    if alpha_chars < 20:
+        return True
+    if separator_chars >= 8 and separator_chars > max(6, alpha_chars // 3):
+        return True
+
+    return False
+
+
+def _demo_candidate_blocks(document_text: str) -> list[str]:
+    import re
+
+    value = (document_text or '').replace('\r\n', '\n').strip()
+    if not value:
+        return []
+
+    paragraphs = [part.strip() for part in re.split(r'\n\s*\n+', value) if (part or '').strip()]
+    lines = [part.strip() for part in value.split('\n') if (part or '').strip()]
+
+    candidates = []
+    seen = set()
+    for part in paragraphs + lines:
+        cleaned = re.sub(r'\s+', ' ', (part or '').strip())
+        key = cleaned.lower()
+        if len(cleaned) < 30 or key in seen or _is_demo_noise_block(cleaned):
+            continue
+        seen.add(key)
+        candidates.append(cleaned)
+    return candidates
+
+
+def _looks_like_demo_template(document_text: str) -> bool:
+    import re
+
+    lower = (document_text or '').lower()
+    if 'template' in lower:
+        return True
+
+    placeholder_count = len(re.findall(r'\[[^\]]{2,40}\]|<[^>]{2,40}>', document_text or ''))
+    return placeholder_count >= 3
+
+
 def _rank_demo_snippets(document_text: str, query_text: str, top_k: int = 4) -> list[dict]:
-    blocks = []
-    for part in (document_text or '').split('\n'):
-        cleaned = (part or '').strip()
-        if len(cleaned) >= 30:
-            blocks.append(cleaned)
+    blocks = _demo_candidate_blocks(document_text)
 
     if not blocks:
         return []
 
     query_terms = _tokenize_demo_text(query_text)
+    substantive_terms = {
+        'participant', 'consent', 'complaint', 'complaints', 'feedback', 'privacy', 'dignity', 'rights',
+        'agreement', 'support', 'supports', 'planning', 'assessment', 'culture', 'diversity', 'risk',
+        'review', 'incident', 'governance', 'monitoring', 'confidentiality',
+    }
     scored = []
     for block in blocks:
         lower = block.lower()
-        score = 0
+        score = 0.0
+        matched_terms = 0
         for term in query_terms:
             if term in lower:
-                score += 1
+                score += 1.0
+                matched_terms += 1
+        if matched_terms <= 0:
+            continue
+        if any(term in lower for term in substantive_terms):
+            score += 0.5
+        if len(block) >= 140:
+            score += 0.25
         if score > 0:
             scored.append((score, block))
 
@@ -3216,7 +3370,7 @@ def _rank_demo_snippets(document_text: str, query_text: str, top_k: int = 4) -> 
     selected = scored[:max(1, min(int(top_k or 4), 6))]
     return [
         {
-            'score': int(score),
+            'score': max(1, int(round(score))),
             'text': (text[:420].rstrip() + '...') if len(text) > 420 else text,
         }
         for score, text in selected
@@ -3239,6 +3393,7 @@ def _derive_demo_status(document_text: str, query_text: str, snippets: list[dict
     normalized_mode = (mode or 'balanced').strip().lower()
     if normalized_mode not in {'strict', 'balanced'}:
         normalized_mode = 'balanced'
+    is_template_like = _looks_like_demo_template(document_text)
 
     # Strict mode is intentionally conservative to avoid over-claiming readiness.
     if normalized_mode == 'strict':
@@ -3262,9 +3417,33 @@ def _derive_demo_status(document_text: str, query_text: str, snippets: list[dict
         return 'Mature', round(confidence, 3)
     if score >= 0.48 and snippet_count >= 2:
         return 'OK', round(confidence, 3)
+    if is_template_like and coverage >= 0.16 and snippet_count >= 2:
+        return 'OK', round(min(confidence, 0.58), 3)
     if score >= 0.22:
         return 'High risk gap', round(confidence, 3)
     return 'Critical gap', round(confidence, 3)
+
+
+def _build_demo_rag_query(question_text: str, document_text: str) -> str:
+    lower = f'{question_text or ""} {(document_text or "")[:2500]}'.lower()
+    expansions = []
+    topic_bundles = [
+        ({'complaint', 'complaints', 'feedback', 'grievance'}, 'complaints management resolution participant feedback'),
+        ({'consent', 'privacy', 'dignity', 'confidential', 'confidentiality'}, 'participant rights privacy dignity information management consent'),
+        ({'service agreement', 'agreement', 'service terms', 'supports'}, 'service agreements with participants provision of supports responsive support provision'),
+        ({'support plan', 'care plan', 'assessment', 'planning', 'goals'}, 'support planning participant needs preferences goals risk assessments'),
+        ({'culture', 'cultural', 'diversity', 'inclusive', 'inclusion', 'beliefs', 'values'}, 'person centred supports individual values beliefs participant rights cultural inclusion'),
+        ({'risk', 'governance', 'quality', 'incident', 'information management'}, 'governance operational management risk management quality management information management'),
+    ]
+
+    for keywords, expansion in topic_bundles:
+        if any(keyword in lower for keyword in keywords):
+            expansions.append(expansion)
+
+    if not expansions:
+        return question_text
+
+    return ' '.join([question_text.strip()] + expansions).strip()
 
 
 def _ensure_demo_summary_text(
@@ -3519,6 +3698,17 @@ def ai_demo():
 
     corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
     corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
+    try:
+        from app.models import DemoAnalysisResult
+        recent_analyses = (
+            DemoAnalysisResult.query
+            .filter_by(organization_id=int(org_id))
+            .order_by(DemoAnalysisResult.created_at.desc())
+            .limit(10)
+            .all()
+        )
+    except Exception:
+        recent_analyses = []
     return render_template(
         'main/ai_demo.html',
         title='AI Demo Lab',
@@ -3526,6 +3716,7 @@ def ai_demo():
         demo_model=current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free',
         has_openrouter_key=bool((current_app.config.get('OPENROUTER_API_KEY') or '').strip()),
         has_ndis_corpus=bool(os.path.exists(corpus_abs)),
+        recent_analyses=recent_analyses,
     )
 
 
@@ -3562,10 +3753,13 @@ def ai_demo_analyze_api():
     rag_citations = []
     rag_warning = None
     warning_items: list[dict] = []
+    _demo_retrieval_mode = 'lexical'
+    rag_query_text = _build_demo_rag_query(question, doc_text)
     corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
     corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
     try:
-        rag_result = rag_query_service.query(corpus_path=corpus_abs, query_text=question, requirement_id='', top_k=3)
+        rag_result = rag_query_service.query(corpus_path=corpus_abs, query_text=rag_query_text, requirement_id='', top_k=3)
+        _demo_retrieval_mode = getattr(rag_result, 'retrieval_mode', 'lexical')
         rag_citations = [
             {
                 'chunk_id': c.chunk_id,
@@ -3576,6 +3770,8 @@ def ai_demo_analyze_api():
             }
             for c in rag_result.citations
         ]
+        if _demo_retrieval_mode == 'lexical' and rag_citations:
+            warning_items.append({'source': 'rag', 'message': 'Semantic embeddings computing on first run — using keyword matching now. Reload to use hybrid mode.'})
     except FileNotFoundError:
         rag_warning = 'NDIS corpus is not built yet; showing document-only analysis.'
         warning_items.append({'source': 'rag', 'message': rag_warning})
@@ -3600,6 +3796,33 @@ def ai_demo_analyze_api():
         citations=rag_citations,
     )
 
+    provider_label = 'openrouter' if not llm_warning else 'deterministic'
+    model_label = used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
+
+    # Persist result (non-blocking — never fail the API on a DB error)
+    try:
+        from app.models import DemoAnalysisResult
+        record = DemoAnalysisResult(
+            organization_id=int(org_id),
+            user_id=int(current_user.id),
+            filename=(getattr(uploaded, 'filename', '') or '')[:255] or None,
+            question=(question or '')[:700] or None,
+            status=status,
+            confidence=confidence,
+            analysis_mode=analysis_mode,
+            summary=ai_summary,
+            snippet_count=len(snippets),
+            citation_count=len(rag_citations),
+            provider=provider_label,
+            model_used=(model_label or '')[:120] or None,
+            retrieval_mode=_demo_retrieval_mode,
+        )
+        db.session.add(record)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to persist demo analysis result')
+
     warnings = [w.get('message', '') for w in warning_items if (w.get('message') or '').strip()]
     return jsonify(
         {
@@ -3612,10 +3835,11 @@ def ai_demo_analyze_api():
             'warnings': warnings,
             'warning_items': warning_items,
             'meta': {
-                'provider': 'openrouter' if not llm_warning else 'deterministic',
-                'model': used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free',
+                'provider': provider_label,
+                'model': model_label,
                 'analysis_mode': analysis_mode,
-                'scoring_version': 'demo-v2',
+                'scoring_version': 'demo-v3',
+                'retrieval_mode': _demo_retrieval_mode,
                 'document_chars': len(doc_text or ''),
                 'temporary_processing_only': True,
             },
@@ -3651,11 +3875,10 @@ def rag_query_api():
         return jsonify({'success': False, 'error': 'query or requirement_id is required'}), 400
 
     corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
-    corpus_path = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
-
+    corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
     try:
         result = rag_query_service.query(
-            corpus_path=corpus_path,
+            corpus_path=corpus_abs,
             query_text=query_text,
             requirement_id=requirement_id,
             top_k=top_k,

@@ -473,22 +473,6 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.ai_evidence' %}active{% endif %}"
-                href="{{ url_for('main.ai_evidence') }}"
-              >
-                <i class="bi bi-robot me-1"></i>AI Evidence
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.ai_demo' %}active{% endif %}"
-                href="{{ url_for('main.ai_demo') }}"
-              >
-                <i class="bi bi-flask me-1"></i>AI Demo
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
                 class="nav-link nav-btn {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
                 href="{{ url_for('main.gap_analysis') }}"
               >
