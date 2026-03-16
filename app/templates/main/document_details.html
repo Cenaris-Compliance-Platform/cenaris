@@ -46,10 +46,16 @@
                                 </span>
                             </div>
                             <div class="d-flex gap-2">
+                                <form method="POST" action="{{ url_for('main.analyze_document', doc_id=document.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-cpu me-2"></i>{% if document.ai_analysis_at %}Re-analyze{% else %}Analyze{% endif %}
+                                    </button>
+                                </form>
                                 <a href="{{ url_for('main.preview_document', doc_id=document.id) }}" target="_blank" class="btn btn-outline-primary">
                                     <i class="bi bi-eye me-2"></i>Preview
                                 </a>
-                                <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-primary">
+                                <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-outline-primary">
                                     <i class="bi bi-download me-2"></i>Download
                                 </a>
                                 <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}')">
@@ -70,6 +76,81 @@
     <div class="row">
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-body-tertiary border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clipboard-data me-2 text-primary"></i>
+                        Review Summary
+                    </h5>
+                    {% if document.ai_analysis_at %}
+                    <small class="text-body-secondary">Last analysed {{ document.ai_analysis_at | datetime_format('%b %d, %Y at %I:%M %p') }}</small>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if document.ai_analysis_at %}
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 h-100 bg-body-tertiary">
+                                <div class="text-body-secondary small mb-1">Status</div>
+                                <div>
+                                    <span class="badge {% if document.ai_status == 'Mature' %}bg-primary{% elif document.ai_status == 'OK' %}bg-success{% elif document.ai_status == 'High risk gap' %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ document.ai_status or 'Pending' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 h-100 bg-body-tertiary">
+                                <div class="text-body-secondary small mb-1">Confidence</div>
+                                <div class="fw-semibold">{% if document.ai_confidence is not none %}{{ (document.ai_confidence * 100)|round(0)|int }}%{% else %}—{% endif %}</div>
+                                <div class="small text-body-secondary mt-1">Confidence is a review signal, not a final compliance decision.</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 h-100 bg-body-tertiary">
+                                <div class="text-body-secondary small mb-1">Main Requirement Area</div>
+                                <div class="fw-semibold">{{ document.ai_focus_area or 'General Compliance Evidence' }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="small text-body-secondary mb-1">Review Focus</div>
+                        <div class="border rounded p-3 bg-body-tertiary small">{{ document.ai_question or 'No review focus recorded.' }}</div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 h-100">
+                                <div class="fw-semibold mb-2">Why this status</div>
+                                <div class="small text-body-secondary" style="white-space: pre-wrap;">{{ summary_sections.why or 'Run analysis to generate an explanation.' }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 h-100">
+                                <div class="fw-semibold mb-2">Missing evidence</div>
+                                <div class="small text-body-secondary" style="white-space: pre-wrap;">{{ summary_sections.missing or 'No missing evidence extracted yet.' }}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3 h-100">
+                                <div class="fw-semibold mb-2">Next action</div>
+                                <div class="small text-body-secondary" style="white-space: pre-wrap;">{{ summary_sections.next_action or 'No next action available yet.' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <div class="text-body-secondary mb-3">This document has not been analysed yet.</div>
+                        <form method="POST" action="{{ url_for('main.analyze_document', doc_id=document.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-cpu me-2"></i>Analyze This Document
+                            </button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-body-tertiary border-bottom">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-info-circle me-2 text-primary"></i>
@@ -84,12 +165,6 @@
                                     <i class="bi bi-file-earmark me-2"></i>Original Filename
                                 </td>
                                 <td class="fw-medium">{{ document.filename }}</td>
-                            </tr>
-                            <tr>
-                                <td class="text-body-secondary">
-                                    <i class="bi bi-hash me-2"></i>System Filename
-                                </td>
-                                <td><code>{{ document.filename }}</code></td>
                             </tr>
                             <tr>
                                 <td class="text-body-secondary">
@@ -148,6 +223,48 @@
                     </table>
                 </div>
             </div>
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-body-tertiary border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-diagram-3 me-2 text-primary"></i>
+                        Mapped NDIS Requirements
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if linked_requirements %}
+                    <div class="d-flex flex-column gap-3">
+                        {% for link, requirement, assessment in linked_requirements %}
+                        <div class="border rounded p-3">
+                            <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                                <div>
+                                    <div class="fw-semibold">{{ requirement.requirement_id }}{% if requirement.module_name %} · {{ requirement.module_name }}{% endif %}</div>
+                                    <div class="small text-body-secondary">{{ requirement.standard_name or requirement.outcome_text or requirement.quality_indicator_text or 'Requirement mapping' }}</div>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-body-tertiary text-body border">{{ link.evidence_bucket|capitalize }}</span>
+                                    {% if assessment and assessment.computed_flag %}
+                                    <div class="small text-body-secondary mt-1">{{ assessment.computed_flag }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% if link.rationale_note %}
+                            <div class="small mb-2"><strong>Why matched:</strong> {{ link.rationale_note }}</div>
+                            {% endif %}
+                            {% if requirement.system_evidence_required or requirement.implementation_evidence_required or requirement.workforce_evidence_required or requirement.participant_evidence_required %}
+                            <div class="small text-body-secondary">
+                                <strong>Missing evidence guidance:</strong>
+                                {{ requirement.system_evidence_required or requirement.implementation_evidence_required or requirement.workforce_evidence_required or requirement.participant_evidence_required }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-body-secondary small">Run analysis to map this document to specific NDIS requirements.</div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
         
         <div class="col-lg-4">
@@ -161,15 +278,18 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
+                        <form method="POST" action="{{ url_for('main.analyze_document', doc_id=document.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-cpu me-2"></i>{% if document.ai_analysis_at %}Re-analyze{% else %}Analyze{% endif %} Document
+                            </button>
+                        </form>
                         <a href="{{ url_for('main.preview_document', doc_id=document.id) }}" target="_blank" class="btn btn-outline-primary">
                             <i class="bi bi-eye me-2"></i>Preview Document
                         </a>
                         <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-outline-primary">
                             <i class="bi bi-download me-2"></i>Download Document
                         </a>
-                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ document.id }}')">
-                            <i class="bi bi-hash me-2"></i>Copy Document ID
-                        </button>
                         <hr>
                         <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}')">
                             <i class="bi bi-trash me-2"></i>Delete Document
@@ -286,28 +406,5 @@
         });
     }
     
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text).then(function() {
-            // Show success toast
-            const toastHtml = `
-                <div class="toast align-items-center text-white bg-success border-0 position-fixed" 
-                     style="top: 20px; right: 20px; z-index: 9999;" role="alert">
-                    <div class="d-flex">
-                        <div class="toast-body">
-                            <i class="bi bi-check-circle me-2"></i>Copied to clipboard!
-                        </div>
-                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                    </div>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', toastHtml);
-            const toastElement = document.querySelector('.toast:last-child');
-            const toast = new bootstrap.Toast(toastElement);
-            toast.show();
-            toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
-        }).catch(function(err) {
-            alert('Failed to copy: ' + err);
-        });
-    }
 </script>
 {% endblock %}

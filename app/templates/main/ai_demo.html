@@ -122,6 +122,40 @@
     </div>
   </div>
 </div>
+
+{% if recent_analyses %}
+<div class="card border-0 shadow-sm mt-4">
+  <div class="card-header bg-transparent border-bottom fw-semibold small">
+    Recent Analyses (last 10)
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 small">
+      <thead class="table-light">
+        <tr>
+          <th>Document</th>
+          <th>Status</th>
+          <th>Confidence</th>
+          <th>Retrieval</th>
+          <th>Provider</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recent_analyses %}
+        <tr>
+          <td class="text-truncate" style="max-width:180px;" title="{{ r.filename or '' }}">{{ r.filename or '—' }}</td>
+          <td><span class="badge bg-secondary">{{ r.status or '—' }}</span></td>
+          <td>{% if r.confidence is not none %}{{ (r.confidence * 100)|round(0)|int }}%{% else %}—{% endif %}</td>
+          <td><span class="badge bg-info text-dark">{{ r.retrieval_mode or 'lexical' }}</span></td>
+          <td>{{ r.provider or '—' }}</td>
+          <td>{{ r.created_at.strftime('%d %b %y %H:%M') if r.created_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

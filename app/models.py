@@ -284,7 +284,17 @@ class Document(db.Model):
     blob_name = db.Column(db.String(255))
     file_size = db.Column(db.Integer)
     content_type = db.Column(db.String(50))
+    extracted_text = db.Column(db.Text, nullable=True)
     search_text = db.Column(db.Text, nullable=True)
+    ai_status = db.Column(db.String(50), nullable=True)
+    ai_confidence = db.Column(db.Float, nullable=True)
+    ai_focus_area = db.Column(db.String(80), nullable=True)
+    ai_question = db.Column(db.Text, nullable=True)
+    ai_summary = db.Column(db.Text, nullable=True)
+    ai_provider = db.Column(db.String(50), nullable=True)
+    ai_model = db.Column(db.String(120), nullable=True)
+    ai_retrieval_mode = db.Column(db.String(20), nullable=True)
+    ai_analysis_at = db.Column(db.DateTime, nullable=True)
     uploaded_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'))
@@ -505,6 +515,44 @@ class RequirementEvidenceLink(db.Model):
         ),
         db.Index('ix_requirement_evidence_links_org_requirement', 'organization_id', 'requirement_id'),
         db.Index('ix_requirement_evidence_links_document', 'document_id'),
+    )
+
+
+class DemoAnalysisResult(db.Model):
+    """
+    Persisted record of every AI demo analysis run.
+    Uploaded file content is NOT stored — only metadata and the AI output.
+    """
+    __tablename__ = 'demo_analysis_results'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Input metadata (no file content stored)
+    filename = db.Column(db.String(255), nullable=True)
+    question = db.Column(db.Text, nullable=True)
+
+    # AI outputs
+    status = db.Column(db.String(50), nullable=True)      # Mature / OK / High risk gap / Critical gap
+    confidence = db.Column(db.Float, nullable=True)       # 0.0–1.0
+    analysis_mode = db.Column(db.String(20), default='balanced', nullable=False)
+    summary = db.Column(db.Text, nullable=True)
+    snippet_count = db.Column(db.Integer, default=0, nullable=False)
+    citation_count = db.Column(db.Integer, default=0, nullable=False)
+
+    # Engine metadata
+    provider = db.Column(db.String(50), nullable=True)    # openrouter / deterministic
+    model_used = db.Column(db.String(120), nullable=True)
+    retrieval_mode = db.Column(db.String(20), nullable=True)  # hybrid / lexical
+
+    organization = db.relationship('Organization', lazy='select')
+    user = db.relationship('User', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_demo_analysis_org_created', 'organization_id', 'created_at'),
+        db.Index('ix_demo_analysis_user_created', 'user_id', 'created_at'),
     )
 
 

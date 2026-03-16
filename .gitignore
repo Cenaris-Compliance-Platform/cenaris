@@ -67,3 +67,6 @@ coverage.xml
 bandit-report.json
 pylint-report.txt
 *.sarif
+
+# Local evaluation assets
+policies/

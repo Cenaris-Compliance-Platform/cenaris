@@ -1,0 +1,74 @@
+......F....                                                              [100%]
+================================== FAILURES ===================================
+_____________________ test_notifications_page_admin_only ______________________
+
+client = <FlaskClient <Flask 'app'>>, app = <Flask 'app'>
+db_session = <SQLAlchemy sqlite:///C:\Users\DELL\Desktop\cenaris\instance\test.db>
+seed_org_user = (1, 1, 1)
+
+    def test_notifications_page_admin_only(client, app, db_session, seed_org_user):
+        from app.models import OrganizationMembership, User
+    
+        org_id, _admin_user_id, _membership_id = seed_org_user
+    
+        with app.app_context():
+            member = User(email='member@example.com', email_verified=True, is_active=True)
+            member.set_password('Passw0rd1')
+            member.organization_id = int(org_id)
+            db_session.session.add(member)
+            db_session.session.flush()
+    
+            db_session.session.add(
+                OrganizationMembership(
+                    organization_id=int(org_id),
+                    user_id=int(member.id),
+                    role='User',
+                    is_active=True,
+                )
+            )
+            db_session.session.commit()
+    
+        login_resp = client.post(
+            '/auth/login',
+            data={'email': 'member@example.com', 'password': 'Passw0rd1', 'remember_me': 'y'},
+            follow_redirects=False,
+            environ_base={'REMOTE_ADDR': '127.0.0.1'},
+        )
+        assert login_resp.status_code in {302, 303}
+    
+>       with pytest.raises(Forbidden):
+E       Failed: DID NOT RAISE <class 'werkzeug.exceptions.Forbidden'>
+
+tests\test_admin_notifications.py:38: Failed
+----------------------------- Captured log setup ------------------------------
+INFO     app.services.logging_service:logging_service.py:110 Security logger Azure Monitor integration enabled
+WARNING  opentelemetry.trace:__init__.py:537 Overriding of current TracerProvider is not allowed
+INFO     app.services.logging_service:logging_service.py:407 Application Insights integration enabled
+INFO     app.services.logging_service:logging_service.py:411 Application logging system initialized
+INFO     app.services.monitoring_service:monitoring_service.py:113 [MONITORING] Reusing existing tracer from logging service
+WARNING  opentelemetry.metrics._internal:__init__.py:791 Overriding of current MeterProvider is not allowed
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:209 An instrument with name http.server.request.duration, type Histogram, unit ms and description HTTP request duration in milliseconds has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:99 An instrument with name http.server.requests.total, type Counter, unit 1 and description Total number of HTTP requests has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:278 An instrument with name system.cpu.usage, type ObservableGauge, unit % and description CPU usage percentage has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:278 An instrument with name system.memory.usage, type ObservableGauge, unit % and description Memory usage percentage has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:278 An instrument with name system.disk.usage, type ObservableGauge, unit % and description Disk usage percentage has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:209 An instrument with name db.query.duration, type Histogram, unit ms and description Database query duration in milliseconds has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:278 An instrument with name app.users.active, type ObservableGauge, unit 1 and description Number of currently active users has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:99 An instrument with name app.user.sessions, type Counter, unit 1 and description User session events has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:209 An instrument with name http.server.duration, type Histogram, unit ms and description Measures the duration of inbound HTTP requests. has been created already.
+WARNING  opentelemetry.sdk.metrics._internal:__init__.py:136 An instrument with name http.server.active_requests, type UpDownCounter, unit {request} and description Number of active HTTP server requests. has been created already.
+INFO     app.services.monitoring_service:monitoring_service.py:229 [MONITORING] Flask auto-instrumentation enabled
+WARNING  opentelemetry.instrumentation.instrumentor:instrumentor.py:100 Attempting to instrument while already instrumented
+INFO     app.services.monitoring_service:monitoring_service.py:233 [MONITORING] Requests auto-instrumentation enabled
+WARNING  opentelemetry.instrumentation.instrumentor:instrumentor.py:100 Attempting to instrument while already instrumented
+INFO     app.services.monitoring_service:monitoring_service.py:243 [MONITORING] SQLAlchemy auto-instrumentation enabled
+INFO     app.services.monitoring_service:monitoring_service.py:367 [MONITORING] System health monitoring thread started
+INFO     app.services.monitoring_service:monitoring_service.py:156 [MONITORING] Enhanced monitoring initialized successfully
+INFO     app.services.monitoring_service:monitoring_service.py:157 [MONITORING] Tracking: Performance, System Health, Database, Errors
+---------------------------- Captured stderr call -----------------------------
+[2026-03-15 14:41:48] [SECURITY] INFO: {"event_type": "LOGIN_SUCCESS", "description": "User logged in successfully", "timestamp": "2026-03-15T09:41:48.908383+00:00", "user_id": 2, "org_id": null, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "details": {"email": "member@example.com", "provider": "password"}}
+[2026-03-15 14:41:48] [ACCESS] {"method": "POST", "path": "/auth/login", "status_code": 302, "duration_ms": 646.22, "user_id": 2, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "timestamp": "2026-03-15T09:41:48.912661+00:00"}
+[2026-03-15 14:41:48] [ACCESS] {"method": "GET", "path": "/notifications", "status_code": 403, "duration_ms": 12.85, "user_id": 2, "ip_address": "127.0.0.1", "user_agent": "Werkzeug/2.3.7", "timestamp": "2026-03-15T09:41:48.927160+00:00"}
+=========================== short test summary info ===========================
+FAILED tests/test_admin_notifications.py::test_notifications_page_admin_only
+1 failed, 10 passed in 33.81s
