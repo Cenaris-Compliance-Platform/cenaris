@@ -83,6 +83,11 @@
                         </h5>
                         {% if documents %}
                             <div class="d-flex gap-2">
+                                <form method="GET" action="{{ url_for('main.ai_demo') }}" id="bulkAiReviewForm" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary" id="bulkAiReviewBtn" disabled>
+                                        <i class="bi bi-stars me-1"></i>Review Selected
+                                    </button>
+                                </form>
                                 <form method="POST" action="{{ url_for('main.analyze_selected_documents') }}" id="bulkAnalyzeForm" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                                     <button type="submit" class="btn btn-sm btn-primary" id="bulkAnalyzeBtn" disabled>
@@ -220,7 +225,7 @@
                                                                 </form>
                                                             </li>
                                                             <li>
-                                                                <a class="dropdown-item" href="{{ url_for('main.ai_demo') }}">
+                                                                <a class="dropdown-item" href="{{ url_for('main.ai_demo', doc_ids=document.id) }}">
                                                                     <i class="bi bi-stars me-2"></i>Open AI Review
                                                                 </a>
                                                             </li>
@@ -304,7 +309,7 @@
                                                             </form>
                                                         </li>
                                                         <li>
-                                                            <a class="dropdown-item" href="{{ url_for('main.ai_demo') }}">
+                                                            <a class="dropdown-item" href="{{ url_for('main.ai_demo', doc_ids=document.id) }}">
                                                                 <i class="bi bi-stars me-2"></i>Open AI Review
                                                             </a>
                                                         </li>
@@ -491,6 +496,8 @@
 
     // Prevent dropdown menus from being clipped inside scroll/overflow containers.
     document.addEventListener('DOMContentLoaded', function () {
+        const bulkAiReviewForm = document.getElementById('bulkAiReviewForm');
+        const bulkAiReviewButton = document.getElementById('bulkAiReviewBtn');
         const bulkAnalyzeForm = document.getElementById('bulkAnalyzeForm');
         const bulkAnalyzeButton = document.getElementById('bulkAnalyzeBtn');
         const bulkDeleteForm = document.getElementById('bulkDeleteForm');
@@ -517,6 +524,9 @@
 
         function refreshBulkState() {
             const selected = rowChecks.filter((c) => c.checked);
+            if (bulkAiReviewButton) {
+                bulkAiReviewButton.disabled = selected.length === 0;
+            }
             if (bulkAnalyzeButton) {
                 bulkAnalyzeButton.disabled = selected.length === 0;
             }
@@ -530,6 +540,7 @@
                 selectAll.checked = rowChecks.length > 0 && selected.length === rowChecks.length;
             }
 
+            syncSelectedDocIds(bulkAiReviewForm, selected);
             syncSelectedDocIds(bulkAnalyzeForm, selected);
             syncSelectedDocIds(bulkDeleteForm, selected);
             syncSelectedDocIds(bulkForm, selected);
