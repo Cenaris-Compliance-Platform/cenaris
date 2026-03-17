@@ -5,40 +5,19 @@
   <div class="row mb-4">
     <div class="col-12 d-flex justify-content-between align-items-center">
       <div>
-        <h1 class="h3 fw-bold mb-1">AI Review Workspace</h1>
-        <p class="text-body-secondary mb-0">Review uploaded evidence or selected repository documents with one dedicated AI workspace.</p>
+        <h1 class="h3 fw-bold mb-1">AI Demo Lab</h1>
+        <p class="text-body-secondary mb-0">Temporary test screen: upload one file, run RAG-style analysis, and inspect proposed status.</p>
       </div>
     </div>
   </div>
 
   <div class="alert alert-warning alert-permanent border d-flex flex-column gap-1" role="alert">
-    <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Decision-support output</div>
+    <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Demo-only output</div>
     <div class="small">
-      Results here support review decisions, but they are not final audit or legal outcomes.
-      Repository documents stay in storage; temporary uploads are processed in memory only.
+      This screen is for product validation only. Results are decision-support, not final audit/legal outcomes.
+      Uploaded files here are processed in memory and are not saved as permanent evidence.
     </div>
   </div>
-
-  {% if selected_documents %}
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-        <div>
-          <div class="fw-semibold mb-1">Selected repository documents</div>
-          <div class="small text-body-secondary">Choose one of the selected repository files to analyze in this workspace.</div>
-        </div>
-        <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-folder2-open me-1"></i>Back to Repository
-        </a>
-      </div>
-      <div class="mt-3 d-flex flex-wrap gap-2">
-        {% for document in selected_documents %}
-        <span class="badge bg-body-tertiary text-body border px-3 py-2">{{ document.filename }}</span>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-  {% endif %}
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
@@ -57,21 +36,10 @@
     <div class="card-body">
       <form id="aiDemoForm" class="row g-3" data-skip-loading="1">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        {% if selected_documents %}
         <div class="col-md-5">
-          <label for="storedDocId" class="form-label">Repository document</label>
-          <select id="storedDocId" name="stored_doc_id" class="form-select">
-            {% for document in selected_documents %}
-            <option value="{{ document.id }}" {% if loop.first %}selected{% endif %}>{{ document.filename }}</option>
-            {% endfor %}
-          </select>
-          <div class="form-text">Analyzes the selected stored document without re-uploading it.</div>
-        </div>
-        {% endif %}
-        <div class="col-md-5">
-          <label for="demoFile" class="form-label">Temporary upload{% if selected_documents %} (optional){% endif %}</label>
-          <input id="demoFile" name="file" type="file" class="form-control" accept=".txt,.pdf,.docx" {% if not selected_documents %}required{% endif %} />
-          <div class="form-text">Use this when you want to test a file without adding it to the repository.</div>
+          <label for="demoFile" class="form-label">Document (TXT, PDF, DOCX)</label>
+          <input id="demoFile" name="file" type="file" class="form-control" accept=".txt,.pdf,.docx" required />
+          <div class="form-text">Max size 8MB. Temporary processing only.</div>
         </div>
         <div class="col-md-7">
           <label for="demoQuestion" class="form-label">Question to AI</label>
@@ -116,7 +84,6 @@
     <div class="card-body">
       <div class="mb-3">
         <h5 class="card-title mb-2">Analysis Result</h5>
-        <div class="small text-body-secondary mb-3" id="resultSourceMeta"></div>
         <div class="row g-2 align-items-stretch">
           <div class="col-md-6">
             <div class="border rounded p-3 h-100 bg-body-tertiary">
@@ -155,40 +122,6 @@
     </div>
   </div>
 </div>
-
-{% if recent_analyses %}
-<div class="card border-0 shadow-sm mt-4">
-  <div class="card-header bg-transparent border-bottom fw-semibold small">
-    Recent Analyses (last 10)
-  </div>
-  <div class="table-responsive">
-    <table class="table table-sm table-hover mb-0 small">
-      <thead class="table-light">
-        <tr>
-          <th>Document</th>
-          <th>Status</th>
-          <th>Confidence</th>
-          <th>Retrieval</th>
-          <th>Provider</th>
-          <th>Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in recent_analyses %}
-        <tr>
-          <td class="text-truncate" style="max-width:180px;" title="{{ r.filename or '' }}">{{ r.filename or '—' }}</td>
-          <td><span class="badge bg-secondary">{{ r.status or '—' }}</span></td>
-          <td>{% if r.confidence is not none %}{{ (r.confidence * 100)|round(0)|int }}%{% else %}—{% endif %}</td>
-          <td><span class="badge bg-info text-dark">{{ r.retrieval_mode or 'lexical' }}</span></td>
-          <td>{{ r.provider or '—' }}</td>
-          <td>{{ r.created_at.strftime('%d %b %y %H:%M') if r.created_at else '—' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -205,15 +138,12 @@
     const statusBadge = document.getElementById('resultStatusBadge');
     const confidenceEl = document.getElementById('resultConfidence');
     const summaryEl = document.getElementById('resultSummary');
-    const resultSourceMetaEl = document.getElementById('resultSourceMeta');
     const warningsEl = document.getElementById('resultWarnings');
     const snippetsEl = document.getElementById('resultSnippets');
     const citationsEl = document.getElementById('resultCitations');
     const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
     const progressWrap = document.getElementById('demoProgressWrap');
     const progressBar = document.getElementById('demoProgressBar');
-    const storedDocSelect = document.getElementById('storedDocId');
-    const demoFileInput = document.getElementById('demoFile');
     let progressTimer = null;
     let progressValue = 0;
     let requestInFlight = false;
@@ -240,22 +170,6 @@
     };
 
     renderIdleButton();
-
-    const syncSourceInputs = () => {
-      if (!demoFileInput) {
-        return;
-      }
-      const hasStoredDocument = !!(storedDocSelect && (storedDocSelect.value || '').trim());
-      demoFileInput.required = !hasStoredDocument;
-    };
-
-    if (storedDocSelect) {
-      storedDocSelect.addEventListener('change', syncSourceInputs);
-    }
-    if (demoFileInput) {
-      demoFileInput.addEventListener('change', syncSourceInputs);
-    }
-    syncSourceInputs();
 
     const setRunning = (running, text) => {
       requestInFlight = !!running;
@@ -450,12 +364,7 @@
         confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
         const provider = ((payload.meta || {}).provider) || 'deterministic';
         const model = ((payload.meta || {}).model) || '-';
-        const source = ((payload.meta || {}).source) || 'upload';
-        const filename = ((payload.meta || {}).filename) || 'Untitled document';
         resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}`;
-        if (resultSourceMetaEl) {
-          resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Temporary upload'} | Document: ${filename}`;
-        }
         const summary = ((payload.summary || '') + '').trim();
         if (summary.length > 0) {
           summaryEl.textContent = summary;

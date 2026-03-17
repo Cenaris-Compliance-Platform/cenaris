@@ -42,6 +42,8 @@ def test_ai_review_workspace_shows_selected_repository_documents(client, app, db
     assert b'policy-a.txt' in workspace_resp.data
     assert b'policy-b.txt' in workspace_resp.data
     assert b'Repository document' in workspace_resp.data
+    assert b'Temporary upload' not in workspace_resp.data
+    assert b'name="file"' not in workspace_resp.data
 
 
 def test_ai_review_api_can_analyze_stored_repository_document(client, app, db_session, seed_org_user, monkeypatch):
@@ -120,3 +122,58 @@ def test_ai_review_api_can_analyze_stored_repository_document(client, app, db_se
     assert payload['meta']['stored_doc_id'] == doc_id
     assert payload['meta']['filename'] == 'incident-policy.txt'
     assert len(payload['citations']) == 1
+
+
+def test_ai_review_followup_api_returns_answer_for_workspace_document(client, app, db_session, seed_org_user, monkeypatch):
+    from app.models import Document
+    from tests.conftest import login
+    import app.main.routes as routes
+
+    org_id, user_id, _membership_id = seed_org_user
+
+    with app.app_context():
+        document = Document(
+            filename='followup-policy.txt',
+            blob_name='org_1/followup-policy.txt',
+            file_size=256,
+            content_type='text/plain',
+            uploaded_by=int(user_id),
+            organization_id=int(org_id),
+            is_active=True,
+        )
+        db_session.session.add(document)
+        db_session.session.commit()
+        doc_id = int(document.id)
+
+    monkeypatch.setattr(
+        routes,
+        '_openrouter_demo_followup',
+        lambda **kwargs: ('Focus on missing implementation records and review cadence evidence.', None),
+    )
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    followup_resp = client.post(
+        '/api/ai/demo/followup',
+        json={
+            'stored_doc_id': doc_id,
+            'question': 'What should I fix first?',
+            'base_question': 'Does this support incident readiness?',
+            'base_summary': 'Missing implementation evidence and review cadence detail.',
+            'citations': [
+                {
+                    'source_id': 'ndis',
+                    'page_number': 3,
+                    'text': 'Incident management systems must be reviewed regularly.',
+                }
+            ],
+        },
+        follow_redirects=False,
+    )
+
+    assert followup_resp.status_code == 200
+    payload = followup_resp.get_json()
+    assert payload['success'] is True
+    assert 'missing implementation records' in payload['answer']
+    assert payload['meta']['stored_doc_id'] == doc_id

@@ -2928,7 +2928,7 @@ def ai_evidence_detail(entry_id):
 @bp.route('/gap-analysis')
 @login_required
 def gap_analysis():
-    """Gap Analysis route."""
+    """Legacy compliance dashboard route; redirects to AI Review workspace."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -2936,70 +2936,14 @@ def gap_analysis():
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
-
-    # Get real ADLS data (org-scoped). Keep this endpoint quiet to avoid slow log I/O.
-    summary = azure_data_service.get_dashboard_summary(user_id=current_user.id, organization_id=org_id)
-    
-    # Build gap analysis data from ADLS
-    gap_data = []
-    
-    if summary.get('file_summaries'):
-        for file_summary in summary['file_summaries']:
-            frameworks_data = file_summary.get('frameworks', [])
-            
-            for framework_data in frameworks_data:
-                # Map status from ADLS to display format
-                status = framework_data.get('status', '').strip()
-                if status.lower() == 'complete':
-                    display_status = 'Complete'
-                elif status.lower() == 'needs review':
-                    display_status = 'Needs Review'
-                elif status.lower() == 'missing':
-                    display_status = 'Missing'
-                else:
-                    display_status = status
-                
-                item = {
-                    'requirement_name': framework_data['name'],
-                    'status': display_status,
-                    'completion_percentage': round(framework_data['score'], 1),  # Score is already a percentage
-                    'supporting_evidence': file_summary.get('file_name', 'compliance_summary.csv'),
-                    'last_updated': file_summary.get('last_updated')
-                }
-                gap_data.append(item)
-    
-    # Calculate summary stats from gap_data
-    total = len(gap_data)
-    met = len([g for g in gap_data if g['status'] == 'Complete'])
-    pending = len([g for g in gap_data if g['status'] == 'Needs Review'])
-    not_met = len([g for g in gap_data if g['status'] == 'Missing'])
-    
-    # Calculate overall compliance percentage from average of all framework scores
-    if gap_data:
-        avg_percentage = sum([g['completion_percentage'] for g in gap_data]) / len(gap_data)
-    else:
-        avg_percentage = 0
-    
-    summary_stats = {
-        'total': total,
-        'met': met,
-        'pending': pending,
-        'not_met': not_met,
-        'compliance_percentage': int(avg_percentage)
-    }
-    
-    return render_template('main/gap_analysis.html',
-                         title='Gap Analysis',
-                         gaps=[],  # Keep for backward compatibility
-                         gap_data=gap_data,
-                         summary_stats=summary_stats,
-                         ml_summary=summary)
+    flash('Gap Analysis has moved into AI Review workspaces.', 'info')
+    return redirect(url_for('main.ai_demo'))
 
 
 @bp.route('/compliance-requirements')
 @login_required
 def compliance_requirements():
-    """Organization-scoped compliance requirements and assessment view."""
+    """Legacy requirements view; redirects to AI Review workspace."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -3007,70 +2951,8 @@ def compliance_requirements():
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
-
-    query_text = (request.args.get('q') or '').strip()
-    status_filter = (request.args.get('status') or '').strip()
-    page = request.args.get('page', 1, type=int)
-    per_page = int(request.args.get('per_page', '25') or 25)
-    per_page = min(max(per_page, 10), 100)
-
-    base_query = (
-        db.session.query(ComplianceRequirement, OrganizationRequirementAssessment)
-        .join(ComplianceFrameworkVersion, ComplianceFrameworkVersion.id == ComplianceRequirement.framework_version_id)
-        .outerjoin(
-            OrganizationRequirementAssessment,
-            and_(
-                OrganizationRequirementAssessment.organization_id == int(org_id),
-                OrganizationRequirementAssessment.requirement_id == ComplianceRequirement.id,
-            ),
-        )
-        .filter(
-            ComplianceFrameworkVersion.is_active.is_(True),
-            or_(
-                ComplianceFrameworkVersion.organization_id.is_(None),
-                ComplianceFrameworkVersion.organization_id == int(org_id),
-            ),
-        )
-    )
-
-    if query_text:
-        like = f'%{query_text}%'
-        base_query = base_query.filter(
-            or_(
-                ComplianceRequirement.requirement_id.ilike(like),
-                ComplianceRequirement.quality_indicator_code.ilike(like),
-                ComplianceRequirement.quality_indicator_text.ilike(like),
-                ComplianceRequirement.outcome_code.ilike(like),
-                ComplianceRequirement.outcome_text.ilike(like),
-            )
-        )
-
-    normalized_status_filter = _normalize_computed_flag_filter(status_filter)
-    if normalized_status_filter:
-        status_values = _computed_flag_filter_values(normalized_status_filter)
-        base_query = base_query.filter(OrganizationRequirementAssessment.computed_flag.in_(status_values))
-
-    pagination = base_query.order_by(
-        ComplianceRequirement.requirement_id.asc(),
-        ComplianceRequirement.id.asc(),
-    ).paginate(page=page, per_page=per_page, error_out=False)
-
-    requirement_rows = [
-        {
-            'requirement': requirement,
-            'assessment': assessment,
-        }
-        for requirement, assessment in pagination.items
-    ]
-
-    return render_template(
-        'main/compliance_requirements.html',
-        title='Compliance Requirements',
-        requirement_rows=requirement_rows,
-        pagination=pagination,
-        q=query_text,
-        status_filter=normalized_status_filter,
-    )
+    flash('Requirements view has been consolidated into AI Review workspaces.', 'info')
+    return redirect(url_for('main.ai_demo'))
 
 
 def _normalize_computed_flag_filter(value: str) -> str:
@@ -3643,6 +3525,7 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
     api_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()
     configured_model = (current_app.config.get('OPENROUTER_MODEL') or '').strip() or 'mistralai/mistral-7b-instruct:free'
     fallback_models = [configured_model, 'openrouter/auto']
+    token_budgets = [700, 350, 180]
     # Preserve order but remove duplicates.
     model_candidates = []
     seen = set()
@@ -3682,57 +3565,58 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
 
         last_warning = None
         attempt_messages = []
+        retriable_statuses = {400, 402, 404, 408, 409, 425, 429, 500, 502, 503, 504}
         for model in model_candidates:
-            response = requests.post(
-                'https://openrouter.ai/api/v1/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                    'HTTP-Referer': 'https://cenaris.local',
-                    'X-Title': 'Cenaris AI Demo',
-                },
-                json={
-                    'model': model,
-                    'messages': [
-                        {'role': 'system', 'content': 'You are precise and practical. Do not claim final legal compliance.'},
-                        {'role': 'user', 'content': prompt},
-                    ],
-                    'temperature': 0.1,
-                    'max_tokens': 700,
-                },
-                timeout=20,
-            )
+            for max_tokens in token_budgets:
+                response = requests.post(
+                    'https://openrouter.ai/api/v1/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {api_key}',
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://cenaris.local',
+                        'X-Title': 'Cenaris AI Demo',
+                    },
+                    json={
+                        'model': model,
+                        'messages': [
+                            {'role': 'system', 'content': 'You are precise and practical. Do not claim final legal compliance.'},
+                            {'role': 'user', 'content': prompt},
+                        ],
+                        'temperature': 0.1,
+                        'max_tokens': max_tokens,
+                    },
+                    timeout=20,
+                )
 
-            if response.status_code >= 400:
-                snippet = ((response.text or '').strip()[:140])
-                last_warning = f'OpenRouter model {model} failed ({response.status_code}){": " + snippet if snippet else ""}.'
-                attempt_messages.append(f'{model}: {response.status_code}')
-                # 404/400 are often model-routing issues; try next candidate.
-                if response.status_code in {400, 404}:
+                if response.status_code >= 400:
+                    snippet = ((response.text or '').strip()[:140])
+                    last_warning = f'OpenRouter model {model} failed ({response.status_code}){": " + snippet if snippet else ""}.'
+                    attempt_messages.append(f'{model}:{max_tokens} -> {response.status_code}')
+                    if response.status_code in retriable_statuses:
+                        continue
+                    return None, f'{last_warning} Using deterministic explanation.', None
+
+                payload = response.json() if response.content else {}
+                choices = payload.get('choices') or []
+                if not choices:
+                    last_warning = f'OpenRouter model {model} returned no choices.'
+                    attempt_messages.append(f'{model}:{max_tokens} -> no choices')
                     continue
-                return None, f'{last_warning} Using deterministic explanation.', None
 
-            payload = response.json() if response.content else {}
-            choices = payload.get('choices') or []
-            if not choices:
-                last_warning = f'OpenRouter model {model} returned no choices.'
-                attempt_messages.append(f'{model}: no choices')
-                continue
-
-            message = ((choices[0] or {}).get('message') or {}).get('content') or ''
-            answer = _normalize_demo_summary_text(message)
-            if not answer:
-                last_warning = f'OpenRouter model {model} returned empty content.'
-                attempt_messages.append(f'{model}: empty content')
-                continue
-            if not _is_complete_demo_summary(answer):
-                coerced = _coerce_demo_summary_text(answer)
-                if coerced and _is_complete_demo_summary(coerced):
-                    return coerced, None, model
-                last_warning = f'OpenRouter model {model} returned incomplete summary format.'
-                attempt_messages.append(f'{model}: incomplete format')
-                continue
-            return answer, None, model
+                message = ((choices[0] or {}).get('message') or {}).get('content') or ''
+                answer = _normalize_demo_summary_text(message)
+                if not answer:
+                    last_warning = f'OpenRouter model {model} returned empty content.'
+                    attempt_messages.append(f'{model}:{max_tokens} -> empty content')
+                    continue
+                if not _is_complete_demo_summary(answer):
+                    coerced = _coerce_demo_summary_text(answer)
+                    if coerced and _is_complete_demo_summary(coerced):
+                        return coerced, None, model
+                    last_warning = f'OpenRouter model {model} returned incomplete summary format.'
+                    attempt_messages.append(f'{model}:{max_tokens} -> incomplete format')
+                    continue
+                return answer, None, model
 
         if last_warning:
             attempts = '; '.join(attempt_messages[-3:]) if attempt_messages else 'unknown'
@@ -3745,7 +3629,7 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
 @bp.route('/ai-demo')
 @login_required
 def ai_demo():
-    """Dedicated AI review workspace for uploaded or repository documents."""
+    """Dedicated AI review workspace for repository documents."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -3755,32 +3639,61 @@ def ai_demo():
         abort(403)
 
     requested_ids = [int(v) for v in request.args.getlist('doc_ids') if str(v).isdigit()]
-    selected_documents = []
-    selected_document_ids = []
-    if requested_ids:
+    selected_documents = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.id.in_(requested_ids),
+        )
+        .order_by(Document.uploaded_at.desc())
+        .all()
+        if requested_ids
+        else []
+    )
+
+    if not selected_documents:
         selected_documents = (
             Document.query
             .filter(
                 Document.organization_id == int(org_id),
                 Document.is_active.is_(True),
-                Document.id.in_(requested_ids),
             )
             .order_by(Document.uploaded_at.desc())
+            .limit(50)
             .all()
         )
-        selected_document_ids = [int(document.id) for document in selected_documents]
+
+    selected_document_ids = [int(document.id) for document in selected_documents]
+
+    active_doc_id_raw = (request.args.get('active_doc_id') or '').strip()
+    active_doc_id = int(active_doc_id_raw) if active_doc_id_raw.isdigit() else None
+    if active_doc_id not in selected_document_ids:
+        active_doc_id = selected_document_ids[0] if selected_document_ids else None
+
+    autostart = (request.args.get('autostart') or '').strip().lower() in {'1', 'true', 'yes'}
 
     corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
     corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
     try:
         from app.models import DemoAnalysisResult
-        recent_analyses = (
+        raw_recent_analyses = (
             DemoAnalysisResult.query
             .filter_by(organization_id=int(org_id))
             .order_by(DemoAnalysisResult.created_at.desc())
-            .limit(10)
+            .limit(40)
             .all()
         )
+        seen_filenames: set[str] = set()
+        recent_analyses = []
+        for item in raw_recent_analyses:
+            filename_key = (item.filename or '').strip().lower() or f'id-{int(item.id)}'
+            if filename_key in seen_filenames:
+                continue
+            seen_filenames.add(filename_key)
+            recent_analyses.append(item)
+            if len(recent_analyses) >= 10:
+                break
     except Exception:
         recent_analyses = []
     return render_template(
@@ -3793,6 +3706,8 @@ def ai_demo():
         recent_analyses=recent_analyses,
         selected_documents=selected_documents,
         selected_document_ids=selected_document_ids,
+        active_doc_id=active_doc_id,
+        autostart=autostart,
     )
 
 
@@ -3800,7 +3715,7 @@ def ai_demo():
 @login_required
 @limiter.limit('8 per minute', key_func=_ai_rate_limit_key)
 def ai_demo_analyze_api():
-    """Analyze an uploaded file or stored repository document in the AI workspace."""
+    """Analyze a stored repository document in the AI workspace."""
     maybe = _require_active_org()
     if maybe is not None:
         return jsonify({'success': False, 'error': 'No active organization'}), 400
@@ -3809,7 +3724,6 @@ def ai_demo_analyze_api():
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
-    uploaded = request.files.get('file')
     stored_doc_id = (request.form.get('stored_doc_id') or '').strip()
     question = _limit_text((request.form.get('question') or '').strip(), max_chars=700)
     # Demo mode is intentionally fixed to balanced for consistent client-facing behavior.
@@ -3818,23 +3732,19 @@ def ai_demo_analyze_api():
     if not question:
         question = 'Assess this document against NDIS-style compliance evidence expectations.'
 
-    source_filename = (getattr(uploaded, 'filename', '') or '').strip()
-    if stored_doc_id:
-        if not stored_doc_id.isdigit():
-            return jsonify({'success': False, 'error': 'Invalid stored document selection.'}), 400
-        from app.services.azure_storage import AzureBlobStorageService
+    if not stored_doc_id or not stored_doc_id.isdigit():
+        return jsonify({'success': False, 'error': 'Choose a repository document first.'}), 400
 
-        document = _authorized_org_document_or_404(int(stored_doc_id))
-        storage_service = AzureBlobStorageService()
-        result = storage_service.download_file(document.blob_name)
-        if not result.get('success') or not result.get('data'):
-            return jsonify({'success': False, 'error': 'Could not load stored document for AI review.'}), 400
-        source_filename = (document.filename or '').strip()
-        doc_text, extraction_error = document_analysis_service.extract_text_from_bytes(source_filename, result.get('data') or b'')
-    else:
-        if not uploaded:
-            return jsonify({'success': False, 'error': 'Choose a repository document or upload a file first.'}), 400
-        doc_text, extraction_error = _extract_demo_document_text(uploaded)
+    from app.services.azure_storage import AzureBlobStorageService
+
+    document = _authorized_org_document_or_404(int(stored_doc_id))
+    storage_service = AzureBlobStorageService()
+    result = storage_service.download_file(document.blob_name)
+    if not result.get('success') or not result.get('data'):
+        return jsonify({'success': False, 'error': 'Could not load stored document for AI review.'}), 400
+
+    source_filename = (document.filename or '').strip()
+    doc_text, extraction_error = document_analysis_service.extract_text_from_bytes(source_filename, result.get('data') or b'')
     if extraction_error:
         return jsonify({'success': False, 'error': extraction_error}), 400
 
@@ -3932,10 +3842,155 @@ def ai_demo_analyze_api():
                 'scoring_version': 'demo-v3',
                 'retrieval_mode': _demo_retrieval_mode,
                 'document_chars': len(doc_text or ''),
-                'temporary_processing_only': not bool(stored_doc_id),
+                'temporary_processing_only': False,
                 'filename': source_filename,
-                'source': 'repository' if stored_doc_id else 'upload',
+                'source': 'repository',
                 'stored_doc_id': int(stored_doc_id) if stored_doc_id.isdigit() else None,
+            },
+        }
+    )
+
+
+def _openrouter_demo_followup(*, document_name: str, initial_question: str, initial_summary: str, followup_question: str, citations: list[dict]) -> tuple[str | None, str | None]:
+    api_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()
+    configured_model = (current_app.config.get('OPENROUTER_MODEL') or '').strip() or 'mistralai/mistral-7b-instruct:free'
+    fallback_models = [configured_model, 'openrouter/auto']
+    token_budgets = [500, 260, 160]
+    model_candidates = []
+    seen = set()
+    for model_name in fallback_models:
+        key = (model_name or '').strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        model_candidates.append(model_name)
+    if not api_key:
+        return None, 'OPENROUTER_API_KEY is not set. Using deterministic follow-up response.'
+
+    citation_points = '\n'.join([
+        f"- {item.get('source_id', 'ndis')} p.{item.get('page_number') or '?'}: {item.get('text', '')}"
+        for item in citations[:3]
+    ]) or '- No citations available.'
+
+    prompt = (
+        'You are an NDIS evidence review assistant. '
+        'Answer the follow-up question using the initial review and citations below. '
+        'Keep the response practical and concise for a compliance user.\n\n'
+        f'Document: {document_name}\n'
+        f'Initial review question: {initial_question}\n\n'
+        f'Initial review summary:\n{initial_summary}\n\n'
+        f'Citations:\n{citation_points}\n\n'
+        f'Follow-up question: {followup_question}\n\n'
+        'Return plain text only.'
+    )
+
+    try:
+        import requests
+
+        retriable_statuses = {400, 402, 404, 408, 409, 425, 429, 500, 502, 503, 504}
+        last_warning = None
+        for model in model_candidates:
+            for max_tokens in token_budgets:
+                response = requests.post(
+                    'https://openrouter.ai/api/v1/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {api_key}',
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://cenaris.local',
+                        'X-Title': 'Cenaris AI Review Follow-up',
+                    },
+                    json={
+                        'model': model,
+                        'messages': [
+                            {'role': 'system', 'content': 'Be practical, specific, and avoid legal conclusions.'},
+                            {'role': 'user', 'content': prompt},
+                        ],
+                        'temperature': 0.2,
+                        'max_tokens': max_tokens,
+                    },
+                    timeout=20,
+                )
+                if response.status_code >= 400:
+                    snippet = ((response.text or '').strip()[:140])
+                    last_warning = f'OpenRouter follow-up unavailable ({response.status_code}){": " + snippet if snippet else ""}.'
+                    if response.status_code in retriable_statuses:
+                        continue
+                    return None, f'{last_warning} Using deterministic response.'
+
+                payload = response.json() if response.content else {}
+                choices = payload.get('choices') or []
+                if not choices:
+                    last_warning = 'OpenRouter follow-up returned no choices.'
+                    continue
+
+                text = (((choices[0] or {}).get('message') or {}).get('content') or '').strip()
+                if not text:
+                    last_warning = 'OpenRouter follow-up returned empty content.'
+                    continue
+                return text, None
+
+        if last_warning:
+            return None, f'{last_warning} Using deterministic response.'
+        return None, 'OpenRouter follow-up unavailable. Using deterministic response.'
+    except Exception:
+        return None, 'OpenRouter follow-up request failed. Using deterministic response.'
+
+
+@bp.route('/api/ai/demo/followup', methods=['POST'])
+@login_required
+@limiter.limit('12 per minute', key_func=_ai_rate_limit_key)
+def ai_demo_followup_api():
+    """Handle follow-up questions for an analyzed repository document workspace."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    stored_doc_id = str(payload.get('stored_doc_id') or '').strip()
+    followup_question = _limit_text((payload.get('question') or '').strip(), max_chars=700)
+    base_question = _limit_text((payload.get('base_question') or '').strip(), max_chars=700)
+    base_summary = _limit_text((payload.get('base_summary') or '').strip(), max_chars=3200)
+    citations = payload.get('citations') or []
+    if not isinstance(citations, list):
+        citations = []
+
+    if not stored_doc_id.isdigit():
+        return jsonify({'success': False, 'error': 'Invalid repository document selection.'}), 400
+    if not followup_question:
+        return jsonify({'success': False, 'error': 'Enter a follow-up question first.'}), 400
+
+    document = _authorized_org_document_or_404(int(stored_doc_id))
+
+    answer, warning = _openrouter_demo_followup(
+        document_name=(document.filename or 'Document'),
+        initial_question=base_question or (document.ai_question or ''),
+        initial_summary=base_summary or (document.ai_summary or ''),
+        followup_question=followup_question,
+        citations=citations[:3],
+    )
+
+    if not answer:
+        summary_text = (base_summary or document.ai_summary or '').strip()
+        fallback = summary_text if summary_text else 'No prior summary is available yet. Run analysis first, then ask a follow-up question.'
+        answer = (
+            'Using deterministic follow-up guidance:\n\n'
+            f'Current review context:\n{fallback}\n\n'
+            f'Follow-up request: {followup_question}\n\n'
+            'Recommended next step: link this follow-up question to a specific missing evidence item, then re-run analysis after updating the document.'
+        )
+
+    return jsonify(
+        {
+            'success': True,
+            'answer': answer,
+            'warning': warning,
+            'meta': {
+                'stored_doc_id': int(stored_doc_id),
+                'filename': document.filename,
             },
         }
     )
@@ -4427,62 +4482,17 @@ def mark_all_notifications_read():
 @bp.route('/audit-export')
 @login_required
 def audit_export():
-    """Audit export route for generating compliance reports."""
-    maybe = _require_org_permission('audits.export')
+    """Legacy audit export route; redirects to AI Review workspace."""
+    maybe = _require_active_org()
     if maybe is not None:
         return maybe
 
-    available_reports = [
-        {
-            'id': 1,
-            'name': 'Gap Analysis Report',
-            'description': 'Current compliance status, requirement scores, and identified gaps.',
-            'status': 'Ready',
-            'format': ['PDF'],
-            'frameworks': ['NDIS'],
-            'file_size': 'Auto',
-            'estimated_time': '1-2 min',
-            'last_generated': datetime.now(),
-            'download_url': url_for('main.generate_report', report_type='gap-analysis'),
-        },
-        {
-            'id': 2,
-            'name': 'Accreditation Plan',
-            'description': 'Recommended actions and plan derived from current compliance gaps.',
-            'status': 'Ready',
-            'format': ['PDF'],
-            'frameworks': ['NDIS'],
-            'file_size': 'Auto',
-            'estimated_time': '1-2 min',
-            'last_generated': datetime.now(),
-            'download_url': url_for('main.generate_report', report_type='accreditation-plan'),
-        },
-        {
-            'id': 3,
-            'name': 'Audit Pack Export',
-            'description': 'Compiled evidence and summary data suitable for audit sharing.',
-            'status': 'Ready',
-            'format': ['PDF'],
-            'frameworks': ['NDIS'],
-            'file_size': 'Auto',
-            'estimated_time': '2-4 min',
-            'last_generated': datetime.now(),
-            'download_url': url_for('main.generate_report', report_type='audit-pack'),
-        },
-    ]
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
 
-    export_stats = {
-        'total_reports': len(available_reports),
-        'ready_reports': len([r for r in available_reports if r.get('status') == 'Ready']),
-        'recent_exports': 0,
-        'total_size': 'Generated on demand',
-    }
-
-    return render_template('main/audit_export.html',
-                         title='Audit Export',
-                         export_stats=export_stats,
-                         available_reports=available_reports,
-                         recent_exports=[])
+    flash('Audit Export has moved into AI Review workspaces.', 'info')
+    return redirect(url_for('main.ai_demo'))
 
 
 @bp.route('/analytics')

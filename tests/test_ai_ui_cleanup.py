@@ -11,6 +11,9 @@ def test_dashboard_nav_shows_ai_review_but_hides_legacy_ai_links(client, app, se
     assert dashboard_resp.status_code == 200
     assert b'Evidence Repository' in dashboard_resp.data
     assert b'AI Review' in dashboard_resp.data
+    assert b'Gap Analysis' not in dashboard_resp.data
+    assert b'Requirements' not in dashboard_resp.data
+    assert b'Audit Export' not in dashboard_resp.data
     assert b'AI Evidence' not in dashboard_resp.data
     assert b'AI Demo' not in dashboard_resp.data
 
@@ -45,3 +48,22 @@ def test_legacy_ai_evidence_routes_redirect_to_primary_document_flow(client, app
     detail_resp = client.get(f'/ai-evidence/{doc_id}', follow_redirects=False)
     assert detail_resp.status_code in {302, 303}
     assert detail_resp.headers.get('Location', '').endswith(f'/document/{doc_id}/details')
+
+
+def test_legacy_compliance_screens_redirect_to_ai_review(client, app, seed_org_user):
+    from tests.conftest import login
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    gap_resp = client.get('/gap-analysis', follow_redirects=False)
+    assert gap_resp.status_code in {302, 303}
+    assert gap_resp.headers.get('Location', '').endswith('/ai-demo')
+
+    req_resp = client.get('/compliance-requirements', follow_redirects=False)
+    assert req_resp.status_code in {302, 303}
+    assert req_resp.headers.get('Location', '').endswith('/ai-demo')
+
+    export_resp = client.get('/audit-export', follow_redirects=False)
+    assert export_resp.status_code in {302, 303}
+    assert export_resp.headers.get('Location', '').endswith('/ai-demo')
