@@ -84,14 +84,10 @@
                         {% if documents %}
                             <div class="d-flex gap-2">
                                 <form method="GET" action="{{ url_for('main.ai_demo') }}" id="bulkAiReviewForm" class="d-inline">
+                                    <input type="hidden" name="active_doc_id" id="bulkAiActiveDocId" value="" />
+                                    <input type="hidden" name="autostart" value="1" />
                                     <button type="submit" class="btn btn-sm btn-outline-primary" id="bulkAiReviewBtn" disabled>
-                                        <i class="bi bi-stars me-1"></i>Review Selected
-                                    </button>
-                                </form>
-                                <form method="POST" action="{{ url_for('main.analyze_selected_documents') }}" id="bulkAnalyzeForm" class="d-inline">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                                    <button type="submit" class="btn btn-sm btn-primary" id="bulkAnalyzeBtn" disabled>
-                                        <i class="bi bi-cpu me-1"></i>Analyze Selected
+                                        <i class="bi bi-cpu me-1"></i>Analyze Selected in AI Workspace
                                     </button>
                                 </form>
                                 <form method="POST" action="{{ url_for('main.delete_selected_documents') }}" id="bulkDeleteForm" class="d-inline">
@@ -217,16 +213,8 @@
                                                         </button>
                                                         <ul class="dropdown-menu dropdown-menu-end">
                                                             <li>
-                                                                <form method="POST" action="{{ url_for('main.analyze_document', doc_id=document.id) }}">
-                                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                                                                    <button type="submit" class="dropdown-item">
-                                                                        <i class="bi bi-cpu me-2"></i>Analyze
-                                                                    </button>
-                                                                </form>
-                                                            </li>
-                                                            <li>
-                                                                <a class="dropdown-item" href="{{ url_for('main.ai_demo', doc_ids=document.id) }}">
-                                                                    <i class="bi bi-stars me-2"></i>Open AI Review
+                                                                <a class="dropdown-item" href="{{ url_for('main.ai_demo', doc_ids=document.id, active_doc_id=document.id, autostart=1) }}">
+                                                                    <i class="bi bi-cpu me-2"></i>Analyze in AI Workspace
                                                                 </a>
                                                             </li>
                                                             <li><hr class="dropdown-divider"></li>
@@ -301,16 +289,8 @@
                                                     </button>
                                                     <ul class="dropdown-menu">
                                                         <li>
-                                                            <form method="POST" action="{{ url_for('main.analyze_document', doc_id=document.id) }}">
-                                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                                                                <button type="submit" class="dropdown-item">
-                                                                    <i class="bi bi-cpu me-2"></i>Analyze
-                                                                </button>
-                                                            </form>
-                                                        </li>
-                                                        <li>
-                                                            <a class="dropdown-item" href="{{ url_for('main.ai_demo', doc_ids=document.id) }}">
-                                                                <i class="bi bi-stars me-2"></i>Open AI Review
+                                                            <a class="dropdown-item" href="{{ url_for('main.ai_demo', doc_ids=document.id, active_doc_id=document.id, autostart=1) }}">
+                                                                <i class="bi bi-cpu me-2"></i>Analyze in AI Workspace
                                                             </a>
                                                         </li>
                                                         <li><hr class="dropdown-divider"></li>
@@ -498,8 +478,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         const bulkAiReviewForm = document.getElementById('bulkAiReviewForm');
         const bulkAiReviewButton = document.getElementById('bulkAiReviewBtn');
-        const bulkAnalyzeForm = document.getElementById('bulkAnalyzeForm');
-        const bulkAnalyzeButton = document.getElementById('bulkAnalyzeBtn');
+        const bulkAiActiveDocId = document.getElementById('bulkAiActiveDocId');
         const bulkDeleteForm = document.getElementById('bulkDeleteForm');
         const bulkDeleteButton = document.getElementById('bulkDeleteBtn');
         const bulkDeleteConfirmationText = document.getElementById('bulkDeleteConfirmationText');
@@ -527,9 +506,6 @@
             if (bulkAiReviewButton) {
                 bulkAiReviewButton.disabled = selected.length === 0;
             }
-            if (bulkAnalyzeButton) {
-                bulkAnalyzeButton.disabled = selected.length === 0;
-            }
             if (bulkDeleteButton) {
                 bulkDeleteButton.disabled = selected.length === 0;
             }
@@ -541,7 +517,9 @@
             }
 
             syncSelectedDocIds(bulkAiReviewForm, selected);
-            syncSelectedDocIds(bulkAnalyzeForm, selected);
+            if (bulkAiActiveDocId) {
+                bulkAiActiveDocId.value = selected.length > 0 ? selected[0].value : '';
+            }
             syncSelectedDocIds(bulkDeleteForm, selected);
             syncSelectedDocIds(bulkForm, selected);
         }

@@ -600,6 +600,16 @@ class DocumentAnalysisService:
     def _openrouter_summary(self, *, status: str, question: str, focus_area: str, snippets: list[dict], citations: list[dict]) -> tuple[str | None, str | None, str | None]:
         api_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()
         configured_model = (current_app.config.get('OPENROUTER_MODEL') or '').strip() or 'mistralai/mistral-7b-instruct:free'
+        fallback_models = [configured_model, 'openrouter/auto']
+        token_budgets = [700, 350, 180]
+        model_candidates = []
+        seen = set()
+        for model_name in fallback_models:
+            key = (model_name or '').strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            model_candidates.append(model_name)
         if not api_key:
             return None, 'OPENROUTER_API_KEY is not set. Using deterministic explanation.', None
 
@@ -626,35 +636,55 @@ class DocumentAnalysisService:
         try:
             import requests
 
-            response = requests.post(
-                'https://openrouter.ai/api/v1/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                    'HTTP-Referer': 'https://cenaris.local',
-                    'X-Title': 'Cenaris Evidence Review',
-                },
-                json={
-                    'model': configured_model,
-                    'messages': [
-                        {'role': 'system', 'content': 'Be practical, precise, and avoid legal conclusions.'},
-                        {'role': 'user', 'content': prompt},
-                    ],
-                    'temperature': 0.1,
-                    'max_tokens': 700,
-                },
-                timeout=20,
-            )
-            if response.status_code >= 400:
-                snippet = ((response.text or '').strip()[:140])
-                return None, f'OpenRouter summary unavailable ({response.status_code}){": " + snippet if snippet else ""}. Using deterministic explanation.', None
+            retriable_statuses = {400, 402, 404, 408, 409, 425, 429, 500, 502, 503, 504}
+            last_warning = None
+            attempt_messages = []
+            for model in model_candidates:
+                for max_tokens in token_budgets:
+                    response = requests.post(
+                        'https://openrouter.ai/api/v1/chat/completions',
+                        headers={
+                            'Authorization': f'Bearer {api_key}',
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': 'https://cenaris.local',
+                            'X-Title': 'Cenaris Evidence Review',
+                        },
+                        json={
+                            'model': model,
+                            'messages': [
+                                {'role': 'system', 'content': 'Be practical, precise, and avoid legal conclusions.'},
+                                {'role': 'user', 'content': prompt},
+                            ],
+                            'temperature': 0.1,
+                            'max_tokens': max_tokens,
+                        },
+                        timeout=20,
+                    )
+                    if response.status_code >= 400:
+                        snippet = ((response.text or '').strip()[:140])
+                        last_warning = f'OpenRouter summary unavailable ({response.status_code}){": " + snippet if snippet else ""}.'
+                        attempt_messages.append(f'{model}:{max_tokens} -> {response.status_code}')
+                        if response.status_code in retriable_statuses:
+                            continue
+                        return None, f'{last_warning} Using deterministic explanation.', None
 
-            payload = response.json() if response.content else {}
-            choices = payload.get('choices') or []
-            if not choices:
-                return None, 'OpenRouter returned no choices. Using deterministic explanation.', None
-            message = ((choices[0] or {}).get('message') or {}).get('content') or ''
-            return self._normalize_summary(message), None, configured_model
+                    payload = response.json() if response.content else {}
+                    choices = payload.get('choices') or []
+                    if not choices:
+                        last_warning = 'OpenRouter returned no choices.'
+                        attempt_messages.append(f'{model}:{max_tokens} -> no choices')
+                        continue
+                    message = ((choices[0] or {}).get('message') or {}).get('content') or ''
+                    if not (message or '').strip():
+                        last_warning = 'OpenRouter returned empty content.'
+                        attempt_messages.append(f'{model}:{max_tokens} -> empty content')
+                        continue
+                    return self._normalize_summary(message), None, model
+
+            if last_warning:
+                attempts = '; '.join(attempt_messages[-3:]) if attempt_messages else 'unknown'
+                return None, f'{last_warning} Attempts: {attempts}. Using deterministic explanation.', None
+            return None, 'OpenRouter summary unavailable. Using deterministic explanation.', None
         except Exception:
             logger.exception('OpenRouter summary request failed')
             return None, 'OpenRouter request failed. Using deterministic explanation.', None
