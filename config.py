@@ -122,6 +122,7 @@ class Config:
     AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER = os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER')
     AZURE_OPENAI_TIMEOUT_SECONDS = int(os.environ.get('AZURE_OPENAI_TIMEOUT_SECONDS') or 30)
     AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS = int(os.environ.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS') or 1400)
+    AZURE_OPENAI_SUMMARY_MAX_OUTPUT_TOKENS = int(os.environ.get('AZURE_OPENAI_SUMMARY_MAX_OUTPUT_TOKENS') or 450)
 
     # Demo provider for fast validation of AI flow (non-production helper)
     OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
