@@ -3851,6 +3851,269 @@ def ai_demo_analyze_api():
     )
 
 
+def _checklist_status_from_score(score: float | None) -> str:
+    value = float(score or 0)
+    if value >= 0.28:
+        return 'Clear'
+    if value >= 0.18:
+        return 'Partial'
+    return 'Gap'
+
+
+def _checklist_status_from_overall(status: str | None) -> str:
+    value = (status or '').strip().lower()
+    if value in {'mature', 'ok'}:
+        return 'Clear'
+    if 'critical' in value or 'high risk' in value:
+        return 'Gap'
+    return 'Partial'
+
+
+def _build_checklist_from_analysis(analysis: dict) -> dict:
+    def format_note(*, status: str, missing: str, rationale: str) -> str:
+        missing_value = (missing or '').strip()
+        rationale_value = (rationale or '').strip()
+        if status == 'Clear':
+            if rationale_value:
+                return f"Covered: {rationale_value}"
+            return 'Covered by the provided evidence.'
+        if missing_value:
+            return f"Missing: {missing_value}"
+        if rationale_value:
+            return f"Partially addressed: {rationale_value}"
+        return 'Needs clearer evidence in the document.'
+
+    items = []
+    matched = analysis.get('matched_requirements') or []
+    for item in matched:
+        score = item.get('score')
+        status = _checklist_status_from_score(score)
+        label = (item.get('label') or item.get('requirement_id') or 'Requirement').strip()
+        note = format_note(
+            status=status,
+            missing=(item.get('missing_evidence') or ''),
+            rationale=(item.get('rationale_note') or ''),
+        )
+        items.append(
+            {
+                'label': label,
+                'status': status,
+                'note': note,
+                'score': score,
+                'requirement_id': item.get('requirement_id'),
+            }
+        )
+
+    if not items:
+        overall_status = _checklist_status_from_overall(analysis.get('status'))
+        label = (analysis.get('focus_area') or 'General compliance coverage').strip()
+        note = (analysis.get('summary') or 'Use more detailed evidence to improve assessment coverage.').strip()
+        items.append(
+            {
+                'label': label,
+                'status': overall_status,
+                'note': note,
+                'score': None,
+                'requirement_id': None,
+            }
+        )
+
+    summary = {'clear': [], 'partial': [], 'gap': []}
+    for item in items:
+        status_key = (item.get('status') or '').lower()
+        if status_key == 'clear':
+            summary['clear'].append(item.get('label') or '')
+        elif status_key == 'partial':
+            summary['partial'].append(item.get('label') or '')
+        else:
+            summary['gap'].append(item.get('label') or '')
+
+    return {
+        'items': items,
+        'summary': summary,
+        'thresholds': {
+            'clear_min_score': 0.28,
+            'partial_min_score': 0.18,
+        },
+    }
+
+
+@bp.route('/ai-summary-test')
+@login_required
+def ai_summary_test():
+    """Experimental checklist summary UI for AI analysis."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    requested_ids = [int(v) for v in request.args.getlist('doc_ids') if str(v).isdigit()]
+    selected_documents = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.id.in_(requested_ids),
+        )
+        .order_by(Document.uploaded_at.desc())
+        .all()
+        if requested_ids
+        else []
+    )
+
+    if not selected_documents:
+        selected_documents = (
+            Document.query
+            .filter(
+                Document.organization_id == int(org_id),
+                Document.is_active.is_(True),
+            )
+            .order_by(Document.uploaded_at.desc())
+            .limit(50)
+            .all()
+        )
+
+    selected_document_ids = [int(document.id) for document in selected_documents]
+
+    active_doc_id_raw = (request.args.get('active_doc_id') or '').strip()
+    active_doc_id = int(active_doc_id_raw) if active_doc_id_raw.isdigit() else None
+    if active_doc_id not in selected_document_ids:
+        active_doc_id = selected_document_ids[0] if selected_document_ids else None
+
+    autostart = (request.args.get('autostart') or '').strip().lower() in {'1', 'true', 'yes'}
+
+    return render_template(
+        'main/ai_summary_test.html',
+        title='AI Summary Test',
+        selected_documents=selected_documents,
+        selected_document_ids=selected_document_ids,
+        active_doc_id=active_doc_id,
+        autostart=autostart,
+    )
+
+
+@bp.route('/api/ai/summary-checklist', methods=['POST'])
+@login_required
+@limiter.limit('8 per minute', key_func=_ai_rate_limit_key)
+def ai_summary_checklist_api():
+    """Analyze a stored repository document and return a checklist summary."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    stored_doc_id = (request.form.get('stored_doc_id') or '').strip()
+    if not stored_doc_id or not stored_doc_id.isdigit():
+        return jsonify({'success': False, 'error': 'Choose a repository document first.'}), 400
+
+    from app.services.azure_storage import AzureBlobStorageService
+
+    document = _authorized_org_document_or_404(int(stored_doc_id))
+    storage_service = AzureBlobStorageService()
+    result = storage_service.download_file(document.blob_name)
+    if not result.get('success') or not result.get('data'):
+        return jsonify({'success': False, 'error': 'Could not load stored document for AI review.'}), 400
+
+    source_filename = (document.filename or '').strip()
+    doc_text, extraction_error = document_analysis_service.extract_text_from_bytes(source_filename, result.get('data') or b'')
+    if extraction_error:
+        return jsonify({'success': False, 'error': extraction_error}), 400
+
+    question = 'Assess this document against NDIS-style compliance evidence expectations.'
+    snippets = _rank_demo_snippets(doc_text, question, top_k=4)
+    status, confidence = _derive_demo_status(doc_text, question, snippets, mode='balanced')
+
+    rag_citations = []
+    warning_items: list[dict] = []
+    _demo_retrieval_mode = 'lexical'
+    rag_query_text = _build_demo_rag_query(question, doc_text)
+    corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
+    corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
+    try:
+        rag_result = rag_query_service.query(corpus_path=corpus_abs, query_text=rag_query_text, requirement_id='', top_k=3)
+        _demo_retrieval_mode = getattr(rag_result, 'retrieval_mode', 'lexical')
+        rag_citations = [
+            {
+                'chunk_id': c.chunk_id,
+                'source_id': c.source_id,
+                'page_number': c.page_number,
+                'score': c.score,
+                'text': c.text,
+            }
+            for c in rag_result.citations
+        ]
+        if _demo_retrieval_mode == 'lexical' and rag_citations:
+            warning_items.append({'source': 'rag', 'message': 'Semantic embeddings computing on first run — using keyword matching now. Reload to use hybrid mode.'})
+    except FileNotFoundError:
+        warning_items.append({'source': 'rag', 'message': 'NDIS corpus is not built yet; showing document-only analysis.'})
+    except Exception:
+        warning_items.append({'source': 'rag', 'message': 'Could not retrieve NDIS citations; showing document-only analysis.'})
+
+    ai_summary, llm_warning, used_model = _openrouter_demo_summary(
+        status=status,
+        question=question,
+        snippets=snippets,
+        citations=rag_citations,
+    )
+    if llm_warning:
+        warning_items.append({'source': 'llm', 'message': llm_warning})
+
+    ai_summary = _ensure_demo_summary_text(
+        ai_summary,
+        status=status,
+        analysis_mode='balanced',
+        snippets=snippets,
+        citations=rag_citations,
+    )
+
+    provider_label = 'openrouter' if not llm_warning else 'deterministic'
+    model_label = used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
+
+    matched_requirements = document_analysis_service._match_requirements(
+        text=doc_text,
+        filename=source_filename,
+        organization_id=int(org_id),
+    )
+    checklist = _build_checklist_from_analysis(
+        {
+            'matched_requirements': matched_requirements,
+            'status': status,
+            'summary': ai_summary,
+            'focus_area': 'General compliance coverage',
+        }
+    )
+    warnings = [w.get('message', '') for w in warning_items if (w.get('message') or '').strip()]
+
+    return jsonify(
+        {
+            'success': True,
+            'status': status,
+            'confidence': confidence,
+            'summary': ai_summary,
+            'checklist': checklist,
+            'snippets': snippets,
+            'citations': rag_citations,
+            'warnings': warnings,
+            'warning_items': warning_items,
+            'meta': {
+                'provider': provider_label,
+                'model': model_label,
+                'retrieval_mode': _demo_retrieval_mode,
+                'document_chars': len(doc_text or ''),
+                'filename': source_filename,
+                'source': 'repository',
+                'stored_doc_id': int(stored_doc_id),
+            },
+        }
+    )
+
+
 def _openrouter_demo_followup(*, document_name: str, initial_question: str, initial_summary: str, followup_question: str, citations: list[dict]) -> tuple[str | None, str | None]:
     api_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()
     configured_model = (current_app.config.get('OPENROUTER_MODEL') or '').strip() or 'mistralai/mistral-7b-instruct:free'
