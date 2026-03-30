@@ -142,18 +142,54 @@
       <div id="resultWarnings" class="d-flex flex-column gap-2 mb-3"></div>
 
       <div class="mb-3">
-        <label class="form-label fw-semibold">AI Summary</label>
-        <div id="resultSummary" class="border rounded p-3 small bg-body-tertiary" style="white-space: pre-wrap;"></div>
+        <h6 class="fw-semibold mb-2">Checklist Summary</h6>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th style="min-width: 220px;">Requirement / Area</th>
+                <th style="min-width: 120px;">Status</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="demoChecklistTable"></tbody>
+          </table>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Clear</div>
+              <ul id="demoChecklistClear" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Partial</div>
+              <ul id="demoChecklistPartial" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Gap</div>
+              <ul id="demoChecklistGap" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="row g-3">
         <div class="col-md-6">
-          <label class="form-label fw-semibold">Document Evidence Highlights</label>
-          <div id="resultSnippets" class="d-flex flex-column gap-2"></div>
+          <details class="border rounded p-3 bg-body-tertiary">
+            <summary class="fw-semibold">Document Evidence Highlights</summary>
+            <div id="resultSnippets" class="d-flex flex-column gap-2 mt-3"></div>
+          </details>
         </div>
         <div class="col-md-6">
-          <label class="form-label fw-semibold">NDIS Citations (RAG)</label>
-          <div id="resultCitations" class="d-flex flex-column gap-2"></div>
+          <details class="border rounded p-3 bg-body-tertiary">
+            <summary class="fw-semibold">NDIS Citations (RAG)</summary>
+            <div id="resultCitations" class="d-flex flex-column gap-2 mt-3"></div>
+          </details>
         </div>
       </div>
     </div>
@@ -174,10 +210,13 @@
     const resultCard = document.getElementById('demoResultCard');
     const statusBadge = document.getElementById('resultStatusBadge');
     const confidenceEl = document.getElementById('resultConfidence');
-    const summaryEl = document.getElementById('resultSummary');
     const warningsEl = document.getElementById('resultWarnings');
     const snippetsEl = document.getElementById('resultSnippets');
     const citationsEl = document.getElementById('resultCitations');
+    const checklistTable = document.getElementById('demoChecklistTable');
+    const checklistClear = document.getElementById('demoChecklistClear');
+    const checklistPartial = document.getElementById('demoChecklistPartial');
+    const checklistGap = document.getElementById('demoChecklistGap');
     const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
     const resultSourceMetaEl = document.getElementById('resultSourceMeta');
     const progressWrap = document.getElementById('demoProgressWrap');
@@ -376,6 +415,10 @@
       warningsEl.innerHTML = '';
       snippetsEl.innerHTML = '';
       citationsEl.innerHTML = '';
+      checklistTable.innerHTML = '';
+      checklistClear.innerHTML = '';
+      checklistPartial.innerHTML = '';
+      checklistGap.innerHTML = '';
 
       if (!storedDocSelect || !storedDocSelect.value) {
         setRunning(false, 'Choose a repository document first.');
@@ -423,12 +466,55 @@
           resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}`;
         }
 
-        const summary = ((payload.summary || '') + '').trim();
-        if (summary.length > 0) {
-          summaryEl.textContent = summary;
-        } else {
-          summaryEl.textContent = 'Summary unavailable for this run. Please retry with a more specific question.';
-        }
+        const checklist = (payload.checklist || {});
+        const items = checklist.items || [];
+        items.forEach(function (item) {
+          const row = document.createElement('tr');
+
+          const labelCell = document.createElement('td');
+          labelCell.textContent = item.label || '-';
+          row.appendChild(labelCell);
+
+          const statusCell = document.createElement('td');
+          const badge = document.createElement('span');
+          const status = item.status || 'Gap';
+          badge.className = 'badge';
+          if (status === 'Clear') {
+            badge.classList.add('bg-success');
+          } else if (status === 'Partial') {
+            badge.classList.add('bg-warning', 'text-dark');
+          } else {
+            badge.classList.add('bg-danger');
+          }
+          badge.textContent = status;
+          statusCell.appendChild(badge);
+          row.appendChild(statusCell);
+
+          const noteCell = document.createElement('td');
+          noteCell.textContent = item.note || '-';
+          row.appendChild(noteCell);
+
+          checklistTable.appendChild(row);
+        });
+
+        const appendListItems = (listEl, listItems) => {
+          listEl.innerHTML = '';
+          if (!listItems || listItems.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'None.';
+            listEl.appendChild(li);
+            return;
+          }
+          listItems.forEach(function (item) {
+            const li = document.createElement('li');
+            li.textContent = item;
+            listEl.appendChild(li);
+          });
+        };
+
+        appendListItems(checklistClear, (checklist.summary || {}).clear || []);
+        appendListItems(checklistPartial, (checklist.summary || {}).partial || []);
+        appendListItems(checklistGap, (checklist.summary || {}).gap || []);
 
         const warningItems = payload.warning_items || [];
         if (warningItems.length > 0) {
