@@ -3622,8 +3622,10 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
             attempts = '; '.join(attempt_messages[-3:]) if attempt_messages else 'unknown'
             return None, f'OpenRouter summary unavailable ({attempts}). Using deterministic explanation.', None
         return None, 'OpenRouter call failed. Using deterministic explanation.', None
-    except Exception:
-        return None, 'OpenRouter request failed. Using deterministic explanation.', None
+    except Exception as exc:
+        current_app.logger.exception('OpenRouter request failed')
+        reason = f'{type(exc).__name__}: {exc}'.strip(': ')
+        return None, f'OpenRouter request failed ({reason}). Using deterministic explanation.', None
 
 
 @bp.route('/ai-demo')
@@ -3824,6 +3826,20 @@ def ai_demo_analyze_api():
         db.session.rollback()
         current_app.logger.exception('Failed to persist demo analysis result')
 
+    matched_requirements = document_analysis_service._match_requirements(
+        text=doc_text,
+        filename=source_filename,
+        organization_id=int(org_id),
+    )
+    checklist = _build_checklist_from_analysis(
+        {
+            'matched_requirements': matched_requirements,
+            'status': status,
+            'summary': ai_summary,
+            'focus_area': 'General compliance coverage',
+        }
+    )
+
     warnings = [w.get('message', '') for w in warning_items if (w.get('message') or '').strip()]
     return jsonify(
         {
@@ -3831,6 +3847,7 @@ def ai_demo_analyze_api():
             'status': status,
             'confidence': confidence,
             'summary': ai_summary,
+            'checklist': checklist,
             'snippets': snippets,
             'citations': rag_citations,
             'warnings': warnings,

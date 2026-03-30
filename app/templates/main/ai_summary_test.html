@@ -113,10 +113,6 @@
 
       <div id="summaryWarnings" class="d-flex flex-column gap-2 mb-3"></div>
 
-      <div class="mb-3">
-        <label class="form-label fw-semibold">AI Summary Notes</label>
-        <div id="summaryNotes" class="border rounded p-3 small bg-body-tertiary" style="white-space: pre-wrap;"></div>
-      </div>
     </div>
   </div>
 </div>
@@ -140,7 +136,6 @@
     const partialList = document.getElementById('summaryPartial');
     const gapList = document.getElementById('summaryGap');
     const warningsEl = document.getElementById('summaryWarnings');
-    const notesEl = document.getElementById('summaryNotes');
     const metaEl = document.getElementById('summaryMeta');
     const AUTO_START = {{ 'true' if autostart else 'false' }};
     let progressTimer = null;
@@ -290,7 +285,6 @@
         renderBadge(payload.status);
         confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}% confidence`;
         metaEl.textContent = `Document: ${(payload.meta || {}).filename || 'Unknown'} | Source: Repository`;
-        notesEl.textContent = (payload.summary || 'No summary notes available.').trim();
 
         const checklist = (payload.checklist || {});
         const items = checklist.items || [];
