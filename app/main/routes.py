@@ -3521,6 +3521,89 @@ def _coerce_demo_summary_text(text: str | None) -> str | None:
     return _normalize_demo_summary_text(coerced)
 
 
+def _azure_openai_demo_summary(*, status: str, question: str, snippets: list[dict], citations: list[dict]) -> tuple[str | None, str | None, str | None]:
+    endpoint = (current_app.config.get('AZURE_OPENAI_ENDPOINT') or '').strip().rstrip('/')
+    api_key = (current_app.config.get('AZURE_OPENAI_API_KEY') or '').strip()
+    api_version = (current_app.config.get('AZURE_OPENAI_API_VERSION') or '2024-10-21').strip()
+    timeout_seconds = int(current_app.config.get('AZURE_OPENAI_TIMEOUT_SECONDS') or 30)
+    max_output_tokens = int(current_app.config.get('AZURE_OPENAI_SUMMARY_MAX_OUTPUT_TOKENS') or 450)
+
+    deployment = (
+        (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI') or '').strip()
+        or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT') or '').strip()
+        or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER') or '').strip()
+    )
+
+    if not endpoint or not api_key or not deployment:
+        return None, 'Azure OpenAI is not fully configured. Using deterministic explanation.', None
+
+    evidence_points = '\n'.join([f"- {item.get('text', '')}" for item in snippets[:4]]) or '- No strong document snippets found.'
+    citation_points = '\n'.join([
+        f"- {c.get('source_id', 'ndis')} p.{c.get('page_number') or '?'}: {c.get('text', '')}"
+        for c in citations[:3]
+    ]) or '- No NDIS citations retrieved.'
+
+    prompt = (
+        'You are an NDIS compliance demo assistant. '
+        'Given the proposed status, document evidence snippets, and NDIS citations, produce a concise explanation. '
+        'Return plain text only (no markdown, no bullet symbols, no code fences). '
+        'Use this exact structure with all sections present:\n'
+        '1) Why this status\n'
+        '2) Missing evidence\n'
+        '3) Recommended next action\n'
+        'End with the line END_SUMMARY\n\n'
+        f'Proposed status: {status}\n'
+        f'Question: {question}\n\n'
+        f'Document evidence snippets:\n{evidence_points}\n\n'
+        f'NDIS citations:\n{citation_points}'
+    )
+
+    try:
+        import requests
+
+        url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
+        response = requests.post(
+            url,
+            headers={
+                'Content-Type': 'application/json',
+                'api-key': api_key,
+            },
+            json={
+                'messages': [
+                    {'role': 'system', 'content': 'You are precise and practical. Do not claim final legal compliance.'},
+                    {'role': 'user', 'content': prompt},
+                ],
+                'temperature': 0.1,
+                'max_tokens': max_output_tokens,
+            },
+            timeout=timeout_seconds,
+        )
+
+        if response.status_code >= 400:
+            snippet = ((response.text or '').strip()[:140])
+            return None, f'Azure OpenAI failed ({response.status_code}){": " + snippet if snippet else ""}. Using deterministic explanation.', None
+
+        payload = response.json() if response.content else {}
+        choices = payload.get('choices') or []
+        if not choices:
+            return None, 'Azure OpenAI returned no choices. Using deterministic explanation.', None
+
+        message = ((choices[0] or {}).get('message') or {}).get('content') or ''
+        answer = _normalize_demo_summary_text(message)
+        if not answer:
+            return None, 'Azure OpenAI returned empty content. Using deterministic explanation.', None
+        if not _is_complete_demo_summary(answer):
+            coerced = _coerce_demo_summary_text(answer)
+            if coerced and _is_complete_demo_summary(coerced):
+                return coerced, None, deployment
+            return None, 'Azure OpenAI returned incomplete summary format. Using deterministic explanation.', None
+        return answer, None, deployment
+    except Exception as exc:
+        current_app.logger.exception('Azure OpenAI request failed')
+        reason = f'{type(exc).__name__}: {exc}'.strip(': ')
+        return None, f'Azure OpenAI request failed ({reason}). Using deterministic explanation.', None
+
+
 def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict], citations: list[dict]) -> tuple[str | None, str | None, str | None]:
     api_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()
     configured_model = (current_app.config.get('OPENROUTER_MODEL') or '').strip() or 'mistralai/mistral-7b-instruct:free'
@@ -3626,6 +3709,30 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
         current_app.logger.exception('OpenRouter request failed')
         reason = f'{type(exc).__name__}: {exc}'.strip(': ')
         return None, f'OpenRouter request failed ({reason}). Using deterministic explanation.', None
+
+
+def _llm_demo_summary(*, status: str, question: str, snippets: list[dict], citations: list[dict]) -> tuple[str | None, str | None, str | None, str]:
+    azure_enabled = bool(
+        (current_app.config.get('AZURE_OPENAI_ENDPOINT') or '').strip()
+        and (current_app.config.get('AZURE_OPENAI_API_KEY') or '').strip()
+    )
+
+    if azure_enabled:
+        summary, warning, model = _azure_openai_demo_summary(
+            status=status,
+            question=question,
+            snippets=snippets,
+            citations=citations,
+        )
+        return summary, warning, model, 'azure-openai'
+
+    summary, warning, model = _openrouter_demo_summary(
+        status=status,
+        question=question,
+        snippets=snippets,
+        citations=citations,
+    )
+    return summary, warning, model, 'openrouter'
 
 
 @bp.route('/ai-demo')
@@ -3782,7 +3889,7 @@ def ai_demo_analyze_api():
         rag_warning = 'Could not retrieve NDIS citations; showing document-only analysis.'
         warning_items.append({'source': 'rag', 'message': rag_warning})
 
-    ai_summary, llm_warning, used_model = _openrouter_demo_summary(
+    ai_summary, llm_warning, used_model, llm_provider = _llm_demo_summary(
         status=status,
         question=question,
         snippets=snippets,
@@ -3799,8 +3906,11 @@ def ai_demo_analyze_api():
         citations=rag_citations,
     )
 
-    provider_label = 'openrouter' if not llm_warning else 'deterministic'
-    model_label = used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
+    provider_label = llm_provider if not llm_warning else 'deterministic'
+    if llm_provider == 'azure-openai':
+        model_label = used_model or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI') or current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT') or current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER') or 'azure-openai')
+    else:
+        model_label = used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
 
     # Persist result (non-blocking — never fail the API on a DB error)
     try:
@@ -4072,7 +4182,7 @@ def ai_summary_checklist_api():
     except Exception:
         warning_items.append({'source': 'rag', 'message': 'Could not retrieve NDIS citations; showing document-only analysis.'})
 
-    ai_summary, llm_warning, used_model = _openrouter_demo_summary(
+    ai_summary, llm_warning, used_model, llm_provider = _llm_demo_summary(
         status=status,
         question=question,
         snippets=snippets,
@@ -4089,8 +4199,11 @@ def ai_summary_checklist_api():
         citations=rag_citations,
     )
 
-    provider_label = 'openrouter' if not llm_warning else 'deterministic'
-    model_label = used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
+    provider_label = llm_provider if not llm_warning else 'deterministic'
+    if llm_provider == 'azure-openai':
+        model_label = used_model or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI') or current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT') or current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER') or 'azure-openai')
+    else:
+        model_label = used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
 
     matched_requirements = document_analysis_service._match_requirements(
         text=doc_text,
