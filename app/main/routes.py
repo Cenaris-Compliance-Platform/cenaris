@@ -1,5 +1,5 @@
-from flask import render_template, redirect, url_for, jsonify, request, make_response, flash, abort, current_app, send_file
-from flask_login import login_required, current_user
+from flask import render_template, redirect, url_for, jsonify, request, make_response, flash, abort, current_app, send_file, session
+from flask_login import login_required, current_user, logout_user
 from app.main import bp
 from app.models import (
     AIUsageEvent,
@@ -27,7 +27,7 @@ from sqlalchemy import and_, or_, func
 
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
@@ -1538,6 +1538,116 @@ def index():
         return redirect(url_for('main.dashboard'))
     return render_template('main/index.html', title='Home')
 
+
+def _review_frequency_to_days(value: str | None) -> int | None:
+    text = (value or '').strip().lower()
+    if not text:
+        return None
+
+    if 'fortnight' in text:
+        return 14
+    if 'quarter' in text:
+        return 90
+    if 'month' in text and 'bi' in text:
+        return 60
+    if 'month' in text:
+        return 30
+    if 'annual' in text or 'year' in text:
+        return 365
+    if 'week' in text:
+        return 7
+    if 'day' in text:
+        return 1
+
+    import re
+
+    match = re.search(r'(\d+)\s*(day|days|week|weeks|month|months|year|years)', text)
+    if not match:
+        return None
+
+    amount = int(match.group(1))
+    unit = match.group(2)
+    if unit.startswith('day'):
+        return amount
+    if unit.startswith('week'):
+        return amount * 7
+    if unit.startswith('month'):
+        return amount * 30
+    if unit.startswith('year'):
+        return amount * 365
+    return None
+
+
+def _build_dashboard_deadlines(*, org_id: int, limit: int = 3) -> list[dict]:
+    now = datetime.now(timezone.utc)
+    query_rows = (
+        db.session.query(
+            OrganizationRequirementAssessment,
+            ComplianceRequirement,
+            ComplianceFrameworkVersion,
+        )
+        .join(ComplianceRequirement, ComplianceRequirement.id == OrganizationRequirementAssessment.requirement_id)
+        .join(ComplianceFrameworkVersion, ComplianceFrameworkVersion.id == ComplianceRequirement.framework_version_id)
+        .filter(
+            OrganizationRequirementAssessment.organization_id == int(org_id),
+            ComplianceFrameworkVersion.is_active.is_(True),
+            or_(
+                ComplianceFrameworkVersion.organization_id.is_(None),
+                ComplianceFrameworkVersion.organization_id == int(org_id),
+            ),
+        )
+        .all()
+    )
+
+    candidates: list[dict] = []
+    for assessment, requirement, framework in query_rows:
+        review_days = _review_frequency_to_days(getattr(requirement, 'review_frequency', None))
+        if not review_days:
+            continue
+
+        base_dt = assessment.last_assessed_at or assessment.updated_at
+        if not base_dt:
+            continue
+        if base_dt.tzinfo is None:
+            base_dt = base_dt.replace(tzinfo=timezone.utc)
+
+        due_dt = base_dt + timedelta(days=int(review_days))
+        days_left = (due_dt.date() - now.date()).days
+
+        # Show due/overdue items within a practical horizon.
+        if days_left > 90:
+            continue
+
+        severity = 'info'
+        if days_left <= 7:
+            severity = 'danger'
+        elif days_left <= 21:
+            severity = 'warning'
+
+        if days_left < 0:
+            due_label = f'Overdue by {abs(days_left)} day(s)'
+        elif days_left == 0:
+            due_label = 'Due today'
+        else:
+            due_label = f'Due in {days_left} day(s)'
+
+        scheme = (framework.scheme or 'Framework').strip()
+        req_label = (requirement.requirement_id or requirement.quality_indicator_code or requirement.standard_name or 'Requirement').strip()
+        title = f'{scheme}: {req_label}'
+
+        candidates.append(
+            {
+                'title': title,
+                'due_label': due_label,
+                'days_left': int(days_left),
+                'severity': severity,
+                'review_frequency': (requirement.review_frequency or '').strip(),
+            }
+        )
+
+    candidates.sort(key=lambda item: item['days_left'])
+    return candidates[: max(1, int(limit))]
+
 @bp.route('/dashboard')
 @login_required
 def dashboard():
@@ -1574,13 +1684,20 @@ def dashboard():
     )
     # Avoid full table scan for count; use an approximate or limit scope.
     total_documents = Document.query.filter_by(organization_id=org_id, is_active=True).limit(1000).count()
-    
+
+    analytics_payload = analytics_service.build_dashboard_payload(organization_id=int(org_id))
+    dashboard_summary = analytics_payload.get('summary') or {}
+    dashboard_frameworks = (analytics_payload.get('framework_analytics') or [])[:6]
+    dashboard_deadlines = _build_dashboard_deadlines(org_id=int(org_id), limit=3)
 
     return render_template('main/dashboard.html', 
                          title='Dashboard',
                          recent_documents=recent_documents,
                          recent_analysed_documents=recent_analysed_documents,
-                         total_documents=total_documents)
+                         total_documents=total_documents,
+                         dashboard_summary=dashboard_summary,
+                         dashboard_frameworks=dashboard_frameworks,
+                         dashboard_deadlines=dashboard_deadlines)
 
 @bp.route('/upload')
 @login_required
@@ -3735,6 +3852,288 @@ def _llm_demo_summary(*, status: str, question: str, snippets: list[dict], citat
     return summary, warning, model, 'openrouter'
 
 
+def _assistant_is_org_admin(org_id: int) -> bool:
+    try:
+        membership = (
+            OrganizationMembership.query
+            .filter_by(organization_id=int(org_id), user_id=int(current_user.id), is_active=True)
+            .first()
+        )
+    except Exception:
+        return False
+    role_name = ((membership.role if membership else '') or '').strip().lower()
+    return role_name in {'admin', 'owner'}
+
+
+def _assistant_default_actions() -> list[dict]:
+    return [
+        {
+            'id': 'open_ai_review',
+            'kind': 'navigate',
+            'label': 'Open AI Review',
+            'url': url_for('main.ai_demo'),
+        },
+        {
+            'id': 'open_repository',
+            'kind': 'navigate',
+            'label': 'Open Evidence Repository',
+            'url': url_for('main.evidence_repository'),
+        },
+        {
+            'id': 'open_upload',
+            'kind': 'navigate',
+            'label': 'Open Upload Section',
+            'url': url_for('main.dashboard', _anchor='upload-documents', open_upload=1),
+        },
+        {
+            'id': 'open_dashboard',
+            'kind': 'navigate',
+            'label': 'Open Dashboard',
+            'url': url_for('main.dashboard'),
+        },
+        {
+            'id': 'open_profile',
+            'kind': 'navigate',
+            'label': 'Open My Profile',
+            'url': url_for('main.profile'),
+        },
+    ]
+
+
+def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, list[dict]]:
+    lower = (query_text or '').strip().lower()
+    if not lower:
+        return (
+            'Ask me things like: "How do I run AI review?", "Open evidence repository", or "Mark all notifications as read".',
+            _assistant_default_actions(),
+        )
+
+    doc_count = (
+        Document.query
+        .filter(Document.organization_id == int(org_id), Document.is_active.is_(True))
+        .count()
+    )
+    is_admin = _assistant_is_org_admin(int(org_id))
+
+    if ('mark' in lower and 'notification' in lower and 'read' in lower) or ('clear notifications' in lower):
+        if is_admin:
+            return (
+                'I can do that for you. Confirm the action below and I will mark all notifications as read.',
+                [
+                    {
+                        'id': 'mark_all_notifications_read',
+                        'kind': 'execute',
+                        'label': 'Mark all notifications as read',
+                        'confirm': 'Mark all unread notifications as read for your organisation?'
+                    },
+                    {
+                        'id': 'open_notifications',
+                        'kind': 'navigate',
+                        'label': 'Open Notifications',
+                        'url': url_for('main.notifications'),
+                    },
+                ],
+            )
+        return (
+            'Viewing notifications is admin-only in this workspace. Ask an org admin to run this action, or open your dashboard instead.',
+            [
+                {
+                    'id': 'open_dashboard',
+                    'kind': 'navigate',
+                    'label': 'Open Dashboard',
+                    'url': url_for('main.dashboard'),
+                }
+            ],
+        )
+
+    if 'notification' in lower:
+        if is_admin:
+            return (
+                'Open Notifications to review recent events and unread items. I can also mark all as read for you.',
+                [
+                    {
+                        'id': 'open_notifications',
+                        'kind': 'navigate',
+                        'label': 'Open Notifications',
+                        'url': url_for('main.notifications'),
+                    },
+                    {
+                        'id': 'open_notifications_unread',
+                        'kind': 'navigate',
+                        'label': 'Open Unread Notifications',
+                        'url': url_for('main.notifications', status='unread'),
+                    },
+                    {
+                        'id': 'mark_all_notifications_read',
+                        'kind': 'execute',
+                        'label': 'Mark all notifications as read',
+                        'confirm': 'Mark all unread notifications as read for your organisation?'
+                    },
+                ],
+            )
+        return (
+            'Notifications are available to organisation admins in this app.',
+            _assistant_default_actions(),
+        )
+
+    if 'ai review' in lower or 'analy' in lower or 'citation' in lower or 'rag' in lower:
+        return (
+            'Use AI Review to analyze repository documents and get evidence snippets plus NDIS citations. Pick a document, choose a question preset, then run analysis.',
+            [
+                {
+                    'id': 'open_ai_review',
+                    'kind': 'navigate',
+                    'label': 'Open AI Review',
+                    'url': url_for('main.ai_demo'),
+                }
+            ],
+        )
+
+    if 'upload' in lower or 'repository' in lower or 'document' in lower or 'evidence' in lower:
+        return (
+            f'You currently have {int(doc_count)} active repository document(s). Open Evidence Repository to upload, tag, preview, and launch AI Review from a document row.',
+            [
+                {
+                    'id': 'open_repository',
+                    'kind': 'navigate',
+                    'label': 'Open Evidence Repository',
+                    'url': url_for('main.evidence_repository'),
+                },
+                {
+                    'id': 'open_upload',
+                    'kind': 'navigate',
+                    'label': 'Open Upload Section',
+                    'url': url_for('main.dashboard', _anchor='upload-documents', open_upload=1),
+                },
+                {
+                    'id': 'open_ai_review',
+                    'kind': 'navigate',
+                    'label': 'Open AI Review',
+                    'url': url_for('main.ai_demo'),
+                },
+            ],
+        )
+
+    if (
+        'profile' in lower
+        or ('change' in lower and 'name' in lower)
+        or ('update' in lower and 'name' in lower)
+        or ('password' in lower)
+        or ('my name' in lower)
+    ):
+        return (
+            'For name updates, open My Profile and edit your first/last name, then save. For password changes, use the forgot-password flow from the sign-in page if you need to reset credentials.',
+            [
+                {
+                    'id': 'open_profile',
+                    'kind': 'navigate',
+                    'label': 'Open My Profile',
+                    'url': url_for('main.profile'),
+                },
+                {
+                    'id': 'open_help',
+                    'kind': 'navigate',
+                    'label': 'Open Help',
+                    'url': url_for('main.help'),
+                },
+            ],
+        )
+
+    if 'analytics' in lower or 'report' in lower or 'trend' in lower:
+        return (
+            'Open Analytics to view readiness trends, requirement status, and downloadable reports.',
+            [
+                {
+                    'id': 'open_analytics',
+                    'kind': 'navigate',
+                    'label': 'Open Analytics',
+                    'url': url_for('main.analytics_dashboard'),
+                }
+            ],
+        )
+
+    if 'dashboard' in lower or 'home' in lower:
+        return (
+            'Dashboard is the best place to start. From there you can upload files, review compliance progress, and jump into AI tools.',
+            [
+                {
+                    'id': 'open_dashboard',
+                    'kind': 'navigate',
+                    'label': 'Open Dashboard',
+                    'url': url_for('main.dashboard'),
+                }
+            ],
+        )
+
+    return (
+        'I can help with app navigation and simple admin automations. Try: "Open AI Review", "How do I upload evidence?", "Show analytics", or "Mark all notifications as read".',
+        _assistant_default_actions(),
+    )
+
+
+@bp.route('/api/assistant/chat', methods=['POST'])
+@login_required
+@limiter.limit('20 per minute', key_func=_ai_rate_limit_key)
+def assistant_chat_api():
+    """Simple in-app assistant for product Q&A and low-risk automations."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    payload = request.get_json(silent=True) or {}
+    message = _limit_text((payload.get('message') or '').strip(), max_chars=800)
+    action_id = (payload.get('action_id') or '').strip()
+    execute_flag = str(payload.get('execute') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+    # Allow execution calls with action_id only.
+    if execute_flag and action_id == 'mark_all_notifications_read':
+        if not _assistant_is_org_admin(int(org_id)):
+            return jsonify(
+                {
+                    'success': True,
+                    'reply': 'I can only run this action for organisation admins.',
+                    'actions': [
+                        {
+                            'id': 'open_dashboard',
+                            'kind': 'navigate',
+                            'label': 'Open Dashboard',
+                            'url': url_for('main.dashboard'),
+                        }
+                    ],
+                    'executed_action': {'id': action_id, 'success': False},
+                }
+            )
+
+        marked = notification_service.mark_all_read(organization_id=int(org_id), user_id=int(current_user.id))
+        invalidate_org_switcher_context_cache(int(current_user.id), int(org_id))
+        return jsonify(
+            {
+                'success': True,
+                'reply': f'Done. I marked {int(marked)} notification(s) as read.',
+                'actions': [
+                    {
+                        'id': 'open_notifications',
+                        'kind': 'navigate',
+                        'label': 'Open Notifications',
+                        'url': url_for('main.notifications'),
+                    }
+                ],
+                'executed_action': {'id': action_id, 'success': True, 'count': int(marked)},
+            }
+        )
+
+    reply, actions = _assistant_compose_response(org_id=int(org_id), query_text=message)
+    return jsonify(
+        {
+            'success': True,
+            'reply': reply,
+            'actions': actions,
+            'executed_action': None,
+        }
+    )
+
+
 @bp.route('/ai-demo')
 @login_required
 def ai_demo():
@@ -4068,58 +4467,13 @@ def _build_checklist_from_analysis(analysis: dict) -> dict:
 @bp.route('/ai-summary-test')
 @login_required
 def ai_summary_test():
-    """Experimental checklist summary UI for AI analysis."""
+    """Legacy route retained for compatibility and redirected to AI Review."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
 
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        abort(403)
-
-    requested_ids = [int(v) for v in request.args.getlist('doc_ids') if str(v).isdigit()]
-    selected_documents = (
-        Document.query
-        .filter(
-            Document.organization_id == int(org_id),
-            Document.is_active.is_(True),
-            Document.id.in_(requested_ids),
-        )
-        .order_by(Document.uploaded_at.desc())
-        .all()
-        if requested_ids
-        else []
-    )
-
-    if not selected_documents:
-        selected_documents = (
-            Document.query
-            .filter(
-                Document.organization_id == int(org_id),
-                Document.is_active.is_(True),
-            )
-            .order_by(Document.uploaded_at.desc())
-            .limit(50)
-            .all()
-        )
-
-    selected_document_ids = [int(document.id) for document in selected_documents]
-
-    active_doc_id_raw = (request.args.get('active_doc_id') or '').strip()
-    active_doc_id = int(active_doc_id_raw) if active_doc_id_raw.isdigit() else None
-    if active_doc_id not in selected_document_ids:
-        active_doc_id = selected_document_ids[0] if selected_document_ids else None
-
-    autostart = (request.args.get('autostart') or '').strip().lower() in {'1', 'true', 'yes'}
-
-    return render_template(
-        'main/ai_summary_test.html',
-        title='AI Summary Test',
-        selected_documents=selected_documents,
-        selected_document_ids=selected_document_ids,
-        active_doc_id=active_doc_id,
-        autostart=autostart,
-    )
+    flash('AI Summary Test has been merged into AI Review.', 'info')
+    return redirect(url_for('main.ai_demo'))
 
 
 @bp.route('/api/ai/summary-checklist', methods=['POST'])
@@ -4713,7 +5067,8 @@ def profile():
         title='My Profile',
         form=form,
         current_membership=current_membership,
-        departments=departments
+        departments=departments,
+        has_local_password=bool((getattr(current_user, 'password_hash', '') or '').strip()),
     )
 
 
@@ -4773,6 +5128,83 @@ def profile_update_department():
         current_app.logger.error(f"Failed to update department for user {current_user.id}: {e}")
 
     return redirect(url_for('main.profile'))
+
+
+@bp.route('/profile/delete-account', methods=['POST'])
+@login_required
+def profile_delete_account():
+    """Deactivate the current user account and end all sessions."""
+    confirm_text = (request.form.get('confirm_text') or '').strip().upper()
+    password = (request.form.get('password') or '').strip()
+
+    if confirm_text != 'DELETE':
+        flash('Type DELETE to confirm account deletion.', 'error')
+        return redirect(url_for('main.profile'))
+
+    user = db.session.get(User, int(current_user.id))
+    if not user:
+        flash('Account not found.', 'error')
+        return redirect(url_for('main.profile'))
+
+    has_local_password = bool((user.password_hash or '').strip())
+    if has_local_password and not password:
+        flash('Password is required for password-based accounts.', 'error')
+        return redirect(url_for('main.profile'))
+
+    if has_local_password and not user.check_password(password):
+        flash('Password is incorrect.', 'error')
+        return redirect(url_for('main.profile'))
+
+    active_memberships = (
+        OrganizationMembership.query
+        .filter_by(user_id=int(user.id), is_active=True)
+        .all()
+    )
+
+    # Safety: do not allow deleting the only active admin in any organisation.
+    for membership in active_memberships:
+        if not _membership_has_permission(membership, 'users.manage'):
+            continue
+
+        active_org_memberships = (
+            OrganizationMembership.query
+            .filter_by(organization_id=int(membership.organization_id), is_active=True)
+            .all()
+        )
+        active_admins = sum(1 for item in active_org_memberships if _membership_has_permission(item, 'users.manage'))
+        if active_admins <= 1:
+            flash('You are the only active admin in at least one organisation. Promote another admin before deleting this account.', 'error')
+            return redirect(url_for('main.profile'))
+
+    try:
+        for membership in active_memberships:
+            membership.is_active = False
+
+        # Free up the original email so users can re-register with the same address later.
+        # Keep a traceable but non-routable tombstone value.
+        tombstone_email = f"deleted+{int(user.id)}+{int(time.time())}@deleted.local"
+        user.email = tombstone_email
+        user.email_verified = False
+        user.password_hash = None
+        user.first_name = None
+        user.last_name = None
+        user.full_name = None
+
+        user.is_active = False
+        user.organization_id = None
+        user.session_version = int(getattr(user, 'session_version', 1) or 1) + 1
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to delete account for user_id=%s', getattr(current_user, 'id', None))
+        flash('Could not delete account right now. Please try again.', 'error')
+        return redirect(url_for('main.profile'))
+
+    logout_user()
+    session.clear()
+    flash('Your account has been deleted.', 'success')
+    return redirect(url_for('main.index'))
 
 
 @bp.route('/profile/avatar')

@@ -1,0 +1,13 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cenaris Compass logo">
+  <defs>
+    <linearGradient id="g1" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0066CC"/>
+      <stop offset="1" stop-color="#00A3A3"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="56" fill="url(#g1)"/>
+  <circle cx="64" cy="64" r="40" fill="white" fill-opacity="0.14"/>
+  <path d="M64 26L74 54L102 64L74 74L64 102L54 74L26 64L54 54L64 26Z" fill="white"/>
+  <circle cx="64" cy="64" r="8" fill="#0066CC"/>
+  <path d="M92 36L97 46L108 48L100 56L102 67L92 62L82 67L84 56L76 48L87 46L92 36Z" fill="white" fill-opacity="0.9"/>
+</svg>

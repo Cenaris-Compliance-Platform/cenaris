@@ -160,7 +160,7 @@ class RegisterForm(FlaskForm):
     def validate_email(self, field):
         """Check if email is already registered."""
         user = User.query.filter_by(email=field.data.lower().strip()).first()
-        if user:
+        if user and bool(getattr(user, 'is_active', False)):
             raise ValidationError('This email address is already registered. Please use a different email or sign in.')
 
 
