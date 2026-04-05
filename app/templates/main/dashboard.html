@@ -123,25 +123,25 @@
           <div class="row mb-4">
             <div class="col-md-3 col-6 mb-3">
               <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.1), rgba(var(--bs-success-rgb), 0.05));">
-                <div class="h2 fw-bold text-success mb-1">85%</div>
+                <div class="h2 fw-bold text-success mb-1">{{ (dashboard_summary.compliance_rate or 0)|round(0)|int }}%</div>
                 <div class="text-body-secondary small">Overall Readiness</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
               <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), rgba(var(--bs-info-rgb), 0.05));">
-                <div class="h2 fw-bold text-info mb-1">{{ total_documents }}</div>
+                <div class="h2 fw-bold text-info mb-1">{{ dashboard_summary.document_count or total_documents }}</div>
                 <div class="text-body-secondary small">Documents Uploaded</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
               <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), rgba(var(--bs-warning-rgb), 0.05));">
-                <div class="h2 fw-bold text-warning mb-1">12</div>
+                <div class="h2 fw-bold text-warning mb-1">{{ dashboard_summary.gap_requirements or 0 }}</div>
                 <div class="text-body-secondary small">Gaps Identified</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
               <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.1), rgba(var(--bs-danger-rgb), 0.05));">
-                <div class="h2 fw-bold text-danger mb-1">3</div>
+                <div class="h2 fw-bold text-danger mb-1">{{ dashboard_deadlines|length }}</div>
                 <div class="text-body-secondary small">Upcoming Deadlines</div>
               </div>
             </div>
@@ -149,126 +149,38 @@
 
           <!-- Framework Compliance Tiles -->
           <div class="row g-3 mb-4">
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">ISO 27001</h6>
-                      <small class="text-body-secondary">Information Security</small>
+            {% if dashboard_frameworks %}
+              {% for fw in dashboard_frameworks %}
+              {% set pct = fw.compliance_rate or 0 %}
+              {% set tone = 'success' if pct >= 80 else ('warning' if pct >= 60 else 'danger') %}
+              <div class="col-md-6 col-lg-4">
+                <div class="card border h-100">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                      <div>
+                        <h6 class="fw-bold mb-0">{{ fw.framework }}</h6>
+                        <small class="text-body-secondary">Live framework coverage</small>
+                      </div>
+                      <span class="badge bg-{{ tone }}">{{ pct|round(0)|int }}%</span>
                     </div>
-                    <span class="badge bg-success">92%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-success" style="width: 92%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>138/150</span>
-                    <span class="text-body-secondary">controls met</span>
+                    <div class="progress mb-2" style="height: 8px;">
+                      <div class="progress-bar bg-{{ tone }}" style="width: {{ pct }}%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between text-sm">
+                      <span class="text-{{ tone }}"><i class="bi bi-check-circle-fill me-1"></i>{{ fw.compliant }}/{{ fw.total }}</span>
+                      <span class="text-body-secondary">requirements marked compliant</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">SOC 2 Type II</h6>
-                      <small class="text-body-secondary">Trust Services</small>
-                    </div>
-                    <span class="badge bg-info">88%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-info" style="width: 88%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-info"><i class="bi bi-check-circle-fill me-1"></i>67/76</span>
-                    <span class="text-body-secondary">criteria met</span>
-                  </div>
+              {% endfor %}
+            {% else %}
+              <div class="col-12">
+                <div class="alert alert-info mb-0">
+                  No live framework analytics yet. Start linking evidence to requirements and running AI review.
                 </div>
               </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">GDPR</h6>
-                      <small class="text-body-secondary">Data Protection</small>
-                    </div>
-                    <span class="badge bg-warning">75%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-warning" style="width: 75%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-warning"><i class="bi bi-check-circle-fill me-1"></i>36/48</span>
-                    <span class="text-body-secondary">articles covered</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">NIST CSF</h6>
-                      <small class="text-body-secondary">Cybersecurity Framework</small>
-                    </div>
-                    <span class="badge bg-success">90%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-success" style="width: 90%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>81/90</span>
-                    <span class="text-body-secondary">functions met</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">HIPAA</h6>
-                      <small class="text-body-secondary">Healthcare Privacy</small>
-                    </div>
-                    <span class="badge bg-warning">78%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-warning" style="width: 78%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-warning"><i class="bi bi-check-circle-fill me-1"></i>47/60</span>
-                    <span class="text-body-secondary">requirements met</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">PCI DSS</h6>
-                      <small class="text-body-secondary">Payment Card Security</small>
-                    </div>
-                    <span class="badge bg-danger">65%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-danger" style="width: 65%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-danger"><i class="bi bi-exclamation-circle-fill me-1"></i>39/60</span>
-                    <span class="text-body-secondary">requirements met</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {% endif %}
           </div>
 
           <!-- Upcoming Deadlines -->
@@ -277,47 +189,32 @@
               <h6 class="fw-bold mb-3">
                 <i class="bi bi-calendar-event text-danger me-2"></i>Upcoming Compliance Deadlines
               </h6>
+              {% if dashboard_deadlines %}
               <div class="row g-2">
+                {% for item in dashboard_deadlines %}
                 <div class="col-md-4">
                   <div class="d-flex align-items-center p-2 rounded" style="background-color: var(--bs-body-bg);">
                     <div class="flex-shrink-0 me-3">
-                      <div class="bg-danger bg-opacity-10 rounded p-2">
-                        <i class="bi bi-calendar-x text-danger" style="font-size: 1.2rem;"></i>
+                      <div class="bg-{{ item.severity }} bg-opacity-10 rounded p-2">
+                        <i class="bi bi-calendar-event text-{{ item.severity }}" style="font-size: 1.2rem;"></i>
                       </div>
                     </div>
                     <div>
-                      <div class="fw-semibold small">ISO 27001 Audit</div>
-                      <div class="text-danger small">Due in 5 days</div>
+                      <div class="fw-semibold small">{{ item.title }}</div>
+                      <div class="text-{{ item.severity }} small">{{ item.due_label }}</div>
+                      {% if item.review_frequency %}
+                      <div class="text-body-secondary" style="font-size: 0.75rem;">Review frequency: {{ item.review_frequency }}</div>
+                      {% endif %}
                     </div>
                   </div>
                 </div>
-                <div class="col-md-4">
-                  <div class="d-flex align-items-center p-2 rounded" style="background-color: var(--bs-body-bg);">
-                    <div class="flex-shrink-0 me-3">
-                      <div class="bg-warning bg-opacity-10 rounded p-2">
-                        <i class="bi bi-calendar-check text-warning" style="font-size: 1.2rem;"></i>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="fw-semibold small">GDPR Review</div>
-                      <div class="text-warning small">Due in 15 days</div>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="d-flex align-items-center p-2 rounded" style="background-color: var(--bs-body-bg);">
-                    <div class="flex-shrink-0 me-3">
-                      <div class="bg-info bg-opacity-10 rounded p-2">
-                        <i class="bi bi-calendar text-info" style="font-size: 1.2rem;"></i>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="fw-semibold small">SOC 2 Assessment</div>
-                      <div class="text-info small">Due in 28 days</div>
-                    </div>
-                  </div>
-                </div>
+                {% endfor %}
               </div>
+              {% else %}
+              <div class="alert alert-info mb-0 small">
+                No configured review deadlines yet. Deadlines appear when requirements have a review frequency and at least one completed assessment.
+              </div>
+              {% endif %}
               <div class="text-center mt-3">
                 <a href="{{ url_for('main.ai_demo') }}" class="btn btn-sm btn-outline-primary">
                   <i class="bi bi-stars me-1"></i>Review in AI Workspace

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import pytest
-from werkzeug.exceptions import Forbidden
 
 
 def test_notifications_page_admin_only(client, app, db_session, seed_org_user):
@@ -35,8 +33,8 @@ def test_notifications_page_admin_only(client, app, db_session, seed_org_user):
     )
     assert login_resp.status_code in {302, 303}
 
-    with pytest.raises(Forbidden):
-        client.get('/notifications', follow_redirects=False)
+    resp = client.get('/notifications', follow_redirects=False)
+    assert resp.status_code == 403
 
 
 def test_upload_creates_admin_notification(client, app, db_session, seed_org_user, monkeypatch):
