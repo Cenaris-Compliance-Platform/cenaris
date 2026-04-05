@@ -57,6 +57,7 @@ def test_bulk_upload_multiple_files(client, app, seed_org_user, monkeypatch):
         assert "policy_a.pdf" in names
         assert "policy_b.pdf" in names
         assert all(int(d.uploaded_by) == int(user_id) for d in docs)
+        assert all(d.ai_status is None for d in docs)
 
 
 def test_add_remove_tags_and_filter(client, app, db_session, seed_org_user):

@@ -325,6 +325,45 @@ def _client_ip() -> str | None:
     return request.remote_addr
 
 
+def _active_membership_count_for_user(user_id: int) -> int:
+    try:
+        return int(
+            OrganizationMembership.query
+            .filter_by(user_id=int(user_id), is_active=True)
+            .count()
+        )
+    except Exception:
+        return 0
+
+
+def _release_inactive_email(email: str) -> bool:
+    """Free an email from an inactive account with no active memberships.
+
+    Returns True if a release happened, else False.
+    """
+    normalized = (email or '').strip().lower()
+    if not normalized:
+        return False
+
+    user = User.query.filter_by(email=normalized).first()
+    if not user or bool(getattr(user, 'is_active', False)):
+        return False
+
+    # Keep strict safety: only release users not active in any organisation.
+    if _active_membership_count_for_user(int(user.id)) > 0:
+        return False
+
+    tombstone_email = f"deleted+{int(user.id)}+{int(_now_ts())}@deleted.local"
+    user.email = tombstone_email
+    try:
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to release inactive email %s', normalized)
+        return False
+
+
 def _log_login_event(
     *,
     email: str | None,
@@ -615,6 +654,9 @@ def signup():
         time_zone = (form.time_zone.data or '').strip() or 'Australia/Sydney'
         email = form.email.data.lower().strip()
         password = form.password.data
+
+        # Allow re-registration when the old account exists but is inactive and detached.
+        _release_inactive_email(email)
         
         try:
             organization = Organization(
@@ -1036,6 +1078,12 @@ def oauth_callback(provider):
     picture_url = (userinfo.get('picture') if isinstance(userinfo, dict) else None) or None
 
     user = User.query.filter_by(email=email).first()
+    if user and not bool(getattr(user, 'is_active', False)):
+        # If this email belongs to an inactive, detached account, allow fresh OAuth signup.
+        released = _release_inactive_email(email)
+        if released:
+            user = None
+
     if not user:
         # For OAuth sign-ups, create a placeholder organization + membership,
         # then require email verification (same as password signup).

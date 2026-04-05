@@ -185,9 +185,9 @@
                 <!-- keep real radios for WTForms submission -->
                 <div class="d-none">
                   {% for subfield in form.theme %}
-                    {% if subfield.data == 'light' %}
+                    {% if subfield._value() == 'light' %}
                       {{ subfield(id='theme-light') }}
-                    {% elif subfield.data == 'dark' %}
+                    {% elif subfield._value() == 'dark' %}
                       {{ subfield(id='theme-dark') }}
                     {% else %}
                       {{ subfield() }}
@@ -231,13 +231,22 @@
       document.documentElement.setAttribute('data-bs-theme', theme);
     };
 
+    const submitFormSafely = () => {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+        return;
+      }
+      // Avoid `form.submit is not a function` when a control is named `submit`.
+      HTMLFormElement.prototype.submit.call(form);
+    };
+
     const radios = form.querySelectorAll('input[type="radio"]');
     radios.forEach((r) => {
       r.addEventListener('change', () => {
         const theme = r.value;
         applyTheme(theme);
         // Auto-submit after a short delay so the user sees the change
-        window.setTimeout(() => form.submit(), 350);
+        window.setTimeout(() => submitFormSafely(), 350);
       });
     });
 

@@ -11,8 +11,14 @@ from datetime import datetime, timezone
 import logging
 import re
 import os
+import io
 
 logger = logging.getLogger(__name__)
+
+
+def _build_document_search_text(document: Document, extracted_text: str | None = None) -> str:
+    base = [document.filename or '', document.content_type or '', (extracted_text or '')[:50000]]
+    return ' '.join([item.strip() for item in base if (item or '').strip()])
 
 def get_versioned_filename(original_filename, organization_id):
     """
@@ -115,7 +121,13 @@ def upload_file():
         failed_count = 0
 
         for file in incoming_files:
-            validation_result = FileValidationService.validate_file(file.stream, file.filename)
+            try:
+                raw_bytes = file.stream.read()
+                file.stream.seek(0)
+            except Exception:
+                raw_bytes = b''
+
+            validation_result = FileValidationService.validate_file(io.BytesIO(raw_bytes), file.filename)
             if not validation_result['success']:
                 failed_count += 1
                 flash(f"{file.filename}: {validation_result['error']}", 'error')
@@ -136,9 +148,8 @@ def upload_file():
                 'upload_timestamp': str(int(datetime.now(timezone.utc).timestamp())),
             }
 
-            file.stream.seek(0)
             upload_result = storage_service.upload_file(
-                file_stream=file.stream,
+                file_stream=io.BytesIO(raw_bytes),
                 file_path=file_path,
                 content_type=validation_result['content_type'],
                 metadata=metadata,
@@ -160,12 +171,16 @@ def upload_file():
                     blob_name=file_path,
                     file_size=validation_result['file_size'],
                     content_type=db_content_type,
+                    search_text='',
                     uploaded_by=current_user.id,
                     organization_id=int(org_id),
                 )
                 db.session.add(document)
                 db.session.commit()
                 success_count += 1
+
+                document.search_text = _build_document_search_text(document, None)
+                db.session.commit()
 
                 try:
                     notification_service.create_admin_notification(

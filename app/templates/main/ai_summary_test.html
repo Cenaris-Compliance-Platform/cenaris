@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+      <div>
+        <h1 class="h3 fw-bold mb-1">AI Summary Test <span class="badge text-bg-warning">Test</span></h1>
+        <p class="text-body-secondary mb-0">Experimental checklist summary for repository documents.</p>
+      </div>
+    </div>
+  </div>
+
+  {% if selected_documents %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+          <div class="fw-semibold mb-1">Select a repository document</div>
+          <div class="small text-body-secondary">This test view highlights what is clear, partial, and missing.</div>
+        </div>
+        <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-folder2-open me-1"></i>Back to Repository
+        </a>
+      </div>
+      <form id="summaryTestForm" class="row g-3 mt-1" data-skip-loading="1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-md-6">
+          <label for="storedDocId" class="form-label">Repository document</label>
+          <select id="storedDocId" name="stored_doc_id" class="form-select">
+            {% for document in selected_documents %}
+            <option value="{{ document.id }}" {% if active_doc_id and active_doc_id == document.id %}selected{% elif not active_doc_id and loop.first %}selected{% endif %}>{{ document.filename }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+          <button id="runSummaryBtn" type="submit" class="btn btn-primary">
+            <span id="runSummaryLabel">Generate Checklist Summary</span>
+          </button>
+          <span id="summaryStatusText" class="small text-body-secondary ms-3 d-none"></span>
+        </div>
+        <div class="col-12 d-none" id="summaryProgressWrap">
+          <div class="progress" role="progressbar" aria-label="Checklist analysis progress" aria-valuemin="0" aria-valuemax="100">
+            <div id="summaryProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <div class="fw-semibold mb-1">No repository documents available</div>
+          <div class="small text-body-secondary">Upload from Dashboard/Repository first, then open AI Summary Test.</div>
+        </div>
+        <a href="{{ url_for('main.dashboard', _anchor='upload-documents', open_upload=1) }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-upload me-1"></i>Upload Documents
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div id="summaryResultCard" class="card border-0 shadow-sm d-none">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+          <h5 class="card-title mb-1">Checklist Summary</h5>
+          <div class="small text-body-secondary" id="summaryMeta"></div>
+        </div>
+        <div class="text-end">
+          <div class="small text-body-secondary">Overall status</div>
+          <div id="summaryStatusBadge" class="badge bg-secondary fs-6 px-3 py-2">-</div>
+          <div id="summaryConfidence" class="small text-body-secondary mt-1">-</div>
+        </div>
+      </div>
+
+      <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th style="min-width: 220px;">Requirement / Area</th>
+              <th style="min-width: 120px;">Status</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="summaryChecklistTable"></tbody>
+        </table>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <div class="border rounded p-3 bg-body-tertiary h-100">
+            <div class="fw-semibold mb-2">Clear</div>
+            <ul id="summaryClear" class="small text-body-secondary mb-0"></ul>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="border rounded p-3 bg-body-tertiary h-100">
+            <div class="fw-semibold mb-2">Partial</div>
+            <ul id="summaryPartial" class="small text-body-secondary mb-0"></ul>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="border rounded p-3 bg-body-tertiary h-100">
+            <div class="fw-semibold mb-2">Gap</div>
+            <ul id="summaryGap" class="small text-body-secondary mb-0"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div id="summaryWarnings" class="d-flex flex-column gap-2 mb-3"></div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const form = document.getElementById('summaryTestForm');
+    const button = document.getElementById('runSummaryBtn');
+    const buttonLabel = document.getElementById('runSummaryLabel');
+    const statusText = document.getElementById('summaryStatusText');
+    const progressWrap = document.getElementById('summaryProgressWrap');
+    const progressBar = document.getElementById('summaryProgressBar');
+    const storedDocSelect = document.getElementById('storedDocId');
+    const resultCard = document.getElementById('summaryResultCard');
+    const statusBadge = document.getElementById('summaryStatusBadge');
+    const confidenceEl = document.getElementById('summaryConfidence');
+    const tableBody = document.getElementById('summaryChecklistTable');
+    const clearList = document.getElementById('summaryClear');
+    const partialList = document.getElementById('summaryPartial');
+    const gapList = document.getElementById('summaryGap');
+    const warningsEl = document.getElementById('summaryWarnings');
+    const metaEl = document.getElementById('summaryMeta');
+    const AUTO_START = {{ 'true' if autostart else 'false' }};
+    let progressTimer = null;
+    let progressValue = 0;
+    let requestInFlight = false;
+
+    if (!form) {
+      return;
+    }
+
+    const renderIdleButton = () => {
+      if (buttonLabel) {
+        buttonLabel.textContent = 'Generate Checklist Summary';
+      } else if (button) {
+        button.textContent = 'Generate Checklist Summary';
+      }
+    };
+
+    const renderLoadingButton = () => {
+      if (buttonLabel) {
+        buttonLabel.textContent = 'Analyzing...';
+      } else if (button) {
+        button.textContent = 'Analyzing...';
+      }
+    };
+
+    const startProgress = () => {
+      if (!progressWrap || !progressBar) {
+        return;
+      }
+      progressValue = 8;
+      progressWrap.classList.remove('d-none');
+      progressBar.style.width = `${progressValue}%`;
+      progressBar.textContent = `${progressValue}%`;
+      progressBar.setAttribute('aria-valuenow', String(progressValue));
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
+      progressTimer = setInterval(function () {
+        progressValue = Math.min(progressValue + 7, 90);
+        progressBar.style.width = `${progressValue}%`;
+        progressBar.textContent = `${progressValue}%`;
+        progressBar.setAttribute('aria-valuenow', String(progressValue));
+      }, 300);
+    };
+
+    const finishProgress = () => {
+      if (!progressWrap || !progressBar) {
+        return;
+      }
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      progressValue = 100;
+      progressBar.style.width = '100%';
+      progressBar.textContent = '100%';
+      progressBar.setAttribute('aria-valuenow', '100');
+      window.setTimeout(function () {
+        progressWrap.classList.add('d-none');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.setAttribute('aria-valuenow', '0');
+      }, 450);
+    };
+
+    const setRunning = (running, text) => {
+      requestInFlight = !!running;
+      button.disabled = !!running;
+      button.classList.remove('loading');
+      button.classList.toggle('disabled', !!running);
+      if (running) {
+        renderLoadingButton();
+      } else {
+        renderIdleButton();
+      }
+      button.setAttribute('aria-busy', running ? 'true' : 'false');
+      statusText.classList.remove('d-none');
+      statusText.textContent = text || '';
+    };
+
+    const renderBadge = (status) => {
+      statusBadge.className = 'badge';
+      const normalized = (status || '').toLowerCase();
+      if (normalized === 'mature') {
+        statusBadge.classList.add('bg-primary');
+      } else if (normalized === 'ok') {
+        statusBadge.classList.add('bg-success');
+      } else if (normalized === 'high risk gap') {
+        statusBadge.classList.add('bg-warning', 'text-dark');
+      } else if (normalized === 'critical gap') {
+        statusBadge.classList.add('bg-danger');
+      } else {
+        statusBadge.classList.add('bg-secondary');
+      }
+      statusBadge.textContent = status || 'Unknown';
+    };
+
+    const appendListItems = (listEl, items) => {
+      listEl.innerHTML = '';
+      if (!items || items.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'None.';
+        listEl.appendChild(li);
+        return;
+      }
+      items.forEach(function (item) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        listEl.appendChild(li);
+      });
+    };
+
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+      if (requestInFlight) {
+        return;
+      }
+      if (!storedDocSelect || !storedDocSelect.value) {
+        setRunning(false, 'Choose a repository document first.');
+        return;
+      }
+
+      setRunning(true, 'Generating checklist summary...');
+      startProgress();
+      resultCard.classList.add('d-none');
+      warningsEl.innerHTML = '';
+      tableBody.innerHTML = '';
+
+      try {
+        const formData = new FormData(form);
+        const response = await fetch("{{ url_for('main.ai_summary_checklist_api') }}", {
+          method: 'POST',
+          body: formData,
+        });
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_e) {
+          payload = null;
+        }
+
+        if (!response.ok || !payload || !payload.success) {
+          throw new Error((payload && payload.error) || 'Analysis failed');
+        }
+
+        renderBadge(payload.status);
+        confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}% confidence`;
+        metaEl.textContent = `Document: ${(payload.meta || {}).filename || 'Unknown'} | Source: Repository`;
+
+        const checklist = (payload.checklist || {});
+        const items = checklist.items || [];
+        items.forEach(function (item) {
+          const row = document.createElement('tr');
+
+          const labelCell = document.createElement('td');
+          labelCell.textContent = item.label || '-';
+          row.appendChild(labelCell);
+
+          const statusCell = document.createElement('td');
+          const badge = document.createElement('span');
+          const status = item.status || 'Gap';
+          badge.className = 'badge';
+          if (status === 'Clear') {
+            badge.classList.add('bg-success');
+          } else if (status === 'Partial') {
+            badge.classList.add('bg-warning', 'text-dark');
+          } else {
+            badge.classList.add('bg-danger');
+          }
+          badge.textContent = status;
+          statusCell.appendChild(badge);
+          row.appendChild(statusCell);
+
+          const noteCell = document.createElement('td');
+          noteCell.textContent = item.note || '-';
+          row.appendChild(noteCell);
+
+          tableBody.appendChild(row);
+        });
+
+        appendListItems(clearList, (checklist.summary || {}).clear || []);
+        appendListItems(partialList, (checklist.summary || {}).partial || []);
+        appendListItems(gapList, (checklist.summary || {}).gap || []);
+
+        const warningItems = payload.warning_items || [];
+        if (warningItems.length > 0) {
+          warningItems.forEach(function (item) {
+            const warning = document.createElement('div');
+            warning.className = 'alert alert-warning py-2 px-3 mb-0 small';
+            const source = ((item && item.source) || 'system').toUpperCase();
+            const message = (item && item.message) || '';
+            warning.textContent = `[${source}] ${message}`;
+            warningsEl.appendChild(warning);
+          });
+        }
+
+        resultCard.classList.remove('d-none');
+        resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setRunning(false, 'Done.');
+      } catch (error) {
+        const message = (error && error.message) || 'Analysis failed.';
+        setRunning(false, message);
+      } finally {
+        finishProgress();
+      }
+    });
+
+    renderIdleButton();
+
+    if (AUTO_START && storedDocSelect && (storedDocSelect.value || '').trim()) {
+      window.setTimeout(function () {
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+      }, 200);
+    }
+  })();
+</script>
+{% endblock %}

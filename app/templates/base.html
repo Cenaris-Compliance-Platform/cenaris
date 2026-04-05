@@ -396,6 +396,63 @@
         background-color: var(--bs-tertiary-bg);
         border-top-color: var(--bs-primary);
       }
+
+      .assistant-fab {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        z-index: 1040;
+        width: 58px;
+        height: 58px;
+        border: none;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #0066cc 0%, #00a3a3 100%);
+        color: #ffffff;
+        box-shadow: 0 10px 24px rgba(0, 102, 204, 0.35);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .assistant-fab:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 28px rgba(0, 102, 204, 0.45);
+      }
+
+      .assistant-messages {
+        height: min(56vh, 460px);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .assistant-msg {
+        max-width: 88%;
+        border-radius: 14px;
+        padding: 10px 12px;
+        font-size: 0.93rem;
+        white-space: pre-wrap;
+      }
+
+      .assistant-msg.assistant {
+        align-self: flex-start;
+        background: var(--bs-tertiary-bg);
+        border: 1px solid var(--bs-border-color);
+      }
+
+      .assistant-msg.user {
+        align-self: flex-end;
+        background: var(--bs-primary-bg-subtle);
+        border: 1px solid var(--bs-primary-border-subtle);
+      }
+
+      .assistant-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -473,26 +530,10 @@
             </li>
             <li class="nav-item">
               <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.ai_evidence' %}active{% endif %}"
-                href="{{ url_for('main.ai_evidence') }}"
-              >
-                <i class="bi bi-robot me-1"></i>AI Evidence
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
                 class="nav-link nav-btn {% if request.endpoint == 'main.ai_demo' %}active{% endif %}"
                 href="{{ url_for('main.ai_demo') }}"
               >
-                <i class="bi bi-flask me-1"></i>AI Demo
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
-                href="{{ url_for('main.gap_analysis') }}"
-              >
-                <i class="bi bi-graph-up me-1"></i>Gap Analysis
+                <i class="bi bi-stars me-1"></i>AI Review
               </a>
             </li>
             <li class="nav-item">
@@ -502,32 +543,6 @@
               >
                 <i class="bi bi-bar-chart-line me-1"></i>Analytics
               </a>
-            </li>
-            <li class="nav-item dropdown">
-              <a
-                class="nav-link nav-btn dropdown-toggle {% if request.endpoint in ['main.compliance_requirements', 'main.audit_export'] %}active{% endif %}"
-                href="#"
-                id="navbarMoreDropdown"
-                role="button"
-                data-bs-toggle="dropdown"
-                aria-expanded="false"
-              >
-                <i class="bi bi-list me-1"></i>More
-              </a>
-              <ul class="dropdown-menu" aria-labelledby="navbarMoreDropdown">
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.compliance_requirements') }}">
-                    <i class="bi bi-list-check me-2"></i>Requirements
-                  </a>
-                </li>
-                {% if can_export_audit %}
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.audit_export') }}">
-                    <i class="bi bi-download me-2"></i>Audit Export
-                  </a>
-                </li>
-                {% endif %}
-              </ul>
             </li>
             {% endif %}
           </ul>
@@ -547,7 +562,7 @@
               >
                 <i class="bi bi-bell"></i>
                 {% if (admin_notifications_unread or 0) > 0 %}
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">
+                <span class="js-admin-unread-count position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" data-unread-count="{{ admin_notifications_unread }}">
                   {{ admin_notifications_unread }}
                 </span>
                 {% endif %}
@@ -555,24 +570,38 @@
               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarNotificationsDropdown" style="min-width: 320px;">
                 <li class="dropdown-header d-flex justify-content-between align-items-center">
                   <span>Notifications</span>
-                  {% if (admin_notifications_unread or 0) > 0 %}
-                  <span class="badge rounded-pill text-bg-danger">{{ admin_notifications_unread }}</span>
-                  {% endif %}
+                  <div class="d-flex align-items-center gap-2">
+                    {% if (admin_notifications_unread or 0) > 0 %}
+                    <span class="js-admin-unread-count badge rounded-pill text-bg-danger" data-unread-count="{{ admin_notifications_unread }}">{{ admin_notifications_unread }}</span>
+                    <form method="POST" action="{{ url_for('main.mark_all_notifications_read') }}" class="d-inline js-notification-action-form" data-skip-loading="1" data-action-kind="mark-all">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                      <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2">Mark all read</button>
+                    </form>
+                    {% endif %}
+                  </div>
                 </li>
                 <li><hr class="dropdown-divider" /></li>
                 {% for item in admin_notifications_recent %}
-                <li>
-                  <a class="dropdown-item py-2" href="{{ url_for('main.notifications') }}">
+                <li data-notification-row data-notification-id="{{ item.id }}" data-is-read="{{ '1' if item.is_read else '0' }}">
+                  <div class="dropdown-item py-2">
                     <div class="d-flex justify-content-between align-items-start gap-2">
-                      <div class="small">
+                      <div class="small pe-2">
                         <div class="fw-semibold">{{ item.title }}</div>
                         <div class="text-body-secondary text-wrap">{{ item.message[:90] }}{% if item.message|length > 90 %}…{% endif %}</div>
                       </div>
-                      {% if not item.is_read %}
-                      <span class="badge text-bg-primary">New</span>
-                      {% endif %}
+                      <div class="d-flex flex-column align-items-end gap-1">
+                        {% if not item.is_read %}
+                        <span class="badge text-bg-primary js-notification-state-badge">New</span>
+                        <form method="POST" action="{{ url_for('main.mark_notification_read', notification_id=item.id) }}" class="d-inline js-notification-action-form" data-skip-loading="1" data-action-kind="mark-one" data-notification-id="{{ item.id }}">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                          <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2">Mark read</button>
+                        </form>
+                        {% else %}
+                        <span class="badge text-bg-secondary js-notification-state-badge">Read</span>
+                        {% endif %}
+                      </div>
                     </div>
-                  </a>
+                  </div>
                 </li>
                 {% else %}
                 <li><span class="dropdown-item-text text-body-secondary small">No notifications yet.</span></li>
@@ -774,6 +803,52 @@
     <main class="{% block main_class %}container my-4{% endblock %}">
       {% block content %}{% endblock %}
     </main>
+
+    {% if current_user.is_authenticated and request.endpoint and not request.endpoint.startswith('auth.') and not request.endpoint.startswith('onboarding.') %}
+    <button
+      id="assistantFab"
+      class="assistant-fab"
+      type="button"
+      data-bs-toggle="offcanvas"
+      data-bs-target="#appAssistantPanel"
+      aria-controls="appAssistantPanel"
+      title="Open assistant"
+    >
+      <img src="{{ url_for('static', filename='images/cenaris_compass.svg') }}" alt="Compass" style="width: 30px; height: 30px;" />
+    </button>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="appAssistantPanel" aria-labelledby="appAssistantPanelLabel">
+      <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title d-flex align-items-center gap-2" id="appAssistantPanelLabel">
+          <img src="{{ url_for('static', filename='images/cenaris_compass.svg') }}" alt="Cenaris Compass" style="width: 22px; height: 22px;" />
+          <span>Cenaris Compass</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body d-flex flex-column gap-3">
+        <div class="small text-body-secondary">
+          Ask product questions or run a safe admin task like marking notifications as read.
+        </div>
+
+        <div id="assistantMessages" class="assistant-messages"></div>
+
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="How do I upload evidence?">Upload evidence</button>
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Open AI Review">AI review</button>
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Show analytics">Analytics</button>
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Mark all notifications as read">Mark notifications read</button>
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Open unread notifications">Unread notifications</button>
+        </div>
+
+        <form id="assistantChatForm" class="mt-auto" data-skip-loading="1">
+          <div class="input-group">
+            <input id="assistantInput" type="text" class="form-control" maxlength="800" placeholder="Ask Compass..." autocomplete="off" />
+            <button id="assistantSendBtn" class="btn btn-primary" type="submit">Send</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Footer -->
     <footer class="footer mt-5 py-4" style="border-top: 2px solid var(--bs-border-color); background-color: var(--bs-tertiary-bg);">
@@ -984,6 +1059,149 @@
         });
       });
 
+      // App assistant widget (lightweight Q&A + safe actions).
+      document.addEventListener("DOMContentLoaded", function () {
+        const panel = document.getElementById("appAssistantPanel");
+        const form = document.getElementById("assistantChatForm");
+        const input = document.getElementById("assistantInput");
+        const sendBtn = document.getElementById("assistantSendBtn");
+        const messages = document.getElementById("assistantMessages");
+        const chips = document.querySelectorAll(".assistant-chip");
+        const csrfToken = "{{ csrf_token() }}";
+        let busy = false;
+
+        if (!panel || !form || !input || !sendBtn || !messages) {
+          return;
+        }
+
+        const scrollToBottom = () => {
+          messages.scrollTop = messages.scrollHeight;
+        };
+
+        const setBusy = (nextBusy) => {
+          busy = !!nextBusy;
+          sendBtn.disabled = busy;
+          input.disabled = busy;
+          if (busy) {
+            sendBtn.classList.add("loading");
+          } else {
+            sendBtn.classList.remove("loading");
+          }
+        };
+
+        const addMessage = (role, text, actions) => {
+          const item = document.createElement("div");
+          item.className = `assistant-msg ${role === "user" ? "user" : "assistant"}`;
+          item.textContent = text || "";
+          messages.appendChild(item);
+
+          if (actions && actions.length > 0) {
+            const actionsWrap = document.createElement("div");
+            actionsWrap.className = "assistant-actions";
+
+            actions.forEach((action) => {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "btn btn-sm btn-outline-primary";
+              btn.textContent = action.label || "Action";
+
+              btn.addEventListener("click", async () => {
+                if (busy) return;
+                if ((action.kind || "") === "navigate" && action.url) {
+                  window.location.href = action.url;
+                  return;
+                }
+                if ((action.kind || "") === "execute" && action.id) {
+                  const promptText = action.confirm || "Run this action now?";
+                  if (!window.confirm(promptText)) {
+                    return;
+                  }
+                  await sendToAssistant("", { execute: true, action_id: action.id });
+                }
+              });
+
+              actionsWrap.appendChild(btn);
+            });
+
+            messages.appendChild(actionsWrap);
+          }
+
+          scrollToBottom();
+        };
+
+        const sendToAssistant = async (message, extraPayload) => {
+          const trimmed = (message || "").trim();
+          const payload = Object.assign({ message: trimmed }, extraPayload || {});
+          if (!payload.execute && !trimmed) {
+            return;
+          }
+
+          if (trimmed) {
+            addMessage("user", trimmed);
+          }
+
+          setBusy(true);
+          try {
+            const response = await fetch("{{ url_for('main.assistant_chat_api') }}", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken,
+              },
+              body: JSON.stringify(payload),
+            });
+
+            let data = null;
+            try {
+              data = await response.json();
+            } catch (_e) {
+              data = null;
+            }
+
+            if (!response.ok || !data || !data.success) {
+              const err = (data && data.error) || "Assistant is temporarily unavailable.";
+              addMessage("assistant", err);
+              return;
+            }
+
+            addMessage("assistant", data.reply || "", data.actions || []);
+          } catch (_err) {
+            addMessage("assistant", "Could not reach assistant. Please retry.");
+          } finally {
+            setBusy(false);
+            input.focus();
+          }
+        };
+
+        addMessage(
+          "assistant",
+          "Hi, I am Cenaris Compass. I can answer workflow questions and run one-click safe actions for your organisation.",
+          [
+            { kind: "navigate", label: "Open Dashboard", url: "{{ url_for('main.dashboard') }}" },
+            { kind: "navigate", label: "Open AI Review", url: "{{ url_for('main.ai_demo') }}" }
+          ]
+        );
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          if (busy) return;
+          const text = (input.value || "").trim();
+          if (!text) return;
+          input.value = "";
+          await sendToAssistant(text);
+        });
+
+        chips.forEach((chip) => {
+          chip.addEventListener("click", async () => {
+            if (busy) return;
+            const prompt = (chip.getAttribute("data-prompt") || "").trim();
+            if (!prompt) return;
+            input.value = "";
+            await sendToAssistant(prompt);
+          });
+        });
+      });
+
       // Prompt for missing profile name (once per browser session)
       document.addEventListener("DOMContentLoaded", function () {
         const modalEl = document.getElementById("profileNameRequiredModal");
@@ -999,6 +1217,86 @@
 
         const modal = new bootstrap.Modal(modalEl);
         modal.show();
+      });
+
+      // Notification popup quick actions (mark one/all as read) without leaving current page.
+      document.addEventListener("DOMContentLoaded", function () {
+        const actionForms = Array.from(document.querySelectorAll("form.js-notification-action-form"));
+        if (!actionForms.length) return;
+
+        const unreadBadges = () => Array.from(document.querySelectorAll('.js-admin-unread-count'));
+        const readRows = () => Array.from(document.querySelectorAll('[data-notification-row]'));
+
+        const getUnreadCount = () => {
+          const fromRow = readRows().filter((row) => row.getAttribute('data-is-read') === '0').length;
+          if (fromRow >= 0) return fromRow;
+          const badge = unreadBadges()[0];
+          return Number((badge && badge.getAttribute('data-unread-count')) || 0) || 0;
+        };
+
+        const setUnreadCount = (count) => {
+          const safe = Math.max(0, Number(count) || 0);
+          unreadBadges().forEach((badge) => {
+            badge.setAttribute('data-unread-count', String(safe));
+            badge.textContent = String(safe);
+            badge.classList.toggle('d-none', safe === 0);
+          });
+        };
+
+        const markRowRead = (row) => {
+          if (!row) return;
+          row.setAttribute('data-is-read', '1');
+          const badge = row.querySelector('.js-notification-state-badge');
+          if (badge) {
+            badge.className = 'badge text-bg-secondary js-notification-state-badge';
+            badge.textContent = 'Read';
+          }
+          const form = row.querySelector('form.js-notification-action-form[data-action-kind="mark-one"]');
+          if (form) {
+            form.remove();
+          }
+        };
+
+        const postForm = async (form) => {
+          const response = await fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+          });
+          return response.ok;
+        };
+
+        actionForms.forEach((form) => {
+          form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            const actionKind = (form.getAttribute('data-action-kind') || '').trim();
+            const ok = await postForm(form).catch(() => false);
+            if (!ok) {
+              if (submitBtn) submitBtn.disabled = false;
+              return;
+            }
+
+            if (actionKind === 'mark-one') {
+              const row = form.closest('[data-notification-row]');
+              markRowRead(row);
+              setUnreadCount(getUnreadCount());
+              return;
+            }
+
+            if (actionKind === 'mark-all') {
+              readRows().forEach((row) => markRowRead(row));
+              setUnreadCount(0);
+              form.classList.add('d-none');
+            }
+          });
+        });
       });
     </script>
 

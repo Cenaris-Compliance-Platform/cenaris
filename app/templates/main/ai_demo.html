@@ -5,19 +5,51 @@
   <div class="row mb-4">
     <div class="col-12 d-flex justify-content-between align-items-center">
       <div>
-        <h1 class="h3 fw-bold mb-1">AI Demo Lab</h1>
-        <p class="text-body-secondary mb-0">Temporary test screen: upload one file, run RAG-style analysis, and inspect proposed status.</p>
+        <h1 class="h3 fw-bold mb-1">AI Review</h1>
+        <p class="text-body-secondary mb-0">Review repository documents in one dedicated AI experience.</p>
       </div>
     </div>
   </div>
 
   <div class="alert alert-warning alert-permanent border d-flex flex-column gap-1" role="alert">
-    <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Demo-only output</div>
+    <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Decision-support output</div>
     <div class="small">
-      This screen is for product validation only. Results are decision-support, not final audit/legal outcomes.
-      Uploaded files here are processed in memory and are not saved as permanent evidence.
+      Results support review decisions but are not final audit or legal outcomes.
+      Analysis uses documents already uploaded to your repository.
     </div>
   </div>
+
+  {% if selected_documents %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+          <div class="fw-semibold mb-1">Selected repository documents</div>
+          <div class="small text-body-secondary">Choose a document below to analyze.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-folder2-open me-1"></i>Back to Repository
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <div class="fw-semibold mb-1">No repository documents available</div>
+          <div class="small text-body-secondary">Upload from Dashboard/Repository first, then open AI Review.</div>
+        </div>
+        <a href="{{ url_for('main.dashboard', _anchor='upload-documents', open_upload=1) }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-upload me-1"></i>Upload Documents
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
@@ -37,9 +69,13 @@
       <form id="aiDemoForm" class="row g-3" data-skip-loading="1">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="col-md-5">
-          <label for="demoFile" class="form-label">Document (TXT, PDF, DOCX)</label>
-          <input id="demoFile" name="file" type="file" class="form-control" accept=".txt,.pdf,.docx" required />
-          <div class="form-text">Max size 8MB. Temporary processing only.</div>
+          <label for="storedDocId" class="form-label">Repository document</label>
+          <select id="storedDocId" name="stored_doc_id" class="form-select" {% if not selected_documents %}disabled{% endif %}>
+            {% for document in selected_documents %}
+            <option value="{{ document.id }}" {% if active_doc_id and active_doc_id == document.id %}selected{% elif not active_doc_id and loop.first %}selected{% endif %}>{{ document.filename }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Analyzes the selected stored document in this screen.</div>
         </div>
         <div class="col-md-7">
           <label for="demoQuestion" class="form-label">Question to AI</label>
@@ -63,10 +99,10 @@
         </div>
         <input type="hidden" name="mode" value="balanced" />
         <div class="col-12">
-          <div class="small text-body-secondary">Analysis mode: <strong>Balanced</strong> (fixed for demo consistency)</div>
+          <div class="small text-body-secondary">Analysis mode: <strong>Balanced</strong></div>
         </div>
         <div class="col-12 d-flex gap-2 align-items-center">
-          <button id="runDemoBtn" type="submit" class="btn btn-primary">
+          <button id="runDemoBtn" type="submit" class="btn btn-primary" {% if not selected_documents %}disabled{% endif %}>
             <span id="runDemoLabel">Analyze Document</span>
           </button>
           <span id="demoStatusText" class="small text-body-secondary d-none"></span>
@@ -84,6 +120,7 @@
     <div class="card-body">
       <div class="mb-3">
         <h5 class="card-title mb-2">Analysis Result</h5>
+        <div class="small text-body-secondary mb-3" id="resultSourceMeta"></div>
         <div class="row g-2 align-items-stretch">
           <div class="col-md-6">
             <div class="border rounded p-3 h-100 bg-body-tertiary">
@@ -105,18 +142,54 @@
       <div id="resultWarnings" class="d-flex flex-column gap-2 mb-3"></div>
 
       <div class="mb-3">
-        <label class="form-label fw-semibold">AI Summary</label>
-        <div id="resultSummary" class="border rounded p-3 small bg-body-tertiary" style="white-space: pre-wrap;"></div>
+        <h6 class="fw-semibold mb-2">Checklist Summary</h6>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th style="min-width: 220px;">Requirement / Area</th>
+                <th style="min-width: 120px;">Status</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="demoChecklistTable"></tbody>
+          </table>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Clear</div>
+              <ul id="demoChecklistClear" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Partial</div>
+              <ul id="demoChecklistPartial" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Gap</div>
+              <ul id="demoChecklistGap" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="row g-3">
         <div class="col-md-6">
-          <label class="form-label fw-semibold">Document Evidence Highlights</label>
-          <div id="resultSnippets" class="d-flex flex-column gap-2"></div>
+          <details class="border rounded p-3 bg-body-tertiary">
+            <summary class="fw-semibold">Document Evidence Highlights</summary>
+            <div id="resultSnippets" class="d-flex flex-column gap-2 mt-3"></div>
+          </details>
         </div>
         <div class="col-md-6">
-          <label class="form-label fw-semibold">NDIS Citations (RAG)</label>
-          <div id="resultCitations" class="d-flex flex-column gap-2"></div>
+          <details class="border rounded p-3 bg-body-tertiary">
+            <summary class="fw-semibold">NDIS Citations (RAG)</summary>
+            <div id="resultCitations" class="d-flex flex-column gap-2 mt-3"></div>
+          </details>
         </div>
       </div>
     </div>
@@ -137,13 +210,20 @@
     const resultCard = document.getElementById('demoResultCard');
     const statusBadge = document.getElementById('resultStatusBadge');
     const confidenceEl = document.getElementById('resultConfidence');
-    const summaryEl = document.getElementById('resultSummary');
     const warningsEl = document.getElementById('resultWarnings');
     const snippetsEl = document.getElementById('resultSnippets');
     const citationsEl = document.getElementById('resultCitations');
+    const checklistTable = document.getElementById('demoChecklistTable');
+    const checklistClear = document.getElementById('demoChecklistClear');
+    const checklistPartial = document.getElementById('demoChecklistPartial');
+    const checklistGap = document.getElementById('demoChecklistGap');
     const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
+    const resultSourceMetaEl = document.getElementById('resultSourceMeta');
     const progressWrap = document.getElementById('demoProgressWrap');
     const progressBar = document.getElementById('demoProgressBar');
+    const storedDocSelect = document.getElementById('storedDocId');
+    const AUTO_START = {{ 'true' if autostart else 'false' }};
+    const ACTIVE_DOC_ID = {{ active_doc_id if active_doc_id else 'null' }};
     let progressTimer = null;
     let progressValue = 0;
     let requestInFlight = false;
@@ -151,6 +231,12 @@
 
     if (!form) {
       return;
+    }
+
+    if (storedDocSelect) {
+      if (ACTIVE_DOC_ID && String(ACTIVE_DOC_ID).trim()) {
+        storedDocSelect.value = String(ACTIVE_DOC_ID).trim();
+      }
     }
 
     const renderIdleButton = () => {
@@ -329,19 +415,28 @@
       warningsEl.innerHTML = '';
       snippetsEl.innerHTML = '';
       citationsEl.innerHTML = '';
+      checklistTable.innerHTML = '';
+      checklistClear.innerHTML = '';
+      checklistPartial.innerHTML = '';
+      checklistGap.innerHTML = '';
+
+      if (!storedDocSelect || !storedDocSelect.value) {
+        setRunning(false, 'Choose a repository document first.');
+        return;
+      }
 
       const formData = new FormData(form);
       setRunning(true, 'Analyzing document...');
       startProgress();
       requestWatchdogTimer = window.setTimeout(function () {
         forceResetUi('Analysis timed out. Please retry.');
-      }, 35000);
+      }, 120000);
 
       try {
         const controller = new AbortController();
         const timeoutId = window.setTimeout(function () {
           controller.abort('timeout');
-        }, 30000);
+        }, 110000);
 
         const response = await fetch("{{ url_for('main.ai_demo_analyze_api') }}", {
           method: 'POST',
@@ -364,13 +459,62 @@
         confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
         const provider = ((payload.meta || {}).provider) || 'deterministic';
         const model = ((payload.meta || {}).model) || '-';
+        const source = ((payload.meta || {}).source) || 'repository';
+        const filename = ((payload.meta || {}).filename) || 'Untitled document';
         resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}`;
-        const summary = ((payload.summary || '') + '').trim();
-        if (summary.length > 0) {
-          summaryEl.textContent = summary;
-        } else {
-          summaryEl.textContent = 'Summary unavailable for this run. Please retry with a more specific question.';
+        if (resultSourceMetaEl) {
+          resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}`;
         }
+
+        const checklist = (payload.checklist || {});
+        const items = checklist.items || [];
+        items.forEach(function (item) {
+          const row = document.createElement('tr');
+
+          const labelCell = document.createElement('td');
+          labelCell.textContent = item.label || '-';
+          row.appendChild(labelCell);
+
+          const statusCell = document.createElement('td');
+          const badge = document.createElement('span');
+          const status = item.status || 'Gap';
+          badge.className = 'badge';
+          if (status === 'Clear') {
+            badge.classList.add('bg-success');
+          } else if (status === 'Partial') {
+            badge.classList.add('bg-warning', 'text-dark');
+          } else {
+            badge.classList.add('bg-danger');
+          }
+          badge.textContent = status;
+          statusCell.appendChild(badge);
+          row.appendChild(statusCell);
+
+          const noteCell = document.createElement('td');
+          noteCell.textContent = item.note || '-';
+          row.appendChild(noteCell);
+
+          checklistTable.appendChild(row);
+        });
+
+        const appendListItems = (listEl, listItems) => {
+          listEl.innerHTML = '';
+          if (!listItems || listItems.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'None.';
+            listEl.appendChild(li);
+            return;
+          }
+          listItems.forEach(function (item) {
+            const li = document.createElement('li');
+            li.textContent = item;
+            listEl.appendChild(li);
+          });
+        };
+
+        appendListItems(checklistClear, (checklist.summary || {}).clear || []);
+        appendListItems(checklistPartial, (checklist.summary || {}).partial || []);
+        appendListItems(checklistGap, (checklist.summary || {}).gap || []);
 
         const warningItems = payload.warning_items || [];
         if (warningItems.length > 0) {
@@ -406,6 +550,7 @@
         }
 
         resultCard.classList.remove('d-none');
+        resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         setRunning(false, 'Done.');
       } catch (error) {
         const fallbackMessage = (error && error.name === 'AbortError')
@@ -413,10 +558,15 @@
           : (error.message || 'Analysis failed.');
         setRunning(false, fallbackMessage);
       } finally {
-        // Force button back to idle state regardless of any previous branch.
         forceResetUi();
       }
     });
+
+    if (AUTO_START && storedDocSelect && (storedDocSelect.value || '').trim()) {
+      window.setTimeout(function () {
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+      }, 200);
+    }
 
     window.addEventListener('pagehide', function () {
       forceResetUi();
