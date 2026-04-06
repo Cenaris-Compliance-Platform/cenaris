@@ -113,9 +113,14 @@
             <h5 class="card-title mb-0">
               <i class="bi bi-shield-check me-2 text-primary"></i>Compliance Readiness
             </h5>
-            <a href="{{ url_for('main.ai_demo') }}" class="btn btn-sm btn-outline-primary">
-              Open AI Review
-            </a>
+            <div class="d-flex gap-2">
+              <a href="{{ url_for('main.compliance_journey') }}" class="btn btn-sm btn-primary">
+                Guided Workflow
+              </a>
+              <a href="{{ url_for('main.ai_demo') }}" class="btn btn-sm btn-outline-primary">
+                Open AI Review
+              </a>
+            </div>
           </div>
         </div>
         <div class="card-body p-4">
@@ -149,7 +154,7 @@
           </div>
 
           <div class="alert alert-info small mb-4">
-            Dashboard readiness is based on <strong>requirement-level assessments</strong>, not just file uploads. Reviewing a document in AI helps, but readiness updates when evidence is linked and requirements are assessed.
+            Dashboard readiness is based on <strong>requirement-level assessments</strong>, not just file uploads. AI Review auto-maps likely requirement links, but readiness updates after those mappings are verified and requirement assessments are confirmed.
           </div>
 
           <div class="row g-3 mb-4">

@@ -124,6 +124,70 @@ def test_ai_review_api_can_analyze_stored_repository_document(client, app, db_se
     assert len(payload['citations']) == 1
 
 
+def test_ai_review_api_reuses_cached_result_for_same_document_and_question(client, app, db_session, seed_org_user, monkeypatch):
+    from app.models import Document
+    from tests.conftest import login
+    import app.services.azure_storage as azure_storage_module
+
+    org_id, user_id, _membership_id = seed_org_user
+
+    with app.app_context():
+        document = Document(
+            filename='cached-policy.txt',
+            blob_name='org_1/cached-policy.txt',
+            file_size=256,
+            content_type='text/plain',
+            uploaded_by=int(user_id),
+            organization_id=int(org_id),
+            is_active=True,
+            ai_status='OK',
+            ai_confidence=0.82,
+            ai_focus_area='General compliance coverage',
+            ai_question='Does this document support incident readiness?',
+            ai_summary='1) Why this status\nCore controls are described.\n\n2) Missing evidence\nAdd implementation records.\n\n3) Recommended next action\nAttach evidence logs.\nEND_SUMMARY',
+            ai_provider='openrouter',
+            ai_model='test-model',
+            ai_retrieval_mode='hybrid',
+            extracted_text='cached extracted text',
+        )
+        db_session.session.add(document)
+        db_session.session.commit()
+        doc_id = int(document.id)
+
+    class FailingStorage:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def download_file(self, blob_name):
+            raise AssertionError('Storage download should not run when cached result is reused')
+
+    monkeypatch.setattr(azure_storage_module, 'AzureBlobStorageService', FailingStorage)
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    analyze_resp = client.post(
+        '/api/ai/demo/analyze',
+        data={
+            'stored_doc_id': str(doc_id),
+            'question': 'Does this document support incident readiness?',
+            'reuse_last': '1',
+        },
+        follow_redirects=False,
+    )
+
+    assert analyze_resp.status_code == 200
+    payload = analyze_resp.get_json()
+    assert payload['success'] is True
+    assert payload['meta']['cached_result'] is True
+    assert payload['meta']['source'] == 'repository'
+    assert payload['meta']['filename'] == 'cached-policy.txt'
+    assert payload['snippets'] == []
+    assert payload['citations'] == []
+    assert payload['warnings']
+    assert 'Reused the latest stored analysis' in payload['warnings'][0]
+
+
 def test_ai_review_followup_api_returns_answer_for_workspace_document(client, app, db_session, seed_org_user, monkeypatch):
     from app.models import Document
     from tests.conftest import login

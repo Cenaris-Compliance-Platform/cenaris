@@ -82,7 +82,7 @@ def test_assistant_chat_explains_linking_evidence_value(client, app, seed_org_us
     payload = chat_resp.get_json()
     assert payload['success'] is True
     reply = (payload.get('reply') or '').lower()
-    assert 'linking means attaching a document' in reply
+    assert 'ai review already tries to auto-link' in reply
     action_ids = {a.get('id') for a in (payload.get('actions') or [])}
     assert 'open_repository' in action_ids
     assert 'open_requirements' in action_ids

@@ -522,10 +522,26 @@
             </li>
             <li class="nav-item">
               <a
+                class="nav-link nav-btn {% if request.endpoint == 'main.compliance_journey' %}active{% endif %}"
+                href="{{ url_for('main.compliance_journey') }}"
+              >
+                <i class="bi bi-signpost-split me-1"></i>Compliance Journey
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
                 class="nav-link nav-btn {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}"
                 href="{{ url_for('main.evidence_repository') }}"
               >
                 <i class="bi bi-folder2-open me-1"></i>Evidence Repository
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link nav-btn {% if request.endpoint == 'main.compliance_requirements' %}active{% endif %}"
+                href="{{ url_for('main.compliance_requirements') }}"
+              >
+                <i class="bi bi-list-check me-1"></i>Requirements
               </a>
             </li>
             <li class="nav-item">
@@ -833,8 +849,12 @@
         <div id="assistantMessages" class="assistant-messages"></div>
 
         <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Show me the compliance journey step by step">Compliance journey</button>
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Open requirements workboard">Requirements</button>
           <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="How do I upload evidence?">Upload evidence</button>
           <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Open AI Review">AI review</button>
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="What is compliance readiness?">Readiness</button>
+          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="How do I link evidence and why does it help?">Link evidence</button>
           <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Show analytics">Analytics</button>
           <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Mark all notifications as read">Mark notifications read</button>
           <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Open unread notifications">Unread notifications</button>
