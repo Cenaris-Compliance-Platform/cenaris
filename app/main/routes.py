@@ -1580,6 +1580,20 @@ def _review_frequency_to_days(value: str | None) -> int | None:
 
 def _build_dashboard_deadlines(*, org_id: int, limit: int = 3) -> list[dict]:
     now = datetime.now(timezone.utc)
+    linked_requirement_ids = {
+        int(req_id)
+        for (req_id,) in (
+            db.session.query(RequirementEvidenceLink.requirement_id)
+            .filter(RequirementEvidenceLink.organization_id == int(org_id))
+            .distinct()
+            .all()
+        )
+        if req_id is not None
+    }
+
+    if not linked_requirement_ids:
+        return []
+
     query_rows = (
         db.session.query(
             OrganizationRequirementAssessment,
@@ -1601,11 +1615,15 @@ def _build_dashboard_deadlines(*, org_id: int, limit: int = 3) -> list[dict]:
 
     candidates: list[dict] = []
     for assessment, requirement, framework in query_rows:
+        if int(getattr(requirement, 'id', 0) or 0) not in linked_requirement_ids:
+            continue
+
         review_days = _review_frequency_to_days(getattr(requirement, 'review_frequency', None))
         if not review_days:
             continue
 
-        base_dt = assessment.last_assessed_at or assessment.updated_at
+        # Deadlines are meaningful only after a real assessment event.
+        base_dt = assessment.last_assessed_at
         if not base_dt:
             continue
         if base_dt.tzinfo is None:
@@ -1648,6 +1666,67 @@ def _build_dashboard_deadlines(*, org_id: int, limit: int = 3) -> list[dict]:
     candidates.sort(key=lambda item: item['days_left'])
     return candidates[: max(1, int(limit))]
 
+
+def _build_dashboard_bridge_stats(*, org_id: int) -> dict:
+    """Build workflow bridge metrics from document review -> requirement assessment."""
+    linked_doc_ids = {
+        int(doc_id)
+        for (doc_id,) in (
+            db.session.query(RequirementEvidenceLink.document_id)
+            .filter(RequirementEvidenceLink.organization_id == int(org_id))
+            .distinct()
+            .all()
+        )
+        if doc_id is not None
+    }
+
+    reviewed_doc_ids = {
+        int(doc_id)
+        for (doc_id,) in (
+            db.session.query(Document.id)
+            .filter(
+                Document.organization_id == int(org_id),
+                Document.is_active.is_(True),
+                Document.ai_analysis_at.isnot(None),
+            )
+            .all()
+        )
+        if doc_id is not None
+    }
+
+    linked_requirement_ids = {
+        int(req_id)
+        for (req_id,) in (
+            db.session.query(RequirementEvidenceLink.requirement_id)
+            .filter(RequirementEvidenceLink.organization_id == int(org_id))
+            .distinct()
+            .all()
+        )
+        if req_id is not None
+    }
+
+    pending_assessment_count = 0
+    if linked_requirement_ids:
+        pending_assessment_count = (
+            db.session.query(OrganizationRequirementAssessment)
+            .filter(
+                OrganizationRequirementAssessment.organization_id == int(org_id),
+                OrganizationRequirementAssessment.requirement_id.in_(linked_requirement_ids),
+                or_(
+                    OrganizationRequirementAssessment.computed_flag.is_(None),
+                    OrganizationRequirementAssessment.computed_flag.in_(['', 'Not assessed']),
+                ),
+            )
+            .count()
+        )
+
+    return {
+        'reviewed_docs': len(reviewed_doc_ids),
+        'reviewed_docs_not_linked': len(reviewed_doc_ids - linked_doc_ids),
+        'linked_requirements': len(linked_requirement_ids),
+        'linked_requirements_pending_assessment': int(pending_assessment_count),
+    }
+
 @bp.route('/dashboard')
 @login_required
 def dashboard():
@@ -1684,20 +1763,33 @@ def dashboard():
     )
     # Avoid full table scan for count; use an approximate or limit scope.
     total_documents = Document.query.filter_by(organization_id=org_id, is_active=True).limit(1000).count()
+    reviewed_documents_count = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.ai_analysis_at.isnot(None),
+        )
+        .limit(1000)
+        .count()
+    )
 
     analytics_payload = analytics_service.build_dashboard_payload(organization_id=int(org_id))
     dashboard_summary = analytics_payload.get('summary') or {}
     dashboard_frameworks = (analytics_payload.get('framework_analytics') or [])[:6]
     dashboard_deadlines = _build_dashboard_deadlines(org_id=int(org_id), limit=3)
+    dashboard_bridge = _build_dashboard_bridge_stats(org_id=int(org_id))
 
     return render_template('main/dashboard.html', 
                          title='Dashboard',
                          recent_documents=recent_documents,
                          recent_analysed_documents=recent_analysed_documents,
                          total_documents=total_documents,
+                         dashboard_reviewed_documents=reviewed_documents_count,
                          dashboard_summary=dashboard_summary,
                          dashboard_frameworks=dashboard_frameworks,
-                         dashboard_deadlines=dashboard_deadlines)
+                         dashboard_deadlines=dashboard_deadlines,
+                         dashboard_bridge=dashboard_bridge)
 
 @bp.route('/upload')
 @login_required
@@ -3913,7 +4005,150 @@ def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, l
         .filter(Document.organization_id == int(org_id), Document.is_active.is_(True))
         .count()
     )
+    reviewed_doc_count = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.ai_analysis_at.isnot(None),
+        )
+        .count()
+    )
+    dashboard_summary = (analytics_service.build_dashboard_payload(organization_id=int(org_id)).get('summary') or {})
+    bridge = _build_dashboard_bridge_stats(org_id=int(org_id))
     is_admin = _assistant_is_org_admin(int(org_id))
+
+    if ('readiness' in lower) or ('overall readiness' in lower) or ('why' in lower and 'zero' in lower):
+        return (
+            (
+                f'Readiness is requirement-based, not upload-only. You currently have {int(doc_count)} uploaded file(s), '
+                f'{int(reviewed_doc_count)} AI-reviewed file(s), and a requirement compliance rate of '
+                f'{round(float(dashboard_summary.get("compliance_rate") or 0), 1)}%. '
+                f'Reviewed but not linked documents: {int(bridge.get("reviewed_docs_not_linked") or 0)}. '
+                'To increase readiness: link reviewed evidence to requirements, then assess those requirements.'
+            ),
+            [
+                {
+                    'id': 'open_repository',
+                    'kind': 'navigate',
+                    'label': 'Open Evidence Repository',
+                    'url': url_for('main.evidence_repository'),
+                },
+                {
+                    'id': 'open_analytics',
+                    'kind': 'navigate',
+                    'label': 'Open Analytics',
+                    'url': url_for('main.analytics_dashboard'),
+                },
+            ],
+        )
+
+    if 'deadline' in lower or 'due' in lower:
+        return (
+            (
+                'Deadlines are auto-calculated per requirement: last assessed date + review frequency. '
+                'A deadline appears only when a requirement has linked evidence and a completed assessment. '
+                'If no completed assessment exists, no deadline is shown.'
+            ),
+            [
+                {
+                    'id': 'open_dashboard',
+                    'kind': 'navigate',
+                    'label': 'Open Dashboard',
+                    'url': url_for('main.dashboard'),
+                },
+                {
+                    'id': 'open_ai_review',
+                    'kind': 'navigate',
+                    'label': 'Open AI Review',
+                    'url': url_for('main.ai_demo'),
+                },
+            ],
+        )
+
+    if (
+        'link' in lower
+        and ('evidence' in lower or 'requirement' in lower or 'them' in lower)
+    ) or ('use of it' in lower) or ('how will it help' in lower):
+        linked_count = int(bridge.get('requirements_with_linked_evidence') or 0)
+        pending_count = int(bridge.get('linked_requirements_pending_assessment') or 0)
+        return (
+            (
+                'Linking means attaching a document to a specific compliance requirement so auditors can see proof for that rule. '
+                'Why it helps: 1) your readiness score can move based on real requirement evidence, 2) gaps become specific and actionable, '
+                '3) exports and reviews become audit-ready.\n\n'
+                f'Current org snapshot: {linked_count} requirement(s) already linked to evidence, '
+                f'{pending_count} linked requirement(s) still waiting assessment update.\n\n'
+                'Quick steps: open Evidence Repository -> open a document -> choose Link to requirement -> save -> review requirement status.'
+            ),
+            [
+                {
+                    'id': 'open_repository',
+                    'kind': 'navigate',
+                    'label': 'Open Evidence Repository',
+                    'url': url_for('main.evidence_repository'),
+                },
+                {
+                    'id': 'open_requirements',
+                    'kind': 'navigate',
+                    'label': 'Open Compliance Requirements',
+                    'url': url_for('main.compliance_requirements'),
+                },
+                {
+                    'id': 'open_dashboard',
+                    'kind': 'navigate',
+                    'label': 'Open Dashboard',
+                    'url': url_for('main.dashboard'),
+                },
+            ],
+        )
+
+    if 'how' in lower and ('website' in lower or 'app' in lower or 'work' in lower):
+        return (
+            (
+                'Quick app flow: 1) Upload evidence in Repository. 2) Run AI Review for each document. '
+                '3) Link evidence to requirements. 4) Review requirement status and gaps. 5) Track trends in Analytics and export reports.'
+            ),
+            [
+                {
+                    'id': 'open_upload',
+                    'kind': 'navigate',
+                    'label': 'Open Upload Section',
+                    'url': url_for('main.dashboard', _anchor='upload-documents', open_upload=1),
+                },
+                {
+                    'id': 'open_ai_review',
+                    'kind': 'navigate',
+                    'label': 'Open AI Review',
+                    'url': url_for('main.ai_demo'),
+                },
+                {
+                    'id': 'open_analytics',
+                    'kind': 'navigate',
+                    'label': 'Open Analytics',
+                    'url': url_for('main.analytics_dashboard'),
+                },
+            ],
+        )
+
+    if 'settings' in lower or 'organisation' in lower or 'organization' in lower:
+        return (
+            'Use Organisation Profile for business details and Team Management for role/member administration.',
+            [
+                {
+                    'id': 'open_org_settings',
+                    'kind': 'navigate',
+                    'label': 'Open Organisation Profile',
+                    'url': url_for('main.organization_settings'),
+                },
+                {
+                    'id': 'open_team_mgmt',
+                    'kind': 'navigate',
+                    'label': 'Open Team Management',
+                    'url': url_for('main.org_admin_dashboard'),
+                },
+            ],
+        )
 
     if ('mark' in lower and 'notification' in lower and 'read' in lower) or ('clear notifications' in lower):
         if is_admin:

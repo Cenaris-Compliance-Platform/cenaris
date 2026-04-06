@@ -66,6 +66,28 @@ def test_assistant_chat_can_mark_all_notifications_read_for_admin(client, app, d
     assert payload['executed_action']['count'] == 2
 
 
+def test_assistant_chat_explains_linking_evidence_value(client, app, seed_org_user):
+    from tests.conftest import login
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    chat_resp = client.post(
+        '/api/assistant/chat',
+        json={'message': 'how do i link them and how will it help me what is the use of it ?'},
+        follow_redirects=False,
+    )
+
+    assert chat_resp.status_code == 200
+    payload = chat_resp.get_json()
+    assert payload['success'] is True
+    reply = (payload.get('reply') or '').lower()
+    assert 'linking means attaching a document' in reply
+    action_ids = {a.get('id') for a in (payload.get('actions') or [])}
+    assert 'open_repository' in action_ids
+    assert 'open_requirements' in action_ids
+
+
 def test_assistant_chat_handles_profile_and_password_question(client, app, seed_org_user):
     from tests.conftest import login
 

@@ -124,25 +124,61 @@
             <div class="col-md-3 col-6 mb-3">
               <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.1), rgba(var(--bs-success-rgb), 0.05));">
                 <div class="h2 fw-bold text-success mb-1">{{ (dashboard_summary.compliance_rate or 0)|round(0)|int }}%</div>
-                <div class="text-body-secondary small">Overall Readiness</div>
+                <div class="text-body-secondary small">Requirement Readiness</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
               <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), rgba(var(--bs-info-rgb), 0.05));">
                 <div class="h2 fw-bold text-info mb-1">{{ dashboard_summary.document_count or total_documents }}</div>
                 <div class="text-body-secondary small">Documents Uploaded</div>
+                <div class="small text-body-secondary">{{ dashboard_reviewed_documents or 0 }} reviewed by AI</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
               <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), rgba(var(--bs-warning-rgb), 0.05));">
                 <div class="h2 fw-bold text-warning mb-1">{{ dashboard_summary.gap_requirements or 0 }}</div>
-                <div class="text-body-secondary small">Gaps Identified</div>
+                <div class="text-body-secondary small">Requirement Gaps</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
               <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.1), rgba(var(--bs-danger-rgb), 0.05));">
                 <div class="h2 fw-bold text-danger mb-1">{{ dashboard_deadlines|length }}</div>
                 <div class="text-body-secondary small">Upcoming Deadlines</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-info small mb-4">
+            Dashboard readiness is based on <strong>requirement-level assessments</strong>, not just file uploads. Reviewing a document in AI helps, but readiness updates when evidence is linked and requirements are assessed.
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <div class="border rounded p-3 bg-body-tertiary h-100">
+                <div class="fw-semibold mb-1">Workflow Bridge</div>
+                <div class="small text-body-secondary mb-3">From document review to requirement compliance</div>
+                <div class="d-flex justify-content-between small mb-2">
+                  <span>Reviewed docs not linked</span>
+                  <span class="fw-semibold">{{ (dashboard_bridge.reviewed_docs_not_linked if dashboard_bridge else 0) or 0 }}</span>
+                </div>
+                <div class="d-flex justify-content-between small mb-2">
+                  <span>Linked requirements pending assessment</span>
+                  <span class="fw-semibold">{{ (dashboard_bridge.linked_requirements_pending_assessment if dashboard_bridge else 0) or 0 }}</span>
+                </div>
+                <div class="d-flex justify-content-between small">
+                  <span>Linked requirements total</span>
+                  <span class="fw-semibold">{{ (dashboard_bridge.linked_requirements if dashboard_bridge else 0) or 0 }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="border rounded p-3 bg-body-tertiary h-100">
+                <div class="fw-semibold mb-1">What To Do Next</div>
+                <ul class="small text-body-secondary mb-0 ps-3">
+                  <li>Open reviewed documents in AI Review.</li>
+                  <li>Link strongest evidence to each requirement.</li>
+                  <li>Complete requirement assessments to move readiness.</li>
+                </ul>
               </div>
             </div>
           </div>
@@ -212,7 +248,7 @@
               </div>
               {% else %}
               <div class="alert alert-info mb-0 small">
-                No configured review deadlines yet. Deadlines appear when requirements have a review frequency and at least one completed assessment.
+                No configured review deadlines yet. Deadlines appear only when requirements have a review frequency, linked evidence, and at least one completed assessment.
               </div>
               {% endif %}
               <div class="text-center mt-3">
