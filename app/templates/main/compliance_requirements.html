@@ -1,59 +1,186 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+  .workboard-kpi {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.85rem;
+    background: var(--bs-body-bg);
+    height: 100%;
+  }
+
+  .bucket-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.2rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+  }
+
+  .bucket-dot.ok {
+    background: rgba(var(--bs-success-rgb), 0.14);
+    border-color: rgba(var(--bs-success-rgb), 0.45);
+    color: var(--bs-success-text-emphasis);
+  }
+
+  .bucket-dot.missing {
+    background: rgba(var(--bs-secondary-rgb), 0.12);
+    color: var(--bs-secondary-color);
+  }
+
+  .workboard-note {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.85rem;
+    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.08), rgba(var(--bs-info-rgb), 0.06));
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="fade-in">
   <div class="row mb-4">
-    <div class="col-12 d-flex justify-content-between align-items-center">
+    <div class="col-12 d-flex justify-content-between align-items-start flex-wrap gap-2">
       <div>
-        <h1 class="h2 fw-bold mb-1">Compliance Requirements</h1>
-        <p class="text-body-secondary mb-0">Review imported requirements and current assessment state</p>
+        <h1 class="h3 fw-bold mb-1">Requirements Workboard</h1>
+        <p class="text-body-secondary mb-0">Track requirement health, evidence coverage, and review due state in one place.</p>
       </div>
-      <a href="{{ url_for('main.gap_analysis') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-graph-up me-1"></i>Gap Analysis
+      <a href="{{ url_for('main.compliance_journey') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-signpost-split me-1"></i>Back to Compliance Journey
       </a>
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body">
-      <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>How to use this page</div>
-      <div class="small text-body-secondary">
-        Start by searching or filtering requirements. Open a requirement row to link supporting documents.
-        Inside each requirement detail screen, you can run AI tools: <strong>NDIS Citation Assistant</strong> and <strong>Policy Draft Assistant</strong>.
+  <div class="workboard-note p-3 mb-3">
+    <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Simple way to use this page</div>
+    <div class="small text-body-secondary">Filter to risky or overdue rows, open a requirement, then link or fix evidence until coverage and status improve.</div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-sm-6 col-lg-3">
+      <div class="workboard-kpi p-3">
+        <div class="text-body-secondary small">Total Requirements</div>
+        <div class="h4 fw-bold mb-0">{{ summary.total_requirements }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="workboard-kpi p-3">
+        <div class="text-body-secondary small">Fully Linked</div>
+        <div class="h4 fw-bold mb-0 text-success">{{ summary.fully_linked_requirements }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="workboard-kpi p-3">
+        <div class="text-body-secondary small">Overdue Reviews</div>
+        <div class="h4 fw-bold mb-0 text-danger">{{ summary.overdue_reviews }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="workboard-kpi p-3">
+        <div class="text-body-secondary small">At Risk</div>
+        <div class="h4 fw-bold mb-0 text-warning">{{ summary.at_risk_requirements }}</div>
       </div>
     </div>
   </div>
 
   <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-body-tertiary border-bottom">
+      <h5 class="card-title mb-0"><i class="bi bi-calendar2-week me-2 text-primary"></i>Monthly Operations Snapshot</h5>
+    </div>
     <div class="card-body">
-      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-2">
-        <div class="fw-semibold"><i class="bi bi-list-check me-1"></i>First-time setup checklist</div>
-        <a href="{{ url_for('main.org_admin_dashboard') }}" class="btn btn-sm btn-outline-primary">
-          <i class="bi bi-people me-1"></i>Open Team Management
-        </a>
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <div class="workboard-kpi p-3">
+            <div class="text-body-secondary small">Uploads (last 30 days)</div>
+            <div class="h5 fw-bold mb-0">{{ monthly_snapshot.uploads_30d }}</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="workboard-kpi p-3">
+            <div class="text-body-secondary small">Assessments updated (last 30 days)</div>
+            <div class="h5 fw-bold mb-0">{{ monthly_snapshot.assessments_30d }}</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="workboard-kpi p-3">
+            <div class="text-body-secondary small">Evidence links created (last 30 days)</div>
+            <div class="h5 fw-bold mb-0">{{ monthly_snapshot.links_30d }}</div>
+          </div>
+        </div>
       </div>
-      <ol class="small text-body-secondary mb-0 ps-3">
-        <li>Open <strong>Team Management</strong> and click <strong>Initialize NDIS Data</strong>.</li>
-        <li>Return to this page and click <strong>Reset</strong> to reload requirements.</li>
-        <li>Open a requirement row, then link uploaded documents as evidence.</li>
-      </ol>
-      {% if not requirement_rows %}
-      <div class="alert alert-warning mt-3 mb-0 py-2 px-3 small">
-        <strong>Setup not finished yet:</strong> no requirements are currently visible for this organisation.
+
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="border rounded p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="fw-semibold">Owner Action Queue</div>
+              <span class="badge bg-warning text-dark">{{ owner_action_queue|length }} items</span>
+            </div>
+            {% if owner_action_queue %}
+            <div class="d-flex flex-column gap-2">
+              {% for item in owner_action_queue %}
+              <div class="border rounded p-2 small">
+                <div class="d-flex justify-content-between gap-2">
+                  <div class="fw-semibold">{{ item.requirement_id }} <span class="text-body-secondary">({{ item.module_name }})</span></div>
+                  <span class="badge bg-body-tertiary text-body border">{{ item.owner_role }}</span>
+                </div>
+                <div class="text-body-secondary mt-1">{{ item.reason }}</div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                  <span class="text-body-secondary">{{ item.due_label }}</span>
+                  <a href="{{ item.action_url }}" class="btn btn-sm btn-outline-primary">Open</a>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="small text-body-secondary">No urgent owner actions right now.</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="border rounded p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="fw-semibold">Upcoming Review Queue</div>
+              <span class="badge bg-info text-dark">{{ upcoming_review_queue|length }} upcoming</span>
+            </div>
+            {% if upcoming_review_queue %}
+            <div class="d-flex flex-column gap-2">
+              {% for item in upcoming_review_queue %}
+              <div class="border rounded p-2 small">
+                <div class="d-flex justify-content-between gap-2">
+                  <div class="fw-semibold">{{ item.requirement_id }} <span class="text-body-secondary">({{ item.module_name }})</span></div>
+                  <span class="badge bg-body-tertiary text-body border">{{ item.owner_role }}</span>
+                </div>
+                <div class="text-body-secondary mt-1">{{ item.due_label }} • Coverage {{ item.coverage_pct }}%</div>
+                <div class="text-end mt-2">
+                  <a href="{{ item.action_url }}" class="btn btn-sm btn-outline-primary">Open</a>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="small text-body-secondary">No scheduled reviews due in the next 45 days.</div>
+            {% endif %}
+          </div>
+        </div>
       </div>
-      {% endif %}
     </div>
   </div>
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
       <form method="GET" class="row g-2 align-items-end">
-        <div class="col-md-6">
+        <div class="col-lg-3">
           <label for="q" class="form-label">Search</label>
-          <input id="q" name="q" value="{{ q }}" class="form-control" placeholder="Requirement ID, quality indicator, outcome" />
+          <input id="q" name="q" value="{{ q or '' }}" class="form-control" placeholder="Requirement, module, owner" />
         </div>
-        <div class="col-md-3">
-          <label for="status" class="form-label">Computed flag</label>
+        <div class="col-lg-2">
+          <label for="status" class="form-label">Status</label>
           <select id="status" name="status" class="form-select">
             <option value="" {% if not status_filter %}selected{% endif %}>All</option>
             <option value="Critical gap" {% if status_filter == 'Critical gap' %}selected{% endif %}>Critical gap</option>
@@ -62,9 +189,36 @@
             <option value="Mature" {% if status_filter == 'Mature' %}selected{% endif %}>Mature</option>
           </select>
         </div>
-        <div class="col-md-3 d-flex gap-2">
-          <button type="submit" class="btn btn-primary flex-grow-1">Apply</button>
-          <a href="{{ url_for('main.compliance_requirements') }}" class="btn btn-outline-secondary">Reset</a>
+        <div class="col-lg-2">
+          <label for="module" class="form-label">Module</label>
+          <select id="module" name="module" class="form-select">
+            <option value="" {% if not module_filter %}selected{% endif %}>All</option>
+            {% for module_name in module_options %}
+            <option value="{{ module_name }}" {% if module_filter == module_name %}selected{% endif %}>{{ module_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-2">
+          <label for="bucket" class="form-label">Bucket</label>
+          <select id="bucket" name="bucket" class="form-select">
+            <option value="" {% if not bucket_filter %}selected{% endif %}>All</option>
+            <option value="system" {% if bucket_filter == 'system' %}selected{% endif %}>System</option>
+            <option value="implementation" {% if bucket_filter == 'implementation' %}selected{% endif %}>Implementation</option>
+            <option value="workforce" {% if bucket_filter == 'workforce' %}selected{% endif %}>Workforce</option>
+            <option value="participant" {% if bucket_filter == 'participant' %}selected{% endif %}>Participant</option>
+          </select>
+        </div>
+        <div class="col-lg-2">
+          <label for="due" class="form-label">Due State</label>
+          <select id="due" name="due" class="form-select">
+            <option value="" {% if not due_filter %}selected{% endif %}>All</option>
+            <option value="overdue" {% if due_filter == 'overdue' %}selected{% endif %}>Overdue</option>
+            <option value="30d" {% if due_filter == '30d' %}selected{% endif %}>Due in 30d</option>
+            <option value="unscheduled" {% if due_filter == 'unscheduled' %}selected{% endif %}>Unscheduled</option>
+          </select>
+        </div>
+        <div class="col-lg-1 d-grid">
+          <button type="submit" class="btn btn-primary">Apply</button>
         </div>
       </form>
     </div>
@@ -76,40 +230,52 @@
         <thead class="table-light">
           <tr>
             <th>Requirement</th>
-            <th>Quality Indicator</th>
-            <th>Outcome</th>
-            <th>Score</th>
-            <th>Flag</th>
+            <th>Owner</th>
+            <th>Evidence Coverage</th>
+            <th>Review Due</th>
+            <th>Status</th>
+            <th class="text-end">Action</th>
           </tr>
         </thead>
         <tbody>
-          {% for row in requirement_rows %}
+          {% for row in rows %}
           {% set req = row.requirement %}
           {% set assessment = row.assessment %}
           <tr>
             <td>
-              <div class="fw-semibold">
-                <a href="{{ url_for('main.compliance_requirement_detail', requirement_db_id=req.id) }}" class="text-decoration-none">
-                  {{ req.requirement_id }}
-                </a>
-              </div>
-              {% if req.module_name %}
-              <small class="text-body-secondary">{{ req.module_name }}</small>
-              {% endif %}
-            </td>
-            <td>
-              <div>{{ req.quality_indicator_code or '—' }}</div>
+              <div class="fw-semibold">{{ req.requirement_id }}</div>
+              <div class="small text-body-secondary">{{ row.module_name }}</div>
               {% if req.quality_indicator_text %}
-              <small class="text-body-secondary">{{ req.quality_indicator_text[:120] }}{% if req.quality_indicator_text|length > 120 %}…{% endif %}</small>
+              <div class="small text-body-secondary">{{ req.quality_indicator_text[:100] }}{% if req.quality_indicator_text|length > 100 %}…{% endif %}</div>
               {% endif %}
             </td>
             <td>
-              <div>{{ req.outcome_code or '—' }}</div>
-              {% if req.outcome_text %}
-              <small class="text-body-secondary">{{ req.outcome_text[:120] }}{% if req.outcome_text|length > 120 %}…{% endif %}</small>
+              <span class="badge bg-body-tertiary text-body border">{{ row.owner_role }}</span>
+            </td>
+            <td>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="progress flex-grow-1" style="height: 8px; min-width: 120px;">
+                  <div class="progress-bar" role="progressbar" style="width: {{ row.bucket_coverage_pct }}%;" aria-valuenow="{{ row.bucket_coverage_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <span class="small fw-semibold">{{ row.bucket_coverage_pct }}%</span>
+              </div>
+              <div class="d-flex flex-wrap gap-1">
+                <span class="bucket-dot {% if row.bucket_counts.system > 0 %}ok{% else %}missing{% endif %}">S</span>
+                <span class="bucket-dot {% if row.bucket_counts.implementation > 0 %}ok{% else %}missing{% endif %}">I</span>
+                {% if 'workforce' in row.required_buckets %}
+                <span class="bucket-dot {% if row.bucket_counts.workforce > 0 %}ok{% else %}missing{% endif %}">W</span>
+                {% endif %}
+                {% if 'participant' in row.required_buckets %}
+                <span class="bucket-dot {% if row.bucket_counts.participant > 0 %}ok{% else %}missing{% endif %}">P</span>
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              <span class="badge bg-{{ row.due.tone }}{% if row.due.tone == 'warning' %} text-dark{% endif %}">{{ row.due.label }}</span>
+              {% if req.review_frequency %}
+              <div class="small text-body-secondary mt-1">Frequency: {{ req.review_frequency }}</div>
               {% endif %}
             </td>
-            <td>{{ assessment.computed_score if assessment and assessment.computed_score is not none else '—' }}</td>
             <td>
               {% if assessment and assessment.computed_flag %}
               {% set flag = assessment.computed_flag|lower|replace('_', ' ') %}
@@ -125,18 +291,18 @@
               <span class="badge bg-secondary">{{ assessment.computed_flag }}</span>
               {% endif %}
               {% else %}
-              <span class="text-body-secondary">Not assessed</span>
+              <span class="badge bg-secondary">Not assessed</span>
               {% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('main.compliance_requirement_detail', requirement_db_id=req.id) }}" class="btn btn-sm btn-outline-primary">Open</a>
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="5" class="text-center py-4 text-body-secondary">
-              <div class="fw-semibold mb-1">No requirements found.</div>
-              <div class="small">
-                If this is your first time, your organisation may not have imported the NDIS requirement list yet.
-                Ask an organisation admin to initialize compliance data from Team Management, then refresh this page.
-              </div>
+            <td colspan="6" class="text-center py-4 text-body-secondary">
+              <div class="fw-semibold mb-1">No matching requirements found</div>
+              <div class="small">Try resetting filters or initialize compliance data from Team Management.</div>
             </td>
           </tr>
           {% endfor %}
@@ -149,13 +315,13 @@
       <nav aria-label="Requirements pagination">
         <ul class="pagination pagination-sm mb-0">
           <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.prev_num, q=q, status=status_filter) if pagination.has_prev else '#' }}">Previous</a>
+            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.prev_num, q=q, status=status_filter, module=module_filter, bucket=bucket_filter, due=due_filter) if pagination.has_prev else '#' }}">Previous</a>
           </li>
           <li class="page-item disabled">
             <span class="page-link">Page {{ pagination.page }} of {{ pagination.pages }}</span>
           </li>
           <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.next_num, q=q, status=status_filter) if pagination.has_next else '#' }}">Next</a>
+            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.next_num, q=q, status=status_filter, module=module_filter, bucket=bucket_filter, due=due_filter) if pagination.has_next else '#' }}">Next</a>
           </li>
         </ul>
       </nav>

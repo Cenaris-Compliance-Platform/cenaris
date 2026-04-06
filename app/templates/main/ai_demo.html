@@ -52,15 +52,9 @@
   {% endif %}
 
   <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body">
-      <div class="row g-2 small text-body-secondary">
-        <div class="col-md-4"><strong>Provider:</strong> {{ demo_provider }}</div>
-        <div class="col-md-4"><strong>Model:</strong> {{ demo_model }}</div>
-        <div class="col-md-4"><strong>OpenRouter Key:</strong> {{ 'Configured' if has_openrouter_key else 'Missing (fallback mode)' }}</div>
-      </div>
-      <div class="mt-2 small text-body-secondary">
-        <strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}
-      </div>
+    <div class="card-body small text-body-secondary">
+      <div><strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}</div>
+      <div class="mt-1">Keep reuse enabled to skip re-running analysis when the same document and question were already analyzed.</div>
     </div>
   </div>
 
@@ -100,6 +94,12 @@
         <input type="hidden" name="mode" value="balanced" />
         <div class="col-12">
           <div class="small text-body-secondary">Analysis mode: <strong>Balanced</strong></div>
+        </div>
+        <div class="col-12">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="1" id="reuseLastResult" name="reuse_last" checked>
+            <label class="form-check-label" for="reuseLastResult">Reuse previous result when this question was already analyzed for the selected document</label>
+          </div>
         </div>
         <div class="col-12 d-flex gap-2 align-items-center">
           <button id="runDemoBtn" type="submit" class="btn btn-primary" {% if not selected_documents %}disabled{% endif %}>
@@ -461,7 +461,8 @@
         const model = ((payload.meta || {}).model) || '-';
         const source = ((payload.meta || {}).source) || 'repository';
         const filename = ((payload.meta || {}).filename) || 'Untitled document';
-        resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}`;
+        const cachedResult = Boolean((payload.meta || {}).cached_result);
+        resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${cachedResult ? ' | Reused previous analysis' : ''}`;
         if (resultSourceMetaEl) {
           resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}`;
         }

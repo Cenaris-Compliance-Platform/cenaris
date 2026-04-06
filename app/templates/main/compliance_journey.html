@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+  .journey-hero {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 1rem;
+    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.12), rgba(var(--bs-info-rgb), 0.08));
+  }
+
+  .journey-step {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.9rem;
+    background: var(--bs-body-bg);
+  }
+
+  .journey-step .step-index {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    background: rgba(var(--bs-primary-rgb), 0.12);
+    color: var(--bs-primary);
+  }
+
+  .persona-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.9rem;
+    background: var(--bs-body-bg);
+  }
+
+  .evidence-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.8rem;
+    height: 100%;
+  }
+
+  .persona-toggle {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.8rem;
+    background: var(--bs-body-bg);
+    padding: 0.75rem;
+  }
+
+  .playbook-task {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    background: var(--bs-body-bg);
+  }
+
+  .playbook-task.is-done {
+    border-color: rgba(var(--bs-success-rgb), 0.45);
+    background: rgba(var(--bs-success-rgb), 0.08);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="journey-hero p-4 p-md-5">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+          <div>
+            <h1 class="h2 fw-bold mb-2">Compliance Journey</h1>
+            <p class="mb-0 text-body-secondary">A simple step-by-step guide from setup to audit-ready export.</p>
+          </div>
+          <div class="text-md-end">
+            <div class="small text-body-secondary">Progress</div>
+            <div class="h4 fw-bold mb-0">{{ progress_percent }}%</div>
+            <div class="small text-body-secondary">{{ completed_steps }} of {{ total_steps }} steps complete</div>
+          </div>
+        </div>
+
+        <div class="progress mt-4" style="height: 10px;">
+          <div class="progress-bar" role="progressbar" style="width: {{ progress_percent }}%;" aria-valuenow="{{ progress_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+
+        <div class="mt-3 small">
+          <span class="text-body-secondary">Next best step:</span>
+          <span class="fw-semibold">{{ next_step.title }}</span>
+          <a class="ms-2" href="{{ next_step.action_url }}">{{ next_step.action_label }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0"><i class="bi bi-people me-2 text-primary"></i>Choose Your Workflow Type</h5>
+        </div>
+        <div class="card-body">
+          <div class="small text-body-secondary mb-3">Pick the mode that matches your business. Cenaris will show the right practical checklist.</div>
+          <div class="d-flex flex-column gap-2">
+            {% for persona_key, persona in persona_profiles.items() %}
+            <form method="POST" action="{{ url_for('main.compliance_journey_set_persona') }}" class="persona-toggle d-flex justify-content-between align-items-center gap-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <input type="hidden" name="persona" value="{{ persona_key }}" />
+              <div>
+                <div class="fw-semibold">{{ persona.label }}{% if selected_persona == persona_key %} <span class="badge bg-primary ms-1">Selected</span>{% endif %}</div>
+                <div class="small text-body-secondary">Typical rhythm: {{ persona.frequency }}</div>
+              </div>
+              <button type="submit" class="btn btn-sm {% if selected_persona == persona_key %}btn-primary{% else %}btn-outline-primary{% endif %}">Use this workflow</button>
+            </form>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-body-tertiary border-bottom d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0"><i class="bi bi-check2-square me-2 text-primary"></i>{{ persona_playbook.label }} Quick-Start Checklist</h5>
+          <button type="button" id="resetPlaybookTasks" class="btn btn-sm btn-outline-secondary">Reset checks</button>
+        </div>
+        <div class="card-body">
+          <div class="small text-body-secondary mb-3">{{ persona_playbook.summary }}</div>
+          <div class="d-flex flex-column gap-2" id="personaPlaybookTasks" data-persona="{{ selected_persona }}">
+            {% for task in persona_playbook.tasks %}
+            <div class="playbook-task p-3" data-task-id="{{ task.id }}">
+              <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="form-check">
+                  <input class="form-check-input playbook-check" type="checkbox" value="1" id="playbookTask{{ loop.index }}" data-task-id="{{ task.id }}">
+                  <label class="form-check-label fw-semibold" for="playbookTask{{ loop.index }}">{{ task.title }}</label>
+                  <div class="small text-body-secondary mt-1">{{ task.detail }}</div>
+                </div>
+                <a href="{{ task.action_url }}" class="btn btn-sm btn-outline-primary">{{ task.action_label }}</a>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0"><i class="bi bi-signpost-split me-2 text-primary"></i>Start To Finish Workflow</h5>
+        </div>
+        <div class="card-body d-flex flex-column gap-3">
+          {% for step in journey_steps %}
+          <div class="journey-step p-3">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <span class="step-index">{{ loop.index }}</span>
+                <div>
+                  <div class="fw-semibold">{{ step.title }}</div>
+                  <div class="small text-body-secondary">{{ step.metric }}</div>
+                </div>
+              </div>
+              <span class="badge bg-{{ step.status_tone }}{% if step.status_tone == 'warning' %} text-dark{% endif %}">{{ step.status }}</span>
+            </div>
+
+            <div class="small mb-2"><span class="fw-semibold">Why this matters:</span> {{ step.why }}</div>
+            <div class="small text-body-secondary mb-3"><span class="fw-semibold">What to do now:</span> {{ step.what_now }}</div>
+
+            <a href="{{ step.action_url }}" class="btn btn-sm btn-outline-primary">{{ step.action_label }}</a>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h6 class="mb-0"><i class="bi bi-calendar-week me-2 text-primary"></i>How Often To Use Cenaris</h6>
+        </div>
+        <div class="card-body d-flex flex-column gap-2">
+          <div class="persona-card p-3">
+            <div class="fw-semibold mb-1">Sole Trader</div>
+            <div class="small text-body-secondary mb-2">Usually once a year before audit preparation.</div>
+            <div class="small">Focus on: upload core policies, run AI Review, export audit pack.</div>
+          </div>
+          <div class="persona-card p-3">
+            <div class="fw-semibold mb-1">Small Provider</div>
+            <div class="small text-body-secondary mb-2">Weekly or monthly operations rhythm.</div>
+            <div class="small">Focus on: deadline tracking, staff evidence updates, gap closure.</div>
+          </div>
+          <div class="persona-card p-3">
+            <div class="fw-semibold mb-1">External Auditor</div>
+            <div class="small text-body-secondary mb-2">Only during audit windows.</div>
+            <div class="small">Focus on: reviewing organized evidence and exported reports.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h6 class="mb-0"><i class="bi bi-alarm me-2 text-danger"></i>Upcoming Deadlines</h6>
+        </div>
+        <div class="card-body">
+          {% if dashboard_deadlines %}
+          <div class="d-flex flex-column gap-2">
+            {% for item in dashboard_deadlines %}
+            <div class="border rounded p-2 small">
+              <div class="fw-semibold">{{ item.title }}</div>
+              <div class="text-{{ item.severity }}">{{ item.due_label }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="small text-body-secondary">No upcoming deadlines yet. They appear after evidence is linked and assessments are completed.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0"><i class="bi bi-journal-check me-2 text-primary"></i>The 4 Evidence Types Auditors Ask For</h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6 col-xl-3">
+              <div class="evidence-card p-3">
+                <div class="fw-semibold mb-2">System Evidence</div>
+                <div class="small text-body-secondary">Your written policy and official process documents.</div>
+              </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+              <div class="evidence-card p-3">
+                <div class="fw-semibold mb-2">Workforce Evidence</div>
+                <div class="small text-body-secondary">Staff certificates, credentials, and training records.</div>
+              </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+              <div class="evidence-card p-3">
+                <div class="fw-semibold mb-2">Implementation Evidence</div>
+                <div class="small text-body-secondary">Logs that prove policies are actually being followed.</div>
+              </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+              <div class="evidence-card p-3">
+                <div class="fw-semibold mb-2">Participant Evidence</div>
+                <div class="small text-body-secondary">Client-facing evidence such as feedback and outcomes.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body">
+      <h6 class="fw-semibold mb-2"><i class="bi bi-clipboard-check me-2 text-success"></i>Audit-Day Quick Check</h6>
+      <ul class="small text-body-secondary mb-0">
+        <li>Your key requirements have linked evidence.</li>
+        <li>Pending requirement assessments are close to zero.</li>
+        <li>High-risk and critical gaps are actively addressed.</li>
+        <li>Audit pack report is generated from current data.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const taskWrap = document.getElementById('personaPlaybookTasks');
+    const resetBtn = document.getElementById('resetPlaybookTasks');
+    if (!taskWrap) {
+      return;
+    }
+
+    const persona = (taskWrap.getAttribute('data-persona') || '').trim();
+    const storageKey = `cenaris.playbook.${persona}`;
+
+    let state = {};
+    try {
+      state = JSON.parse(window.localStorage.getItem(storageKey) || '{}') || {};
+    } catch (_err) {
+      state = {};
+    }
+
+    const applyState = () => {
+      const checks = taskWrap.querySelectorAll('.playbook-check');
+      checks.forEach(function (checkEl) {
+        const taskId = (checkEl.getAttribute('data-task-id') || '').trim();
+        const done = Boolean(state[taskId]);
+        checkEl.checked = done;
+
+        const card = taskWrap.querySelector(`.playbook-task[data-task-id="${taskId}"]`);
+        if (card) {
+          card.classList.toggle('is-done', done);
+        }
+      });
+    };
+
+    const persistState = () => {
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(state));
+      } catch (_err) {
+      }
+    };
+
+    taskWrap.querySelectorAll('.playbook-check').forEach(function (checkEl) {
+      checkEl.addEventListener('change', function () {
+        const taskId = (checkEl.getAttribute('data-task-id') || '').trim();
+        state[taskId] = Boolean(checkEl.checked);
+        persistState();
+        applyState();
+      });
+    });
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        state = {};
+        persistState();
+        applyState();
+      });
+    }
+
+    applyState();
+  })();
+</script>
+{% endblock %}

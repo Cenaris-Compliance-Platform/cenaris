@@ -1727,6 +1727,303 @@ def _build_dashboard_bridge_stats(*, org_id: int) -> dict:
         'linked_requirements_pending_assessment': int(pending_assessment_count),
     }
 
+
+def _journey_step_state(*, completed: bool, in_progress: bool) -> tuple[str, str]:
+    if completed:
+        return 'Complete', 'success'
+    if in_progress:
+        return 'In progress', 'warning'
+    return 'Not started', 'secondary'
+
+
+def _build_compliance_journey_steps(*, organization: Organization, total_documents: int, reviewed_documents: int, bridge: dict, compliance_rate: float, gap_requirements: int) -> list[dict]:
+    profile_complete = bool(organization.onboarding_complete())
+
+    evidence_started = int(total_documents) > 0
+    evidence_complete = int(total_documents) >= 3
+
+    review_started = int(reviewed_documents) > 0
+    review_complete = review_started and int(bridge.get('reviewed_docs_not_linked') or 0) == 0
+
+    mapping_started = int(bridge.get('linked_requirements') or 0) > 0
+    mapping_complete = mapping_started and int(bridge.get('reviewed_docs_not_linked') or 0) == 0
+
+    assessment_started = mapping_started
+    assessment_complete = mapping_started and int(bridge.get('linked_requirements_pending_assessment') or 0) == 0
+
+    audit_started = assessment_started
+    audit_complete = assessment_complete and float(compliance_rate or 0) >= 75 and int(gap_requirements) <= 3
+
+    setup_status, setup_tone = _journey_step_state(completed=profile_complete, in_progress=profile_complete)
+    evidence_status, evidence_tone = _journey_step_state(completed=evidence_complete, in_progress=evidence_started)
+    review_status, review_tone = _journey_step_state(completed=review_complete, in_progress=review_started)
+    mapping_status, mapping_tone = _journey_step_state(completed=mapping_complete, in_progress=mapping_started)
+    assessment_status, assessment_tone = _journey_step_state(completed=assessment_complete, in_progress=assessment_started)
+    audit_status, audit_tone = _journey_step_state(completed=audit_complete, in_progress=audit_started)
+
+    return [
+        {
+            'id': 'setup',
+            'title': 'Step 1: Confirm business setup',
+            'why': 'Auditors need to see who you are and which service you run.',
+            'what_now': 'Check organisation details and team roles.',
+            'metric': 'Organisation profile and governance setup',
+            'status': setup_status,
+            'status_tone': setup_tone,
+            'is_complete': bool(profile_complete),
+            'action_label': 'Open Organisation Profile',
+            'action_url': url_for('main.organization_settings'),
+        },
+        {
+            'id': 'evidence',
+            'title': 'Step 2: Upload evidence documents',
+            'why': 'No documents means no proof during audit.',
+            'what_now': 'Upload policies, registers, logs, and staff records.',
+            'metric': f'{int(total_documents)} document(s) in repository',
+            'status': evidence_status,
+            'status_tone': evidence_tone,
+            'is_complete': bool(evidence_complete),
+            'action_label': 'Open Evidence Repository',
+            'action_url': url_for('main.evidence_repository'),
+        },
+        {
+            'id': 'review',
+            'title': 'Step 3: Run AI Review',
+            'why': 'AI quickly checks if each file has useful compliance content.',
+            'what_now': 'Analyze each key document and confirm suggested findings.',
+            'metric': f'{int(reviewed_documents)} document(s) reviewed',
+            'status': review_status,
+            'status_tone': review_tone,
+            'is_complete': bool(review_complete),
+            'action_label': 'Open AI Review',
+            'action_url': url_for('main.ai_demo'),
+        },
+        {
+            'id': 'mapping',
+            'title': 'Step 4: Verify evidence links',
+            'why': 'Compliance scores move only when evidence is linked to requirements.',
+            'what_now': 'Keep or edit mapped links so each requirement has correct proof.',
+            'metric': f"{int(bridge.get('linked_requirements') or 0)} linked requirement(s)",
+            'status': mapping_status,
+            'status_tone': mapping_tone,
+            'is_complete': bool(mapping_complete),
+            'action_label': 'Review Linked Documents',
+            'action_url': url_for('main.evidence_repository'),
+        },
+        {
+            'id': 'assessment',
+            'title': 'Step 5: Confirm requirement assessments',
+            'why': 'This is the official readiness score an auditor cares about.',
+            'what_now': 'Close pending requirement assessments and resolve flagged gaps.',
+            'metric': f"{int(bridge.get('linked_requirements_pending_assessment') or 0)} pending assessment(s)",
+            'status': assessment_status,
+            'status_tone': assessment_tone,
+            'is_complete': bool(assessment_complete),
+            'action_label': 'Open Requirements Workboard',
+            'action_url': url_for('main.compliance_requirements'),
+        },
+        {
+            'id': 'audit',
+            'title': 'Step 6: Export audit pack',
+            'why': 'Turn all your work into a clear packet for the external auditor.',
+            'what_now': 'Generate gap analysis and audit pack reports.',
+            'metric': f'{round(float(compliance_rate or 0), 1)}% readiness · {int(gap_requirements)} gap(s)',
+            'status': audit_status,
+            'status_tone': audit_tone,
+            'is_complete': bool(audit_complete),
+            'action_label': 'Generate Reports',
+            'action_url': url_for('main.generate_report', report_type='audit-pack'),
+        },
+    ]
+
+
+def _compliance_persona_profiles() -> dict[str, dict]:
+    return {
+        'sole_trader': {
+            'label': 'Sole Trader',
+            'frequency': 'Usually once a year before audit preparation.',
+            'summary': 'Keep setup simple and focus on a clean annual audit packet.',
+            'tasks': [
+                {
+                    'id': 'collect_core_policies',
+                    'title': 'Upload core policy set (incident, risk, complaints)',
+                    'detail': 'Make sure each policy is current and clearly dated.',
+                    'action_label': 'Open Repository',
+                    'action_url': url_for('main.evidence_repository'),
+                },
+                {
+                    'id': 'run_ai_review',
+                    'title': 'Run AI Review on each key policy',
+                    'detail': 'Check suggested links and missing evidence notes.',
+                    'action_label': 'Open AI Review',
+                    'action_url': url_for('main.ai_demo'),
+                },
+                {
+                    'id': 'export_pack',
+                    'title': 'Generate the audit pack before assessment date',
+                    'detail': 'Export a fresh report close to audit day.',
+                    'action_label': 'Generate Audit Pack',
+                    'action_url': url_for('main.generate_report', report_type='audit-pack'),
+                },
+            ],
+        },
+        'small_provider': {
+            'label': 'Small Provider',
+            'frequency': 'Weekly or monthly operational rhythm.',
+            'summary': 'Use Cenaris as an operations cockpit, not only an audit tool.',
+            'tasks': [
+                {
+                    'id': 'check_deadlines',
+                    'title': 'Review upcoming deadlines and expiring evidence',
+                    'detail': 'Catch issues before they become audit gaps.',
+                    'action_label': 'Open Dashboard',
+                    'action_url': url_for('main.dashboard'),
+                },
+                {
+                    'id': 'update_staff_evidence',
+                    'title': 'Upload new staff credentials and workforce records',
+                    'detail': 'Keep workforce evidence current for each requirement.',
+                    'action_label': 'Open Repository',
+                    'action_url': url_for('main.evidence_repository'),
+                },
+                {
+                    'id': 'close_gaps',
+                    'title': 'Close linked requirement gaps every cycle',
+                    'detail': 'Prioritize high-risk and critical flags first.',
+                    'action_label': 'Open Requirements Workboard',
+                    'action_url': url_for('main.compliance_requirements'),
+                },
+            ],
+        },
+        'auditor': {
+            'label': 'Auditor',
+            'frequency': 'Primarily used during formal audit windows.',
+            'summary': 'Review traceable evidence quickly and validate readiness claims.',
+            'tasks': [
+                {
+                    'id': 'review_readiness',
+                    'title': 'Review requirement readiness and unresolved gaps',
+                    'detail': 'Focus on flagged requirements and linked proof quality.',
+                    'action_label': 'Open Analytics',
+                    'action_url': url_for('main.analytics_dashboard'),
+                },
+                {
+                    'id': 'sample_evidence',
+                    'title': 'Sample linked documents and AI review notes',
+                    'detail': 'Spot-check traceability from requirement to evidence.',
+                    'action_label': 'Open AI Review',
+                    'action_url': url_for('main.ai_demo'),
+                },
+                {
+                    'id': 'download_pack',
+                    'title': 'Download audit pack and supporting exports',
+                    'detail': 'Use exports as summary, then drill into source records.',
+                    'action_label': 'Generate Audit Pack',
+                    'action_url': url_for('main.generate_report', report_type='audit-pack'),
+                },
+            ],
+        },
+    }
+
+
+@bp.route('/compliance-journey')
+@login_required
+def compliance_journey():
+    """Plain-language guided workflow from setup to audit readiness."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        abort(404)
+
+    total_documents = (
+        Document.query
+        .filter(Document.organization_id == int(org_id), Document.is_active.is_(True))
+        .count()
+    )
+    reviewed_documents = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.ai_analysis_at.isnot(None),
+        )
+        .count()
+    )
+
+    analytics_payload = analytics_service.build_dashboard_payload(organization_id=int(org_id))
+    summary = analytics_payload.get('summary') or {}
+    bridge = _build_dashboard_bridge_stats(org_id=int(org_id))
+    deadlines = _build_dashboard_deadlines(org_id=int(org_id), limit=5)
+
+    compliance_rate = float(summary.get('compliance_rate') or 0)
+    gap_requirements = int(summary.get('gap_requirements') or 0)
+    persona_profiles = _compliance_persona_profiles()
+    requested_persona = (request.args.get('persona') or '').strip().lower()
+    session_persona = (session.get('journey_persona') or '').strip().lower()
+
+    if requested_persona in persona_profiles:
+        selected_persona = requested_persona
+    elif session_persona in persona_profiles:
+        selected_persona = session_persona
+    else:
+        selected_persona = 'small_provider'
+
+    session['journey_persona'] = selected_persona
+    persona_playbook = persona_profiles.get(selected_persona) or persona_profiles['small_provider']
+
+    journey_steps = _build_compliance_journey_steps(
+        organization=organization,
+        total_documents=int(total_documents),
+        reviewed_documents=int(reviewed_documents),
+        bridge=bridge,
+        compliance_rate=compliance_rate,
+        gap_requirements=gap_requirements,
+    )
+    completed_steps = sum(1 for step in journey_steps if step.get('is_complete'))
+    progress_percent = int(round((completed_steps / max(1, len(journey_steps))) * 100))
+    next_step = next((step for step in journey_steps if not step.get('is_complete')), journey_steps[-1])
+
+    return render_template(
+        'main/compliance_journey.html',
+        title='Compliance Journey',
+        journey_steps=journey_steps,
+        completed_steps=completed_steps,
+        total_steps=len(journey_steps),
+        progress_percent=progress_percent,
+        next_step=next_step,
+        persona_profiles=persona_profiles,
+        selected_persona=selected_persona,
+        persona_playbook=persona_playbook,
+        dashboard_summary=summary,
+        dashboard_bridge=bridge,
+        dashboard_deadlines=deadlines,
+    )
+
+
+@bp.route('/compliance-journey/persona', methods=['POST'])
+@login_required
+def compliance_journey_set_persona():
+    """Persist user's selected journey persona in session for guided playbook UX."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    persona_profiles = _compliance_persona_profiles()
+    selected_persona = (request.form.get('persona') or '').strip().lower()
+    if selected_persona not in persona_profiles:
+        flash('Please choose a valid workflow type.', 'warning')
+        return redirect(url_for('main.compliance_journey'))
+
+    session['journey_persona'] = selected_persona
+    return redirect(url_for('main.compliance_journey', persona=selected_persona))
+
 @bp.route('/dashboard')
 @login_required
 def dashboard():
@@ -3152,7 +3449,7 @@ def gap_analysis():
 @bp.route('/compliance-requirements')
 @login_required
 def compliance_requirements():
-    """Legacy requirements view; redirects to AI Review workspace."""
+    """Requirements workboard with evidence-bucket coverage and due-state tracking."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -3160,8 +3457,270 @@ def compliance_requirements():
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
-    flash('Requirements view has been consolidated into AI Review workspaces.', 'info')
-    return redirect(url_for('main.ai_demo'))
+
+    q = (request.args.get('q') or '').strip()
+    status_filter = _normalize_computed_flag_filter(request.args.get('status') or '')
+    module_filter = (request.args.get('module') or '').strip()
+    bucket_filter = (request.args.get('bucket') or '').strip().lower()
+    due_filter = (request.args.get('due') or '').strip().lower()
+
+    page = _clamp_int(request.args.get('page', 1), default=1, minimum=1, maximum=10_000)
+    per_page = 25
+
+    base_query = (
+        db.session.query(ComplianceRequirement, OrganizationRequirementAssessment)
+        .join(ComplianceFrameworkVersion, ComplianceFrameworkVersion.id == ComplianceRequirement.framework_version_id)
+        .outerjoin(
+            OrganizationRequirementAssessment,
+            and_(
+                OrganizationRequirementAssessment.organization_id == int(org_id),
+                OrganizationRequirementAssessment.requirement_id == ComplianceRequirement.id,
+            ),
+        )
+        .filter(
+            ComplianceFrameworkVersion.is_active.is_(True),
+            or_(
+                ComplianceFrameworkVersion.organization_id.is_(None),
+                ComplianceFrameworkVersion.organization_id == int(org_id),
+            ),
+        )
+    )
+
+    if q:
+        like = f'%{q}%'
+        base_query = base_query.filter(
+            or_(
+                ComplianceRequirement.requirement_id.ilike(like),
+                ComplianceRequirement.module_name.ilike(like),
+                ComplianceRequirement.quality_indicator_code.ilike(like),
+                ComplianceRequirement.quality_indicator_text.ilike(like),
+                ComplianceRequirement.outcome_code.ilike(like),
+                ComplianceRequirement.outcome_text.ilike(like),
+                ComplianceRequirement.evidence_owner_role.ilike(like),
+            )
+        )
+
+    if module_filter:
+        base_query = base_query.filter(ComplianceRequirement.module_name == module_filter)
+
+    if status_filter:
+        base_query = base_query.filter(
+            OrganizationRequirementAssessment.computed_flag.in_(_computed_flag_filter_values(status_filter))
+        )
+
+    raw_rows = base_query.order_by(
+        ComplianceRequirement.module_name.asc().nullslast(),
+        ComplianceRequirement.requirement_id.asc(),
+    ).all()
+
+    bucket_rows = (
+        db.session.query(
+            RequirementEvidenceLink.requirement_id,
+            RequirementEvidenceLink.evidence_bucket,
+            func.count(RequirementEvidenceLink.id),
+        )
+        .filter(RequirementEvidenceLink.organization_id == int(org_id))
+        .group_by(RequirementEvidenceLink.requirement_id, RequirementEvidenceLink.evidence_bucket)
+        .all()
+    )
+
+    bucket_counts_by_requirement: dict[int, dict[str, int]] = {}
+    for requirement_id, evidence_bucket, total_links in bucket_rows:
+        if requirement_id is None:
+            continue
+        rid = int(requirement_id)
+        bucket_counts_by_requirement.setdefault(rid, {})[(evidence_bucket or '').strip().lower()] = int(total_links or 0)
+
+    now_dt = datetime.now(timezone.utc)
+    work_rows: list[dict] = []
+    module_options = set()
+
+    for requirement, assessment in raw_rows:
+        module_name = (requirement.module_name or '').strip() or 'General'
+        module_options.add(module_name)
+
+        req_id = int(requirement.id)
+        bucket_counts = {
+            'system': int(bucket_counts_by_requirement.get(req_id, {}).get('system', 0)),
+            'implementation': int(bucket_counts_by_requirement.get(req_id, {}).get('implementation', 0)),
+            'workforce': int(bucket_counts_by_requirement.get(req_id, {}).get('workforce', 0)),
+            'participant': int(bucket_counts_by_requirement.get(req_id, {}).get('participant', 0)),
+        }
+
+        if bucket_filter in {'system', 'implementation', 'workforce', 'participant'} and bucket_counts.get(bucket_filter, 0) <= 0:
+            continue
+
+        required_buckets = _required_buckets_for_requirement(requirement)
+        linked_required_count = sum(1 for bucket in required_buckets if int(bucket_counts.get(bucket, 0)) > 0)
+        bucket_coverage_pct = int(round((linked_required_count / max(1, len(required_buckets))) * 100))
+
+        due_meta = _requirement_due_meta(requirement=requirement, assessment=assessment, now_dt=now_dt)
+        due_days = due_meta.get('days_left')
+        if due_filter == 'overdue' and not (due_days is not None and int(due_days) < 0):
+            continue
+        if due_filter == '30d' and not (due_days is not None and 0 <= int(due_days) <= 30):
+            continue
+        if due_filter == 'unscheduled' and due_days is not None:
+            continue
+
+        work_rows.append(
+            {
+                'requirement': requirement,
+                'assessment': assessment,
+                'module_name': module_name,
+                'owner_role': (requirement.evidence_owner_role or '').strip() or 'Not assigned',
+                'bucket_counts': bucket_counts,
+                'required_buckets': required_buckets,
+                'bucket_coverage_pct': int(bucket_coverage_pct),
+                'due': due_meta,
+            }
+        )
+
+    total_rows = len(work_rows)
+    total_pages = max(1, (total_rows + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    start_index = (page - 1) * per_page
+    end_index = start_index + per_page
+    paged_rows = work_rows[start_index:end_index]
+
+    overdue_count = sum(1 for row in work_rows if row.get('due', {}).get('days_left') is not None and int(row.get('due', {}).get('days_left') or 0) < 0)
+    fully_linked_count = sum(1 for row in work_rows if int(row.get('bucket_coverage_pct') or 0) >= 100)
+    risk_count = sum(
+        1
+        for row in work_rows
+        if ((row.get('assessment').computed_flag if row.get('assessment') else '') or '').strip() in {'Critical gap', 'High risk gap', 'red', 'amber'}
+    )
+
+    summary = {
+        'total_requirements': int(total_rows),
+        'fully_linked_requirements': int(fully_linked_count),
+        'overdue_reviews': int(overdue_count),
+        'at_risk_requirements': int(risk_count),
+    }
+
+    lookback_30d = now_dt - timedelta(days=30)
+    monthly_snapshot = {
+        'uploads_30d': int(
+            Document.query
+            .filter(
+                Document.organization_id == int(org_id),
+                Document.is_active.is_(True),
+                Document.uploaded_at >= lookback_30d,
+            )
+            .count()
+        ),
+        'assessments_30d': int(
+            OrganizationRequirementAssessment.query
+            .filter(
+                OrganizationRequirementAssessment.organization_id == int(org_id),
+                OrganizationRequirementAssessment.last_assessed_at.isnot(None),
+                OrganizationRequirementAssessment.last_assessed_at >= lookback_30d,
+            )
+            .count()
+        ),
+        'links_30d': int(
+            RequirementEvidenceLink.query
+            .filter(
+                RequirementEvidenceLink.organization_id == int(org_id),
+                RequirementEvidenceLink.linked_at >= lookback_30d,
+            )
+            .count()
+        ),
+    }
+
+    owner_action_queue: list[dict] = []
+    for row in work_rows:
+        assessment = row.get('assessment')
+        due_days = row.get('due', {}).get('days_left')
+        flag = ((assessment.computed_flag if assessment else '') or '').strip().lower()
+        coverage_pct = int(row.get('bucket_coverage_pct') or 0)
+
+        reasons: list[str] = []
+        priority_score = 0
+
+        if due_days is not None and int(due_days) < 0:
+            reasons.append('Overdue review')
+            priority_score += 60 + min(30, abs(int(due_days)))
+
+        if flag in {'critical gap', 'red'}:
+            reasons.append('Critical gap')
+            priority_score += 100
+        elif flag in {'high risk gap', 'amber'}:
+            reasons.append('High risk gap')
+            priority_score += 70
+
+        if coverage_pct < 100:
+            reasons.append('Evidence coverage incomplete')
+            priority_score += 40
+
+        if not reasons:
+            continue
+
+        owner_action_queue.append(
+            {
+                'priority_score': int(priority_score),
+                'requirement_id': row.get('requirement').requirement_id,
+                'module_name': row.get('module_name'),
+                'owner_role': row.get('owner_role'),
+                'reason': ', '.join(reasons),
+                'due_label': row.get('due', {}).get('label') or 'No due date',
+                'status': (assessment.computed_flag if assessment else '') or 'Not assessed',
+                'action_url': url_for('main.compliance_requirement_detail', requirement_db_id=int(row.get('requirement').id)),
+            }
+        )
+
+    owner_action_queue.sort(key=lambda item: int(item.get('priority_score') or 0), reverse=True)
+    owner_action_queue = owner_action_queue[:8]
+
+    upcoming_review_queue: list[dict] = []
+    for row in work_rows:
+        due_days = row.get('due', {}).get('days_left')
+        if due_days is None:
+            continue
+        if int(due_days) < 0 or int(due_days) > 45:
+            continue
+
+        upcoming_review_queue.append(
+            {
+                'days_left': int(due_days),
+                'requirement_id': row.get('requirement').requirement_id,
+                'module_name': row.get('module_name'),
+                'owner_role': row.get('owner_role'),
+                'due_label': row.get('due', {}).get('label') or '',
+                'coverage_pct': int(row.get('bucket_coverage_pct') or 0),
+                'action_url': url_for('main.compliance_requirement_detail', requirement_db_id=int(row.get('requirement').id)),
+            }
+        )
+
+    upcoming_review_queue.sort(key=lambda item: int(item.get('days_left') or 0))
+    upcoming_review_queue = upcoming_review_queue[:8]
+
+    pagination = {
+        'page': int(page),
+        'pages': int(total_pages),
+        'has_prev': bool(page > 1),
+        'has_next': bool(page < total_pages),
+        'prev_num': int(max(1, page - 1)),
+        'next_num': int(min(total_pages, page + 1)),
+    }
+
+    return render_template(
+        'main/compliance_requirements.html',
+        title='Requirements Workboard',
+        rows=paged_rows,
+        q=q,
+        status_filter=status_filter,
+        module_filter=module_filter,
+        bucket_filter=bucket_filter,
+        due_filter=due_filter,
+        module_options=sorted(module_options),
+        summary=summary,
+        monthly_snapshot=monthly_snapshot,
+        owner_action_queue=owner_action_queue,
+        upcoming_review_queue=upcoming_review_queue,
+        pagination=pagination,
+    )
 
 
 def _normalize_computed_flag_filter(value: str) -> str:
@@ -3186,6 +3745,62 @@ def _computed_flag_filter_values(canonical_flag: str) -> list[str]:
         'Mature': ['Mature', 'mature'],
     }
     return mapping.get(canonical_flag, [canonical_flag])
+
+
+def _requirement_due_meta(*, requirement: ComplianceRequirement, assessment: OrganizationRequirementAssessment | None, now_dt: datetime) -> dict:
+    review_days = _review_frequency_to_days(getattr(requirement, 'review_frequency', None))
+    if not review_days:
+        return {
+            'days_left': None,
+            'label': 'No review schedule',
+            'tone': 'secondary',
+        }
+
+    if not assessment or not assessment.last_assessed_at:
+        return {
+            'days_left': None,
+            'label': 'Awaiting first assessment',
+            'tone': 'secondary',
+        }
+
+    base_dt = assessment.last_assessed_at
+    if base_dt.tzinfo is None:
+        base_dt = base_dt.replace(tzinfo=timezone.utc)
+
+    due_dt = base_dt + timedelta(days=int(review_days))
+    days_left = int((due_dt.date() - now_dt.date()).days)
+    if days_left < 0:
+        return {
+            'days_left': days_left,
+            'label': f'Overdue by {abs(days_left)} day(s)',
+            'tone': 'danger',
+        }
+    if days_left == 0:
+        return {
+            'days_left': 0,
+            'label': 'Due today',
+            'tone': 'warning',
+        }
+    if days_left <= 30:
+        return {
+            'days_left': days_left,
+            'label': f'Due in {days_left} day(s)',
+            'tone': 'warning',
+        }
+    return {
+        'days_left': days_left,
+        'label': f'Due in {days_left} day(s)',
+        'tone': 'success',
+    }
+
+
+def _required_buckets_for_requirement(requirement: ComplianceRequirement) -> list[str]:
+    required = ['system', 'implementation']
+    if bool(getattr(requirement, 'requires_workforce_evidence', False)):
+        required.append('workforce')
+    if bool(getattr(requirement, 'requires_participant_evidence', False)):
+        required.append('participant')
+    return required
 
 
 def _get_org_visible_requirement_or_404(requirement_db_id: int, org_id: int):
@@ -3960,6 +4575,18 @@ def _assistant_is_org_admin(org_id: int) -> bool:
 def _assistant_default_actions() -> list[dict]:
     return [
         {
+            'id': 'open_compliance_journey',
+            'kind': 'navigate',
+            'label': 'Open Compliance Journey',
+            'url': url_for('main.compliance_journey'),
+        },
+        {
+            'id': 'open_requirements',
+            'kind': 'navigate',
+            'label': 'Open Requirements Workboard',
+            'url': url_for('main.compliance_requirements'),
+        },
+        {
             'id': 'open_ai_review',
             'kind': 'navigate',
             'label': 'Open AI Review',
@@ -3996,7 +4623,7 @@ def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, l
     lower = (query_text or '').strip().lower()
     if not lower:
         return (
-            'Ask me things like: "How do I run AI review?", "Open evidence repository", or "Mark all notifications as read".',
+            'Ask me things like: "Show me the compliance journey", "Open requirements workboard", or "Mark all notifications as read".',
             _assistant_default_actions(),
         )
 
@@ -4025,9 +4652,15 @@ def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, l
                 f'{int(reviewed_doc_count)} AI-reviewed file(s), and a requirement compliance rate of '
                 f'{round(float(dashboard_summary.get("compliance_rate") or 0), 1)}%. '
                 f'Reviewed but not linked documents: {int(bridge.get("reviewed_docs_not_linked") or 0)}. '
-                'To increase readiness: link reviewed evidence to requirements, then assess those requirements.'
+                'AI Review already auto-maps likely requirement links. To increase readiness, verify/adjust those mappings and confirm requirement assessments.'
             ),
             [
+                {
+                    'id': 'open_compliance_journey',
+                    'kind': 'navigate',
+                    'label': 'Open Compliance Journey',
+                    'url': url_for('main.compliance_journey'),
+                },
                 {
                     'id': 'open_repository',
                     'kind': 'navigate',
@@ -4039,6 +4672,33 @@ def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, l
                     'kind': 'navigate',
                     'label': 'Open Analytics',
                     'url': url_for('main.analytics_dashboard'),
+                },
+            ],
+        )
+
+    if (
+        'journey' in lower
+        or ('start' in lower and ('where' in lower or 'first' in lower or 'begin' in lower))
+        or ('step by step' in lower)
+        or ('full flow' in lower)
+    ):
+        return (
+            (
+                'Use Compliance Journey for a simple step-by-step path: setup -> upload evidence -> run AI review -> verify links -> confirm assessments -> export audit pack. '
+                'It shows what is complete, what is in progress, and the next best action.'
+            ),
+            [
+                {
+                    'id': 'open_compliance_journey',
+                    'kind': 'navigate',
+                    'label': 'Open Compliance Journey',
+                    'url': url_for('main.compliance_journey'),
+                },
+                {
+                    'id': 'open_ai_review',
+                    'kind': 'navigate',
+                    'label': 'Open AI Review',
+                    'url': url_for('main.ai_demo'),
                 },
             ],
         )
@@ -4070,16 +4730,17 @@ def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, l
         'link' in lower
         and ('evidence' in lower or 'requirement' in lower or 'them' in lower)
     ) or ('use of it' in lower) or ('how will it help' in lower):
-        linked_count = int(bridge.get('requirements_with_linked_evidence') or 0)
+        linked_count = int(bridge.get('linked_requirements') or 0)
         pending_count = int(bridge.get('linked_requirements_pending_assessment') or 0)
         return (
             (
-                'Linking means attaching a document to a specific compliance requirement so auditors can see proof for that rule. '
-                'Why it helps: 1) your readiness score can move based on real requirement evidence, 2) gaps become specific and actionable, '
+                'In this app, AI Review already tries to auto-link each reviewed document to likely requirements. '
+                'You still verify those links so the evidence is trustworthy for audit use. '
+                'Why it helps: 1) readiness score moves from requirement evidence, 2) gaps become specific and actionable, '
                 '3) exports and reviews become audit-ready.\n\n'
                 f'Current org snapshot: {linked_count} requirement(s) already linked to evidence, '
                 f'{pending_count} linked requirement(s) still waiting assessment update.\n\n'
-                'Quick steps: open Evidence Repository -> open a document -> choose Link to requirement -> save -> review requirement status.'
+                'Quick steps: open Evidence Repository -> open a reviewed document -> check mapped requirements -> keep/edit links -> review requirement status.'
             ),
             [
                 {
@@ -4442,9 +5103,6 @@ def ai_demo():
     return render_template(
         'main/ai_demo.html',
         title='AI Review Workspace',
-        demo_provider='OpenRouter',
-        demo_model=current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free',
-        has_openrouter_key=bool((current_app.config.get('OPENROUTER_API_KEY') or '').strip()),
         has_ndis_corpus=bool(os.path.exists(corpus_abs)),
         recent_analyses=recent_analyses,
         selected_documents=selected_documents,
@@ -4471,6 +5129,7 @@ def ai_demo_analyze_api():
     question = _limit_text((request.form.get('question') or '').strip(), max_chars=700)
     # Demo mode is intentionally fixed to balanced for consistent client-facing behavior.
     analysis_mode = 'balanced'
+    reuse_last = str(request.form.get('reuse_last') or '').strip().lower() not in {'0', 'false', 'no', 'off'}
 
     if not question:
         question = 'Assess this document against NDIS-style compliance evidence expectations.'
@@ -4478,15 +5137,60 @@ def ai_demo_analyze_api():
     if not stored_doc_id or not stored_doc_id.isdigit():
         return jsonify({'success': False, 'error': 'Choose a repository document first.'}), 400
 
+    document = _authorized_org_document_or_404(int(stored_doc_id))
+    source_filename = (document.filename or '').strip()
+
+    normalized_question = ' '.join((question or '').split()).lower()
+    cached_question = ' '.join(((document.ai_question or '')).split()).lower()
+    if (
+        reuse_last
+        and normalized_question
+        and normalized_question == cached_question
+        and (document.ai_summary or '').strip()
+        and (document.ai_status or '').strip()
+    ):
+        reused_warning = 'Reused the latest stored analysis for this document and question.'
+        checklist = _build_checklist_from_analysis(
+            {
+                'status': document.ai_status,
+                'summary': document.ai_summary,
+                'focus_area': document.ai_focus_area or 'General compliance coverage',
+            }
+        )
+        return jsonify(
+            {
+                'success': True,
+                'status': document.ai_status,
+                'confidence': float(document.ai_confidence or 0),
+                'summary': document.ai_summary,
+                'checklist': checklist,
+                'snippets': [],
+                'citations': [],
+                'warnings': [reused_warning],
+                'warning_items': [{'source': 'cache', 'message': reused_warning}],
+                'meta': {
+                    'provider': (document.ai_provider or 'cached').strip() or 'cached',
+                    'model': (document.ai_model or 'cached').strip() or 'cached',
+                    'analysis_mode': analysis_mode,
+                    'scoring_version': 'demo-v3',
+                    'retrieval_mode': (document.ai_retrieval_mode or 'cached').strip() or 'cached',
+                    'document_chars': len(document.extracted_text or ''),
+                    'temporary_processing_only': False,
+                    'filename': source_filename,
+                    'source': 'repository',
+                    'stored_doc_id': int(stored_doc_id) if stored_doc_id.isdigit() else None,
+                    'cached_result': True,
+                },
+            }
+        )
+
     from app.services.azure_storage import AzureBlobStorageService
 
-    document = _authorized_org_document_or_404(int(stored_doc_id))
     storage_service = AzureBlobStorageService()
     result = storage_service.download_file(document.blob_name)
     if not result.get('success') or not result.get('data'):
         return jsonify({'success': False, 'error': 'Could not load stored document for AI review.'}), 400
 
-    source_filename = (document.filename or '').strip()
     doc_text, extraction_error = document_analysis_service.extract_text_from_bytes(source_filename, result.get('data') or b'')
     if extraction_error:
         return jsonify({'success': False, 'error': extraction_error}), 400
@@ -4549,6 +5253,19 @@ def ai_demo_analyze_api():
     # Persist result (non-blocking — never fail the API on a DB error)
     try:
         from app.models import DemoAnalysisResult
+
+        document.extracted_text = doc_text or None
+        _refresh_document_search_text(document)
+        document.ai_status = status
+        document.ai_confidence = confidence
+        document.ai_focus_area = 'General compliance coverage'
+        document.ai_question = question
+        document.ai_summary = ai_summary
+        document.ai_provider = provider_label
+        document.ai_model = model_label
+        document.ai_retrieval_mode = _demo_retrieval_mode
+        document.ai_analysis_at = datetime.now(timezone.utc)
+
         record = DemoAnalysisResult(
             organization_id=int(org_id),
             user_id=int(current_user.id),
@@ -4607,6 +5324,7 @@ def ai_demo_analyze_api():
                 'filename': source_filename,
                 'source': 'repository',
                 'stored_doc_id': int(stored_doc_id) if stored_doc_id.isdigit() else None,
+                'cached_result': False,
             },
         }
     )
