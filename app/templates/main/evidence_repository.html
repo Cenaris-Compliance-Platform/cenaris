@@ -11,10 +11,10 @@
                     <p class="text-body-secondary mb-0">Manage and view your uploaded compliance documents</p>
                 </div>
                 <div class="d-flex gap-2">
-                    <a href="{{ url_for('main.ai_demo') }}" class="btn btn-primary">
+                    <a href="{{ url_for('main.ai_demo') }}" class="btn btn-primary d-inline-flex align-items-center justify-content-center">
                         <i class="bi bi-stars me-2"></i>Open AI Review
                     </a>
-                    <button onclick="document.getElementById('quickUploadInput').click()" class="btn btn-outline-primary">
+                    <button onclick="document.getElementById('quickUploadInput').click()" class="btn btn-outline-primary d-inline-flex align-items-center justify-content-center">
                         <i class="bi bi-plus-lg me-2"></i>Bulk Upload
                     </button>
                 </div>
@@ -56,8 +56,8 @@
                     <input id="date_to" name="date_to" type="date" class="form-control" value="{{ date_to or '' }}" />
                 </div>
                 <div class="col-lg-3 d-flex gap-2">
-                    <button type="submit" class="btn btn-primary flex-grow-1">Apply Filters</button>
-                    <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary">Reset</a>
+                    <button type="submit" class="btn btn-primary flex-grow-1 d-inline-flex align-items-center justify-content-center">Apply Filters</button>
+                    <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary d-inline-flex align-items-center justify-content-center">Reset</a>
                 </div>
             </form>
         </div>
@@ -75,23 +75,16 @@
                         </h5>
                         {% if documents %}
                             <div class="d-flex gap-2">
-                                <form method="GET" action="{{ url_for('main.ai_demo') }}" id="bulkAiReviewForm" class="d-inline">
-                                    <input type="hidden" name="active_doc_id" id="bulkAiActiveDocId" value="" />
-                                    <input type="hidden" name="autostart" value="1" />
-                                    <button type="submit" class="btn btn-sm btn-outline-primary" id="bulkAiReviewBtn" disabled>
-                                        <i class="bi bi-cpu me-1"></i>Analyze Selected in AI Workspace
-                                    </button>
-                                </form>
                                 <form method="POST" action="{{ url_for('main.delete_selected_documents') }}" id="bulkDeleteForm" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                                     <input type="hidden" name="confirmation_text" id="bulkDeleteConfirmationText" value="" />
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" id="bulkDeleteBtn" disabled>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center" id="bulkDeleteBtn" disabled>
                                         <i class="bi bi-trash me-1"></i>Delete Selected
                                     </button>
                                 </form>
                                 <form method="POST" action="{{ url_for('main.download_documents_zip') }}" id="bulkZipForm" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                                    <button type="submit" class="btn btn-sm btn-outline-primary" id="bulkDownloadBtn" disabled>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center justify-content-center" id="bulkDownloadBtn" disabled>
                                         <i class="bi bi-file-earmark-zip me-1"></i>Download Selected (ZIP)
                                     </button>
                                 </form>
@@ -459,9 +452,6 @@
 
     // Prevent dropdown menus from being clipped inside scroll/overflow containers.
     document.addEventListener('DOMContentLoaded', function () {
-        const bulkAiReviewForm = document.getElementById('bulkAiReviewForm');
-        const bulkAiReviewButton = document.getElementById('bulkAiReviewBtn');
-        const bulkAiActiveDocId = document.getElementById('bulkAiActiveDocId');
         const bulkDeleteForm = document.getElementById('bulkDeleteForm');
         const bulkDeleteButton = document.getElementById('bulkDeleteBtn');
         const bulkDeleteConfirmationText = document.getElementById('bulkDeleteConfirmationText');
@@ -486,9 +476,6 @@
 
         function refreshBulkState() {
             const selected = rowChecks.filter((c) => c.checked);
-            if (bulkAiReviewButton) {
-                bulkAiReviewButton.disabled = selected.length === 0;
-            }
             if (bulkDeleteButton) {
                 bulkDeleteButton.disabled = selected.length === 0;
             }
@@ -499,10 +486,6 @@
                 selectAll.checked = rowChecks.length > 0 && selected.length === rowChecks.length;
             }
 
-            syncSelectedDocIds(bulkAiReviewForm, selected);
-            if (bulkAiActiveDocId) {
-                bulkAiActiveDocId.value = selected.length > 0 ? selected[0].value : '';
-            }
             syncSelectedDocIds(bulkDeleteForm, selected);
             syncSelectedDocIds(bulkForm, selected);
         }

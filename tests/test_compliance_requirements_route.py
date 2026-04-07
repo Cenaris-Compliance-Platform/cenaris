@@ -272,7 +272,7 @@ def test_compliance_requirements_route_renders_monthly_snapshot_and_queues(clien
     assert 'Upcoming Review Queue' in body
     assert 'REQ-MONTHLY' in body
     assert 'Simple Document Link View' in body
-    assert 'Toggle advanced planning queues' in body
+    assert 'Show Advanced Planning (Optional)' in body
 
 
 def test_requirement_link_evidence_auto_bucket_picks_missing_buckets(client, app):

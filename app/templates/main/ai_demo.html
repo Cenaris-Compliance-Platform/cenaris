@@ -1,25 +1,41 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+  .ai-review-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .ai-review-help-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="fade-in">
   <div class="row mb-4">
-    <div class="col-12 d-flex justify-content-between align-items-center gap-2">
+    <div class="col-12">
       <div>
-        <h1 class="h3 fw-bold mb-1">AI Review</h1>
+        <div class="ai-review-title-wrap mb-1">
+          <h1 class="h3 fw-bold mb-0">AI Review</h1>
+          <button
+            class="btn btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center ai-review-help-btn"
+            type="button"
+            id="aiReviewHelpBtn"
+            aria-expanded="false"
+            aria-controls="aiReviewHelpPanel"
+            title="AI Review help"
+          >
+            <i class="bi bi-info-lg"></i>
+          </button>
+        </div>
         <p class="text-body-secondary mb-0">Review repository documents in one dedicated AI experience.</p>
       </div>
-      <button
-        class="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center"
-        type="button"
-        style="width: 34px; height: 34px;"
-        data-bs-toggle="collapse"
-        data-bs-target="#aiReviewHelpPanel"
-        aria-expanded="false"
-        aria-controls="aiReviewHelpPanel"
-        title="AI Review help"
-      >
-        <i class="bi bi-info-lg"></i>
-      </button>
     </div>
   </div>
 
@@ -226,6 +242,15 @@
 {% block extra_js %}
 <script>
   (function () {
+    const helpPanel = document.getElementById('aiReviewHelpPanel');
+    const helpBtn = document.getElementById('aiReviewHelpBtn');
+    if (helpPanel && helpBtn && window.bootstrap && window.bootstrap.Collapse) {
+      const collapse = window.bootstrap.Collapse.getOrCreateInstance(helpPanel, { toggle: false });
+      helpBtn.addEventListener('click', function () {
+        collapse.toggle();
+      });
+    }
+
     const form = document.getElementById('aiDemoForm');
     const button = document.getElementById('runDemoBtn');
     const buttonLabel = document.getElementById('runDemoLabel');

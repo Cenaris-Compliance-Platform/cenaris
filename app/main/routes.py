@@ -3573,9 +3573,15 @@ def _pick_bucket_for_requirement(*, requirement: ComplianceRequirement, bucket_c
     return 'implementation'
 
 
-def _auto_link_from_analyzed_documents(*, org_id: int, user_id: int, target_requirement_id: int | None = None) -> dict[str, int]:
+def _auto_link_from_analyzed_documents(
+    *,
+    org_id: int,
+    user_id: int,
+    target_requirement_id: int | None = None,
+    target_document_id: int | None = None,
+) -> dict[str, int]:
     """Auto-create requirement evidence links from already analyzed/extracted documents."""
-    docs = (
+    docs_query = (
         Document.query
         .filter(
             Document.organization_id == int(org_id),
@@ -3583,8 +3589,10 @@ def _auto_link_from_analyzed_documents(*, org_id: int, user_id: int, target_requ
             Document.extracted_text.isnot(None),
         )
         .order_by(Document.ai_analysis_at.desc().nullslast(), Document.uploaded_at.desc())
-        .all()
     )
+    if target_document_id is not None:
+        docs_query = docs_query.filter(Document.id == int(target_document_id))
+    docs = docs_query.all()
 
     existing_query = RequirementEvidenceLink.query.filter_by(organization_id=int(org_id))
     if target_requirement_id is not None:
@@ -3772,6 +3780,46 @@ def compliance_requirements_auto_link():
         )
     else:
         flash('No new auto-links were found. Analyze more documents first or link manually.', 'info')
+
+    return redirect(url_for('main.compliance_requirements'))
+
+
+@bp.route('/compliance-requirements/auto-link-document/<int:document_id>', methods=['POST'])
+@login_required
+def compliance_requirements_auto_link_document(document_id):
+    """Auto-link analyzed evidence from one document into matching requirements."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    document = db.session.get(Document, int(document_id))
+    if not document or int(document.organization_id) != int(org_id) or not bool(document.is_active):
+        flash('Document not found.', 'error')
+        return redirect(url_for('main.compliance_requirements'))
+
+    try:
+        result = _auto_link_from_analyzed_documents(
+            org_id=int(org_id),
+            user_id=int(current_user.id),
+            target_document_id=int(document.id),
+        )
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Document auto-link failed for doc %s (org %s)', int(document_id), int(org_id))
+        flash('Auto-link failed for this document. Please try again.', 'error')
+        return redirect(url_for('main.compliance_requirements'))
+
+    if int(result.get('links_added') or 0) > 0:
+        flash(
+            f"Auto-linked {int(result.get('links_added') or 0)} evidence item(s) from {document.filename}.",
+            'success',
+        )
+    else:
+        flash('No new links found for this document. Analyze it first or review links manually.', 'info')
 
     return redirect(url_for('main.compliance_requirements'))
 

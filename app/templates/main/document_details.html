@@ -45,23 +45,23 @@
                                     <i class="bi bi-check-circle me-1"></i>Active
                                 </span>
                             </div>
-                            <div class="d-flex gap-2">
+                            <div class="d-flex flex-wrap gap-2">
                                 <form method="POST" action="{{ url_for('main.analyze_document', doc_id=document.id) }}">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                                    <button type="submit" class="btn btn-primary">
+                                    <button type="submit" class="btn btn-primary d-inline-flex align-items-center justify-content-center">
                                         <i class="bi bi-cpu me-2"></i>{% if document.ai_analysis_at %}Re-analyze{% else %}Analyze{% endif %}
                                     </button>
                                 </form>
-                                <a href="{{ url_for('main.preview_document', doc_id=document.id) }}" target="_blank" class="btn btn-outline-primary">
+                                <a href="{{ url_for('main.preview_document', doc_id=document.id) }}" target="_blank" class="btn btn-outline-primary d-inline-flex align-items-center justify-content-center">
                                     <i class="bi bi-eye me-2"></i>Preview
                                 </a>
-                                <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-outline-primary">
+                                <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-outline-primary d-inline-flex align-items-center justify-content-center">
                                     <i class="bi bi-download me-2"></i>Download
                                 </a>
-                                <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}')">
+                                <button class="btn btn-outline-danger d-inline-flex align-items-center justify-content-center" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}')">
                                     <i class="bi bi-trash me-2"></i>Delete
                                 </button>
-                                <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary">
+                                <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary d-inline-flex align-items-center justify-content-center">
                                     <i class="bi bi-arrow-left me-2"></i>Back to Repository
                                 </a>
                             </div>
@@ -268,36 +268,6 @@
         </div>
         
         <div class="col-lg-4">
-            <!-- Quick Actions -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-body-tertiary border-bottom">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-lightning me-2 text-primary"></i>
-                        Quick Actions
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <form method="POST" action="{{ url_for('main.analyze_document', doc_id=document.id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-cpu me-2"></i>{% if document.ai_analysis_at %}Re-analyze{% else %}Analyze{% endif %} Document
-                            </button>
-                        </form>
-                        <a href="{{ url_for('main.preview_document', doc_id=document.id) }}" target="_blank" class="btn btn-outline-primary">
-                            <i class="bi bi-eye me-2"></i>Preview Document
-                        </a>
-                        <a href="{{ url_for('main.download_document', doc_id=document.id) }}" class="btn btn-outline-primary">
-                            <i class="bi bi-download me-2"></i>Download Document
-                        </a>
-                        <hr>
-                        <button class="btn btn-outline-danger" onclick="confirmDelete({{ document.id }}, '{{ document.filename }}')">
-                            <i class="bi bi-trash me-2"></i>Delete Document
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Storage Info (vendor-neutral) -->
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-body-tertiary border-bottom">
