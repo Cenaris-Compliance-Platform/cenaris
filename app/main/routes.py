@@ -5884,6 +5884,20 @@ def policy_draft_api():
     query_text = _limit_text((payload.get('query') or '').strip(), max_chars=max_query_chars)
     requirement_id = (payload.get('requirement_id') or '').strip()
     top_k = _clamp_int(payload.get('top_k', 3), default=3, minimum=1, maximum=max_top_k)
+    output_mode = (payload.get('output_mode') or 'full_draft').strip().lower()
+    audience = _limit_text((payload.get('audience') or '').strip(), max_chars=160)
+    policy_tone = _limit_text((payload.get('policy_tone') or '').strip(), max_chars=120)
+    strictness = _limit_text((payload.get('strictness') or '').strip(), max_chars=120)
+    organization_size = _limit_text((payload.get('organization_size') or '').strip(), max_chars=120)
+    context_brief = _limit_text((payload.get('context_brief') or '').strip(), max_chars=max_query_chars)
+
+    if output_mode not in {'template', 'template_plus', 'full_draft'}:
+        output_mode = 'full_draft'
+
+    audience = audience or 'Leadership team and frontline workers'
+    policy_tone = policy_tone or 'Plain-English'
+    strictness = strictness or 'Balanced'
+    organization_size = organization_size or 'Small provider'
 
     if not policy_type:
         return jsonify({'success': False, 'error': 'policy_type is required'}), 400
@@ -5930,6 +5944,12 @@ def policy_draft_api():
         user_goal=query_text,
         citations=citations,
         prompt_path=prompt_path,
+        output_mode=output_mode,
+        audience=audience,
+        policy_tone=policy_tone,
+        strictness=strictness,
+        organization_size=organization_size,
+        context_brief=context_brief,
     )
 
     draft_text = _limit_text(draft_result.draft_text, max_chars=max_draft_chars)
@@ -5961,6 +5981,12 @@ def policy_draft_api():
                     user_goal=query_text,
                     citations=citations,
                     prompt_path=prompt_path,
+                    output_mode=output_mode,
+                    audience=audience,
+                    policy_tone=policy_tone,
+                    strictness=strictness,
+                    organization_size=organization_size,
+                    context_brief=context_brief,
                 )
                 draft_text = _limit_text(llm_result.draft_text, max_chars=max_draft_chars)
                 disclaimer_text = llm_result.disclaimer
@@ -5997,6 +6023,14 @@ def policy_draft_api():
             },
             'warnings': warnings,
             'citations': citations,
+            'inputs': {
+                'output_mode': output_mode,
+                'audience': audience,
+                'policy_tone': policy_tone,
+                'strictness': strictness,
+                'organization_size': organization_size,
+                'context_brief_present': bool(context_brief),
+            },
             'limits': {
                 'top_k': top_k,
                 'max_query_chars': max_query_chars,

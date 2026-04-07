@@ -121,6 +121,58 @@ def test_policy_draft_api_requires_policy_type(client, app):
     assert "policy_type is required" in payload["error"]
 
 
+def test_policy_draft_api_supports_guided_template_mode(client, app, monkeypatch):
+    with app.app_context():
+        org = _create_org()
+        _create_admin_user(int(org.id))
+        db.session.commit()
+
+    _login(client)
+
+    from app.services.rag_query_service import RagCitation, RagQueryResult
+    import app.main.routes as routes
+
+    def _fake_rag_query(*, corpus_path, query_text, requirement_id=None, top_k=3):
+        return RagQueryResult(
+            answer='Retrieved relevant NDIS source passages for this query. Review citations below before final compliance judgment.',
+            citations=[
+                RagCitation(
+                    chunk_id='page2_off0_abc',
+                    source_id='ndis-practice-standards',
+                    page_number=2,
+                    score=8.2,
+                    text='Providers must maintain documented incident procedures.',
+                )
+            ],
+        )
+
+    monkeypatch.setattr(routes.rag_query_service, 'query', _fake_rag_query)
+
+    response = client.post(
+        '/api/policy/draft',
+        json={
+            'policy_type': 'Incident Management Policy',
+            'query': 'Need an onboarding-ready template',
+            'requirement_id': 'REQ-LINK-1',
+            'output_mode': 'template',
+            'audience': 'Frontline workers',
+            'policy_tone': 'Operational',
+            'strictness': 'Pragmatic',
+            'organization_size': 'Growing provider',
+            'context_brief': 'Must include a simple owner and review cadence table.',
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['inputs']['output_mode'] == 'template'
+    assert payload['inputs']['audience'] == 'Frontline workers'
+    assert payload['inputs']['context_brief_present'] is True
+    assert 'Purpose (fill in)' in payload['draft_text']
+    assert 'Required Controls Template' in payload['draft_text']
+
+
 def test_policy_draft_api_uses_llm_mode_when_enabled(client, app, monkeypatch):
     with app.app_context():
         org = _create_org()
