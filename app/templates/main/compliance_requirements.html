@@ -2,6 +2,46 @@
 
 {% block extra_css %}
 <style>
+  .workboard-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .compact-help-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+  }
+
+  .doc-link-table tbody tr {
+    border-top: 2px solid var(--bs-border-color);
+  }
+
+  .doc-link-table tbody tr:first-child {
+    border-top: 1px solid var(--bs-border-color);
+  }
+
+  .doc-link-row td {
+    padding-top: 0.95rem;
+    padding-bottom: 0.95rem;
+    vertical-align: top;
+  }
+
+  .link-req-cell {
+    min-width: 420px;
+  }
+
+  .link-code-chip {
+    line-height: 1.25;
+    font-size: 0.82rem;
+  }
+
+  .advanced-help-text {
+    font-size: 0.84rem;
+    color: var(--bs-secondary-color);
+  }
+
   .workboard-kpi {
     border: 1px solid var(--bs-border-color);
     border-radius: 0.85rem;
@@ -46,7 +86,19 @@
   <div class="row mb-4">
     <div class="col-12 d-flex justify-content-between align-items-start flex-wrap gap-2">
       <div>
-        <h1 class="h3 fw-bold mb-1">Requirements Workboard</h1>
+        <div class="workboard-title-wrap mb-1">
+          <h1 class="h3 fw-bold mb-0">Requirements Workboard</h1>
+          <button
+            class="btn btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center compact-help-btn"
+            type="button"
+            id="requirementsHelpBtn"
+            aria-expanded="false"
+            aria-controls="requirementsUsageHelp"
+            title="How to use this page"
+          >
+            <i class="bi bi-info-lg"></i>
+          </button>
+        </div>
         <p class="text-body-secondary mb-0">Track requirement health, evidence coverage, and review due state in one place.</p>
       </div>
       <div class="d-flex gap-2 flex-wrap">
@@ -63,22 +115,8 @@
     </div>
   </div>
 
-  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <div class="d-flex align-items-center gap-2">
-      <button
-        class="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center"
-        type="button"
-        style="width: 34px; height: 34px;"
-        data-bs-toggle="collapse"
-        data-bs-target="#requirementsUsageHelp"
-        aria-expanded="false"
-        aria-controls="requirementsUsageHelp"
-        title="How to use this page"
-      >
-        <i class="bi bi-info-lg"></i>
-      </button>
-    </div>
-    <div>
+  <div class="d-flex align-items-center justify-content-end flex-wrap gap-2 mb-3">
+    <div class="text-end">
       <button
         class="btn btn-sm btn-outline-secondary"
         type="button"
@@ -87,8 +125,9 @@
         aria-expanded="false"
         aria-controls="advancedPlanningPanel"
       >
-        Toggle advanced planning queues
+        Show Advanced Planning (Optional)
       </button>
+      <div class="advanced-help-text mt-1">Advanced = monthly snapshot, owner queue, and upcoming review queue.</div>
     </div>
   </div>
 
@@ -106,8 +145,27 @@
       <span class="small text-body-secondary">Which uploaded file is linked to what</span>
     </div>
     <div class="px-3 pt-2 small text-body-secondary">Tip: hover or click a requirement code to see why it was linked.</div>
+    <div class="px-3 pb-2 pt-2 border-bottom">
+      <div class="row g-2 align-items-center">
+        <div class="col-md-8">
+          <input
+            type="search"
+            id="docLinkSearch"
+            class="form-control form-control-sm"
+            placeholder="Search by document name or requirement code..."
+            aria-label="Search linked documents"
+          />
+        </div>
+        <div class="col-md-4 text-md-end">
+          <div class="form-check d-inline-flex align-items-center gap-2">
+            <input class="form-check-input mt-0" type="checkbox" id="showUnlinkedOnly" />
+            <label class="form-check-label small" for="showUnlinkedOnly">Show unlinked only</label>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
+      <table class="table table-sm align-middle mb-0 doc-link-table" id="docLinkTable">
         <thead>
           <tr>
             <th>Document</th>
@@ -118,19 +176,19 @@
         </thead>
         <tbody>
           {% for item in document_link_overview %}
-          <tr>
+          <tr class="doc-link-row" data-doc-link-row data-doc-label="{{ (item.filename or '')|lower }}" data-linked-count="{{ item.linked_count }}" data-req-codes="{{ item.requirements_preview|map(attribute='code')|join(' ')|lower }}">
             <td>
               <div class="fw-semibold">{{ item.filename }}</div>
               <div class="small text-body-secondary">Uploaded {{ item.uploaded_at | datetime_format('%b %d, %Y') if item.uploaded_at else '—' }}</div>
             </td>
-            <td>
+            <td class="link-req-cell">
               <div class="small fw-semibold mb-1">{{ item.linked_count }} linked</div>
               {% if item.requirements_preview %}
               <div class="d-flex flex-wrap gap-1">
                 {% for req in item.requirements_preview %}
                 <button
                   type="button"
-                  class="btn btn-sm btn-light border py-0 px-2"
+                  class="btn btn-sm btn-light border py-0 px-2 link-code-chip"
                   data-bs-toggle="popover"
                   data-bs-trigger="hover focus click"
                   data-bs-title="{{ req.code }}"
@@ -148,7 +206,13 @@
               {{ item.last_linked_at | datetime_format('%b %d, %Y %I:%M %p') if item.last_linked_at else '—' }}
             </td>
             <td class="text-end">
-              <a href="{{ url_for('main.document_details', doc_id=item.document_id) }}" class="btn btn-sm btn-outline-primary">Open Document</a>
+              {% if item.linked_count == 0 %}
+              <form method="POST" action="{{ url_for('main.compliance_requirements_auto_link_document', document_id=item.document_id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button type="submit" class="btn btn-sm btn-primary">Auto-link</button>
+              </form>
+              {% endif %}
+              <a href="{{ url_for('main.document_details', doc_id=item.document_id) }}" class="btn btn-sm btn-outline-primary{% if item.linked_count == 0 %} ms-1{% endif %}">Open Document</a>
             </td>
           </tr>
           {% else %}
@@ -461,6 +525,15 @@
 {% block extra_js %}
 <script>
   (function () {
+    const helpPanel = document.getElementById('requirementsUsageHelp');
+    const helpBtn = document.getElementById('requirementsHelpBtn');
+    if (helpPanel && helpBtn && window.bootstrap && window.bootstrap.Collapse) {
+      const collapse = window.bootstrap.Collapse.getOrCreateInstance(helpPanel, { toggle: false });
+      helpBtn.addEventListener('click', function () {
+        collapse.toggle();
+      });
+    }
+
     const popoverEls = document.querySelectorAll('[data-bs-toggle="popover"]');
     popoverEls.forEach(function (el) {
       if (window.bootstrap && window.bootstrap.Popover) {
@@ -471,6 +544,33 @@
         });
       }
     });
+
+    const searchInput = document.getElementById('docLinkSearch');
+    const showUnlinkedOnly = document.getElementById('showUnlinkedOnly');
+    const rows = Array.from(document.querySelectorAll('[data-doc-link-row]'));
+
+    function refreshDocLinkRows() {
+      const query = ((searchInput && searchInput.value) || '').trim().toLowerCase();
+      const unlinkedOnly = Boolean(showUnlinkedOnly && showUnlinkedOnly.checked);
+
+      rows.forEach(function (row) {
+        const linkedCount = Number(row.getAttribute('data-linked-count') || '0');
+        const docLabel = (row.getAttribute('data-doc-label') || '').toLowerCase();
+        const reqCodes = (row.getAttribute('data-req-codes') || '').toLowerCase();
+        const searchable = (docLabel + ' ' + reqCodes).trim();
+
+        const queryOk = !query || searchable.indexOf(query) >= 0;
+        const linkOk = !unlinkedOnly || linkedCount === 0;
+        row.classList.toggle('d-none', !(queryOk && linkOk));
+      });
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', refreshDocLinkRows);
+    }
+    if (showUnlinkedOnly) {
+      showUnlinkedOnly.addEventListener('change', refreshDocLinkRows);
+    }
   })();
 </script>
 {% endblock %}
