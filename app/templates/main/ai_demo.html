@@ -3,19 +3,32 @@
 {% block content %}
 <div class="fade-in">
   <div class="row mb-4">
-    <div class="col-12 d-flex justify-content-between align-items-center">
+    <div class="col-12 d-flex justify-content-between align-items-center gap-2">
       <div>
         <h1 class="h3 fw-bold mb-1">AI Review</h1>
         <p class="text-body-secondary mb-0">Review repository documents in one dedicated AI experience.</p>
       </div>
+      <button
+        class="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center"
+        type="button"
+        style="width: 34px; height: 34px;"
+        data-bs-toggle="collapse"
+        data-bs-target="#aiReviewHelpPanel"
+        aria-expanded="false"
+        aria-controls="aiReviewHelpPanel"
+        title="AI Review help"
+      >
+        <i class="bi bi-info-lg"></i>
+      </button>
     </div>
   </div>
 
-  <div class="alert alert-warning alert-permanent border d-flex flex-column gap-1" role="alert">
-    <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Decision-support output</div>
-    <div class="small">
-      Results support review decisions but are not final audit or legal outcomes.
-      Analysis uses documents already uploaded to your repository.
+  <div id="aiReviewHelpPanel" class="collapse mb-3">
+    <div class="alert alert-light border d-flex flex-column gap-1" role="alert">
+      <div class="fw-semibold"><i class="bi bi-info-circle me-1"></i>AI Review guidance</div>
+      <div class="small">Results support decisions but are not final audit/legal outcomes.</div>
+      <div class="small"><strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}</div>
+      <div class="small">Keep reuse enabled to skip re-running analysis for the same document and question.</div>
     </div>
   </div>
 
@@ -50,13 +63,6 @@
     </div>
   </div>
   {% endif %}
-
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body small text-body-secondary">
-      <div><strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}</div>
-      <div class="mt-1">Keep reuse enabled to skip re-running analysis when the same document and question were already analyzed.</div>
-    </div>
-  </div>
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">

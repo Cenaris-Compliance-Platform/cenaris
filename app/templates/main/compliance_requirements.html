@@ -56,18 +56,29 @@
             <i class="bi bi-magic me-1"></i>Auto-link From Analyzed Docs
           </button>
         </form>
-        <a href="{{ url_for('main.compliance_journey') }}" class="btn btn-outline-primary btn-sm">
-          <i class="bi bi-signpost-split me-1"></i>Back to Compliance Journey
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-speedometer2 me-1"></i>Back to Dashboard
         </a>
       </div>
     </div>
   </div>
 
-  <div class="workboard-note p-3 mb-3">
-    <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Simple way to use this page</div>
-    <div class="small text-body-secondary">Try <strong>Auto-link From Analyzed Docs</strong> first. Then open only the remaining risky rows and fix what is missing.</div>
-    <div class="small text-body-secondary mt-2">Legend: <strong>S</strong>=System policy, <strong>I</strong>=Implementation proof, <strong>W</strong>=Workforce proof, <strong>P</strong>=Participant proof.</div>
-    <div class="mt-2">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+      <button
+        class="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center"
+        type="button"
+        style="width: 34px; height: 34px;"
+        data-bs-toggle="collapse"
+        data-bs-target="#requirementsUsageHelp"
+        aria-expanded="false"
+        aria-controls="requirementsUsageHelp"
+        title="How to use this page"
+      >
+        <i class="bi bi-info-lg"></i>
+      </button>
+    </div>
+    <div>
       <button
         class="btn btn-sm btn-outline-secondary"
         type="button"
@@ -81,11 +92,20 @@
     </div>
   </div>
 
+  <div class="collapse mb-3" id="requirementsUsageHelp">
+    <div class="workboard-note p-3">
+      <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Simple way to use this page</div>
+      <div class="small text-body-secondary">Try <strong>Auto-link From Analyzed Docs</strong> first. Then open only remaining risky rows.</div>
+      <div class="small text-body-secondary mt-2">Legend: <strong>S</strong>=System policy, <strong>I</strong>=Implementation proof, <strong>W</strong>=Workforce proof, <strong>P</strong>=Participant proof.</div>
+    </div>
+  </div>
+
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-header bg-body-tertiary border-bottom d-flex justify-content-between align-items-center">
       <h5 class="card-title mb-0"><i class="bi bi-link-45deg me-2 text-primary"></i>Simple Document Link View</h5>
       <span class="small text-body-secondary">Which uploaded file is linked to what</span>
     </div>
+    <div class="px-3 pt-2 small text-body-secondary">Tip: hover or click a requirement code to see why it was linked.</div>
     <div class="table-responsive">
       <table class="table table-sm align-middle mb-0">
         <thead>
@@ -107,8 +127,17 @@
               <div class="small fw-semibold mb-1">{{ item.linked_count }} linked</div>
               {% if item.requirements_preview %}
               <div class="d-flex flex-wrap gap-1">
-                {% for label in item.requirements_preview %}
-                <span class="badge bg-body-tertiary text-body border">{{ label }}</span>
+                {% for req in item.requirements_preview %}
+                <button
+                  type="button"
+                  class="btn btn-sm btn-light border py-0 px-2"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="hover focus click"
+                  data-bs-title="{{ req.code }}"
+                  data-bs-content="{{ req.reason }}"
+                >
+                  {{ req.code }}
+                </button>
                 {% endfor %}
               </div>
               {% else %}
@@ -252,9 +281,25 @@
   </div>
   </div>
 
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <div class="small text-body-secondary">Requirement assessment table is optional and can stay hidden for a cleaner view.</div>
+    <button
+      class="btn btn-outline-secondary btn-sm"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#requirementWorkboardPanel"
+      aria-expanded="{{ 'true' if show_requirements_panel else 'false' }}"
+      aria-controls="requirementWorkboardPanel"
+    >
+      Open Requirement Details
+    </button>
+  </div>
+
+  <div id="requirementWorkboardPanel" class="collapse {% if show_requirements_panel %}show{% endif %}">
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
       <form method="GET" class="row g-2 align-items-end">
+        <input type="hidden" name="show_requirements_panel" value="1" />
         <div class="col-lg-3">
           <label for="q" class="form-label">Search</label>
           <input id="q" name="q" value="{{ q or '' }}" class="form-control" placeholder="Requirement, module, owner" />
@@ -383,7 +428,7 @@
           <tr>
             <td colspan="6" class="text-center py-4 text-body-secondary">
               <div class="fw-semibold mb-1">No matching requirements found</div>
-              <div class="small">Try resetting filters or initialize compliance data from Team Management.</div>
+              <div class="small">Try resetting filters or broadening your search.</div>
             </td>
           </tr>
           {% endfor %}
@@ -396,18 +441,36 @@
       <nav aria-label="Requirements pagination">
         <ul class="pagination pagination-sm mb-0">
           <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.prev_num, q=q, status=status_filter, module=module_filter, bucket=bucket_filter, due=due_filter) if pagination.has_prev else '#' }}">Previous</a>
+            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.prev_num, q=q, status=status_filter, module=module_filter, bucket=bucket_filter, due=due_filter, show_requirements_panel=1) if pagination.has_prev else '#' }}">Previous</a>
           </li>
           <li class="page-item disabled">
             <span class="page-link">Page {{ pagination.page }} of {{ pagination.pages }}</span>
           </li>
           <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.next_num, q=q, status=status_filter, module=module_filter, bucket=bucket_filter, due=due_filter) if pagination.has_next else '#' }}">Next</a>
+            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.next_num, q=q, status=status_filter, module=module_filter, bucket=bucket_filter, due=due_filter, show_requirements_panel=1) if pagination.has_next else '#' }}">Next</a>
           </li>
         </ul>
       </nav>
     </div>
     {% endif %}
   </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const popoverEls = document.querySelectorAll('[data-bs-toggle="popover"]');
+    popoverEls.forEach(function (el) {
+      if (window.bootstrap && window.bootstrap.Popover) {
+        new window.bootstrap.Popover(el, {
+          container: 'body',
+          html: false,
+          placement: 'top',
+        });
+      }
+    });
+  })();
+</script>
 {% endblock %}
