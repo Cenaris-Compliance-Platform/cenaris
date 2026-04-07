@@ -55,14 +55,6 @@
                     <label class="form-label" for="date_to">Date to</label>
                     <input id="date_to" name="date_to" type="date" class="form-control" value="{{ date_to or '' }}" />
                 </div>
-                <div class="col-lg-2">
-                    <label class="form-label" for="size_min">Min bytes</label>
-                    <input id="size_min" name="size_min" type="number" min="0" class="form-control" value="{{ size_min or '' }}" />
-                </div>
-                <div class="col-lg-2">
-                    <label class="form-label" for="size_max">Max bytes</label>
-                    <input id="size_max" name="size_max" type="number" min="0" class="form-control" value="{{ size_max or '' }}" />
-                </div>
                 <div class="col-lg-3 d-flex gap-2">
                     <button type="submit" class="btn btn-primary flex-grow-1">Apply Filters</button>
                     <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary">Reset</a>
@@ -125,9 +117,6 @@
                                                 <i class="bi bi-file-earmark me-1"></i>Document
                                             </th>
                                             <th scope="col" class="border-0">
-                                                <i class="bi bi-hdd me-1"></i>Size
-                                            </th>
-                                            <th scope="col" class="border-0">
                                                 <i class="bi bi-calendar me-1"></i>Upload Date
                                             </th>
                                             <th scope="col" class="border-0">
@@ -171,11 +160,6 @@
                                                             </small>
                                                         </div>
                                                     </div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge bg-body-tertiary text-body border">
-                                                        {{ document.file_size | file_size_format }}
-                                                    </span>
                                                 </td>
                                                 <td>
                                                     <div>{{ document.uploaded_at | datetime_format('%b %d, %Y') }}</div>
@@ -270,7 +254,6 @@
                                                 </h6>
                                                 <p class="card-text">
                                                     <small class="text-body-secondary">
-                                                        {{ document.file_size | file_size_format }} • 
                                                         {{ document.uploaded_at | datetime_format('%b %d, %Y') }}
                                                     </small>
                                                 </p>

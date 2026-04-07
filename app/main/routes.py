@@ -514,7 +514,6 @@ def org_admin_dashboard():
         return maybe
 
     from app.main.forms import (
-        InitializeComplianceDataForm,
         InviteMemberForm,
         MembershipActionForm,
         PendingInviteResendForm,
@@ -587,7 +586,6 @@ def org_admin_dashboard():
     update_department_form = UpdateMemberDepartmentForm()
     pending_invite_resend_form = PendingInviteResendForm()
     pending_invite_revoke_form = PendingInviteRevokeForm()
-    initialize_compliance_data_form = InitializeComplianceDataForm()
 
     # Populate role choices for role-update form.
     available_roles = []
@@ -622,7 +620,6 @@ def org_admin_dashboard():
         update_department_form=update_department_form,
         pending_invite_resend_form=pending_invite_resend_form,
         pending_invite_revoke_form=pending_invite_revoke_form,
-        initialize_compliance_data_form=initialize_compliance_data_form,
         departments=departments,
         available_roles=available_roles,
     )
@@ -1730,301 +1727,28 @@ def _build_dashboard_bridge_stats(*, org_id: int) -> dict:
     }
 
 
-def _journey_step_state(*, completed: bool, in_progress: bool) -> tuple[str, str]:
-    if completed:
-        return 'Complete', 'success'
-    if in_progress:
-        return 'In progress', 'warning'
-    return 'Not started', 'secondary'
-
-
-def _build_compliance_journey_steps(*, organization: Organization, total_documents: int, reviewed_documents: int, bridge: dict, compliance_rate: float, gap_requirements: int) -> list[dict]:
-    profile_complete = bool(organization.onboarding_complete())
-
-    evidence_started = int(total_documents) > 0
-    evidence_complete = int(total_documents) >= 3
-
-    review_started = int(reviewed_documents) > 0
-    review_complete = review_started and int(bridge.get('reviewed_docs_not_linked') or 0) == 0
-
-    mapping_started = int(bridge.get('linked_requirements') or 0) > 0
-    mapping_complete = mapping_started and int(bridge.get('reviewed_docs_not_linked') or 0) == 0
-
-    assessment_started = mapping_started
-    assessment_complete = mapping_started and int(bridge.get('linked_requirements_pending_assessment') or 0) == 0
-
-    audit_started = assessment_started
-    audit_complete = assessment_complete and float(compliance_rate or 0) >= 75 and int(gap_requirements) <= 3
-
-    setup_status, setup_tone = _journey_step_state(completed=profile_complete, in_progress=profile_complete)
-    evidence_status, evidence_tone = _journey_step_state(completed=evidence_complete, in_progress=evidence_started)
-    review_status, review_tone = _journey_step_state(completed=review_complete, in_progress=review_started)
-    mapping_status, mapping_tone = _journey_step_state(completed=mapping_complete, in_progress=mapping_started)
-    assessment_status, assessment_tone = _journey_step_state(completed=assessment_complete, in_progress=assessment_started)
-    audit_status, audit_tone = _journey_step_state(completed=audit_complete, in_progress=audit_started)
-
-    return [
-        {
-            'id': 'setup',
-            'title': 'Step 1: Confirm business setup',
-            'why': 'Auditors need to see who you are and which service you run.',
-            'what_now': 'Check organisation details and team roles.',
-            'metric': 'Organisation profile and governance setup',
-            'status': setup_status,
-            'status_tone': setup_tone,
-            'is_complete': bool(profile_complete),
-            'action_label': 'Open Organisation Profile',
-            'action_url': url_for('main.organization_settings'),
-        },
-        {
-            'id': 'evidence',
-            'title': 'Step 2: Upload evidence documents',
-            'why': 'No documents means no proof during audit.',
-            'what_now': 'Upload policies, registers, logs, and staff records.',
-            'metric': f'{int(total_documents)} document(s) in repository',
-            'status': evidence_status,
-            'status_tone': evidence_tone,
-            'is_complete': bool(evidence_complete),
-            'action_label': 'Open Evidence Repository',
-            'action_url': url_for('main.evidence_repository'),
-        },
-        {
-            'id': 'review',
-            'title': 'Step 3: Run AI Review',
-            'why': 'AI quickly checks if each file has useful compliance content.',
-            'what_now': 'Analyze each key document and confirm suggested findings.',
-            'metric': f'{int(reviewed_documents)} document(s) reviewed',
-            'status': review_status,
-            'status_tone': review_tone,
-            'is_complete': bool(review_complete),
-            'action_label': 'Open AI Review',
-            'action_url': url_for('main.ai_demo'),
-        },
-        {
-            'id': 'mapping',
-            'title': 'Step 4: Verify evidence links',
-            'why': 'Compliance scores move only when evidence is linked to requirements.',
-            'what_now': 'Keep or edit mapped links so each requirement has correct proof.',
-            'metric': f"{int(bridge.get('linked_requirements') or 0)} linked requirement(s)",
-            'status': mapping_status,
-            'status_tone': mapping_tone,
-            'is_complete': bool(mapping_complete),
-            'action_label': 'Review Linked Documents',
-            'action_url': url_for('main.evidence_repository'),
-        },
-        {
-            'id': 'assessment',
-            'title': 'Step 5: Confirm requirement assessments',
-            'why': 'This is the official readiness score an auditor cares about.',
-            'what_now': 'Close pending requirement assessments and resolve flagged gaps.',
-            'metric': f"{int(bridge.get('linked_requirements_pending_assessment') or 0)} pending assessment(s)",
-            'status': assessment_status,
-            'status_tone': assessment_tone,
-            'is_complete': bool(assessment_complete),
-            'action_label': 'Open Requirements Workboard',
-            'action_url': url_for('main.compliance_requirements'),
-        },
-        {
-            'id': 'audit',
-            'title': 'Step 6: Export audit pack',
-            'why': 'Turn all your work into a clear packet for the external auditor.',
-            'what_now': 'Generate gap analysis and audit pack reports.',
-            'metric': f'{round(float(compliance_rate or 0), 1)}% readiness · {int(gap_requirements)} gap(s)',
-            'status': audit_status,
-            'status_tone': audit_tone,
-            'is_complete': bool(audit_complete),
-            'action_label': 'Generate Reports',
-            'action_url': url_for('main.generate_report', report_type='audit-pack'),
-        },
-    ]
-
-
-def _compliance_persona_profiles() -> dict[str, dict]:
-    return {
-        'sole_trader': {
-            'label': 'Sole Trader',
-            'frequency': 'Usually once a year before audit preparation.',
-            'summary': 'Keep setup simple and focus on a clean annual audit packet.',
-            'tasks': [
-                {
-                    'id': 'collect_core_policies',
-                    'title': 'Upload core policy set (incident, risk, complaints)',
-                    'detail': 'Make sure each policy is current and clearly dated.',
-                    'action_label': 'Open Repository',
-                    'action_url': url_for('main.evidence_repository'),
-                },
-                {
-                    'id': 'run_ai_review',
-                    'title': 'Run AI Review on each key policy',
-                    'detail': 'Check suggested links and missing evidence notes.',
-                    'action_label': 'Open AI Review',
-                    'action_url': url_for('main.ai_demo'),
-                },
-                {
-                    'id': 'export_pack',
-                    'title': 'Generate the audit pack before assessment date',
-                    'detail': 'Export a fresh report close to audit day.',
-                    'action_label': 'Generate Audit Pack',
-                    'action_url': url_for('main.generate_report', report_type='audit-pack'),
-                },
-            ],
-        },
-        'small_provider': {
-            'label': 'Small Provider',
-            'frequency': 'Weekly or monthly operational rhythm.',
-            'summary': 'Use Cenaris as an operations cockpit, not only an audit tool.',
-            'tasks': [
-                {
-                    'id': 'check_deadlines',
-                    'title': 'Review upcoming deadlines and expiring evidence',
-                    'detail': 'Catch issues before they become audit gaps.',
-                    'action_label': 'Open Dashboard',
-                    'action_url': url_for('main.dashboard'),
-                },
-                {
-                    'id': 'update_staff_evidence',
-                    'title': 'Upload new staff credentials and workforce records',
-                    'detail': 'Keep workforce evidence current for each requirement.',
-                    'action_label': 'Open Repository',
-                    'action_url': url_for('main.evidence_repository'),
-                },
-                {
-                    'id': 'close_gaps',
-                    'title': 'Close linked requirement gaps every cycle',
-                    'detail': 'Prioritize high-risk and critical flags first.',
-                    'action_label': 'Open Requirements Workboard',
-                    'action_url': url_for('main.compliance_requirements'),
-                },
-            ],
-        },
-        'auditor': {
-            'label': 'Auditor',
-            'frequency': 'Primarily used during formal audit windows.',
-            'summary': 'Review traceable evidence quickly and validate readiness claims.',
-            'tasks': [
-                {
-                    'id': 'review_readiness',
-                    'title': 'Review requirement readiness and unresolved gaps',
-                    'detail': 'Focus on flagged requirements and linked proof quality.',
-                    'action_label': 'Open Analytics',
-                    'action_url': url_for('main.analytics_dashboard'),
-                },
-                {
-                    'id': 'sample_evidence',
-                    'title': 'Sample linked documents and AI review notes',
-                    'detail': 'Spot-check traceability from requirement to evidence.',
-                    'action_label': 'Open AI Review',
-                    'action_url': url_for('main.ai_demo'),
-                },
-                {
-                    'id': 'download_pack',
-                    'title': 'Download audit pack and supporting exports',
-                    'detail': 'Use exports as summary, then drill into source records.',
-                    'action_label': 'Generate Audit Pack',
-                    'action_url': url_for('main.generate_report', report_type='audit-pack'),
-                },
-            ],
-        },
-    }
-
-
 @bp.route('/compliance-journey')
 @login_required
 def compliance_journey():
-    """Plain-language guided workflow from setup to audit readiness."""
+    """Legacy route retained for compatibility."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
 
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        abort(403)
-
-    organization = db.session.get(Organization, int(org_id))
-    if not organization:
-        abort(404)
-
-    total_documents = (
-        Document.query
-        .filter(Document.organization_id == int(org_id), Document.is_active.is_(True))
-        .count()
-    )
-    reviewed_documents = (
-        Document.query
-        .filter(
-            Document.organization_id == int(org_id),
-            Document.is_active.is_(True),
-            Document.ai_analysis_at.isnot(None),
-        )
-        .count()
-    )
-
-    analytics_payload = analytics_service.build_dashboard_payload(organization_id=int(org_id))
-    summary = analytics_payload.get('summary') or {}
-    bridge = _build_dashboard_bridge_stats(org_id=int(org_id))
-    deadlines = _build_dashboard_deadlines(org_id=int(org_id), limit=5)
-
-    compliance_rate = float(summary.get('compliance_rate') or 0)
-    gap_requirements = int(summary.get('gap_requirements') or 0)
-    persona_profiles = _compliance_persona_profiles()
-    requested_persona = (request.args.get('persona') or '').strip().lower()
-    session_persona = (session.get('journey_persona') or '').strip().lower()
-
-    if requested_persona in persona_profiles:
-        selected_persona = requested_persona
-    elif session_persona in persona_profiles:
-        selected_persona = session_persona
-    else:
-        selected_persona = 'small_provider'
-
-    session['journey_persona'] = selected_persona
-    persona_playbook = persona_profiles.get(selected_persona) or persona_profiles['small_provider']
-
-    journey_steps = _build_compliance_journey_steps(
-        organization=organization,
-        total_documents=int(total_documents),
-        reviewed_documents=int(reviewed_documents),
-        bridge=bridge,
-        compliance_rate=compliance_rate,
-        gap_requirements=gap_requirements,
-    )
-    completed_steps = sum(1 for step in journey_steps if step.get('is_complete'))
-    progress_percent = int(round((completed_steps / max(1, len(journey_steps))) * 100))
-    next_step = next((step for step in journey_steps if not step.get('is_complete')), journey_steps[-1])
-
-    return render_template(
-        'main/compliance_journey.html',
-        title='Compliance Journey',
-        journey_steps=journey_steps,
-        completed_steps=completed_steps,
-        total_steps=len(journey_steps),
-        progress_percent=progress_percent,
-        next_step=next_step,
-        persona_profiles=persona_profiles,
-        selected_persona=selected_persona,
-        persona_playbook=persona_playbook,
-        dashboard_summary=summary,
-        dashboard_bridge=bridge,
-        dashboard_deadlines=deadlines,
-    )
+    flash('Compliance Journey has been retired. Use Requirements instead.', 'info')
+    return redirect(url_for('main.compliance_requirements'))
 
 
 @bp.route('/compliance-journey/persona', methods=['POST'])
 @login_required
 def compliance_journey_set_persona():
-    """Persist user's selected journey persona in session for guided playbook UX."""
+    """Legacy persona endpoint retained for compatibility."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
 
-    persona_profiles = _compliance_persona_profiles()
-    selected_persona = (request.form.get('persona') or '').strip().lower()
-    if selected_persona not in persona_profiles:
-        flash('Please choose a valid workflow type.', 'warning')
-        return redirect(url_for('main.compliance_journey'))
-
-    session['journey_persona'] = selected_persona
-    return redirect(url_for('main.compliance_journey', persona=selected_persona))
+    flash('Compliance Journey preferences are no longer required.', 'info')
+    return redirect(url_for('main.compliance_requirements'))
 
 @bp.route('/dashboard')
 @login_required
@@ -2134,8 +1858,6 @@ def evidence_repository():
     file_type = (request.args.get('file_type') or '').strip().lower()
     date_from = (request.args.get('date_from') or '').strip()
     date_to = (request.args.get('date_to') or '').strip()
-    size_min_raw = (request.args.get('size_min') or '').strip()
-    size_max_raw = (request.args.get('size_max') or '').strip()
 
     # Pagination to avoid loading thousands of documents at once.
     page = request.args.get('page', 1, type=int)
@@ -2184,20 +1906,6 @@ def evidence_repository():
     elif file_type == 'word':
         query = query.filter(or_(Document.filename.ilike('%.doc'), Document.filename.ilike('%.docx')))
 
-    if size_min_raw:
-        try:
-            size_min = max(0, int(size_min_raw))
-            query = query.filter(Document.file_size >= size_min)
-        except Exception:
-            flash('Minimum size filter must be a number (bytes).', 'warning')
-
-    if size_max_raw:
-        try:
-            size_max = max(0, int(size_max_raw))
-            query = query.filter(Document.file_size <= size_max)
-        except Exception:
-            flash('Maximum size filter must be a number (bytes).', 'warning')
-
     if date_from:
         try:
             from_dt = datetime.strptime(date_from, '%Y-%m-%d')
@@ -2236,9 +1944,7 @@ def evidence_repository():
                          selected_tag=selected_tag,
                          file_type=file_type,
                          date_from=date_from,
-                         date_to=date_to,
-                         size_min=size_min_raw,
-                         size_max=size_max_raw)
+                         date_to=date_to)
 
 def _authorized_org_document_or_404(doc_id: int) -> Document:
     if not getattr(current_user, 'is_authenticated', False):
@@ -3040,122 +2746,11 @@ def organization_settings():
 @bp.route('/organization/ai-controls', methods=['GET', 'POST'])
 @login_required
 def organization_ai_controls():
-    from app.main.forms import OrganizationAISettingsForm, OrganizationAIUsageRetentionForm
-
     maybe = _require_org_permission('org.manage')
     if maybe is not None:
         return maybe
-
-    org_id = _active_org_id()
-    organization = db.session.get(Organization, int(org_id))
-    if not organization:
-        abort(404)
-
-    settings = _get_org_ai_settings(int(org_id))
-    if settings is None:
-        settings = OrganizationAISettings(organization_id=int(org_id), updated_by_user_id=int(current_user.id))
-
-    form = OrganizationAISettingsForm(obj=settings)
-    retention_form = OrganizationAIUsageRetentionForm()
-    if request.method == 'GET':
-        retention_form.days.data = int(current_app.config.get('AI_USAGE_RETENTION_DAYS') or 90)
-        retention_form.dry_run.data = True
-
-    if request.method == 'GET':
-        form.max_query_chars.data = int(_effective_ai_setting(org_id, 'max_query_chars', current_app.config.get('AI_MAX_QUERY_CHARS') or 1200))
-        form.max_top_k.data = int(_effective_ai_setting(org_id, 'max_top_k', current_app.config.get('AI_MAX_TOP_K') or 5))
-        form.max_citation_text_chars.data = int(_effective_ai_setting(org_id, 'max_citation_text_chars', current_app.config.get('AI_MAX_CITATION_TEXT_CHARS') or 600))
-        form.max_answer_chars.data = int(_effective_ai_setting(org_id, 'max_answer_chars', current_app.config.get('AI_MAX_ANSWER_CHARS') or 2000))
-        form.max_policy_draft_chars.data = int(_effective_ai_setting(org_id, 'max_policy_draft_chars', current_app.config.get('AI_MAX_POLICY_DRAFT_CHARS') or 6000))
-        form.rag_rate_limit.data = str(_effective_ai_setting(org_id, 'rag_rate_limit', current_app.config.get('AI_RAG_RATE_LIMIT') or '20 per minute'))
-        form.policy_rate_limit.data = str(_effective_ai_setting(org_id, 'policy_rate_limit', current_app.config.get('AI_POLICY_RATE_LIMIT') or '10 per minute'))
-        form.policy_draft_use_llm.data = bool(_effective_ai_setting(org_id, 'policy_draft_use_llm', current_app.config.get('POLICY_DRAFT_USE_LLM') or False))
-
-    if form.validate_on_submit():
-        settings.policy_draft_use_llm = bool(form.policy_draft_use_llm.data)
-        settings.max_query_chars = int(form.max_query_chars.data)
-        settings.max_top_k = int(form.max_top_k.data)
-        settings.max_citation_text_chars = int(form.max_citation_text_chars.data)
-        settings.max_answer_chars = int(form.max_answer_chars.data)
-        settings.max_policy_draft_chars = int(form.max_policy_draft_chars.data)
-        settings.rag_rate_limit = (form.rag_rate_limit.data or '').strip() or '20 per minute'
-        settings.policy_rate_limit = (form.policy_rate_limit.data or '').strip() or '10 per minute'
-        settings.updated_by_user_id = int(current_user.id)
-
-        if not getattr(settings, 'id', None):
-            db.session.add(settings)
-
-        try:
-            db.session.commit()
-            flash('AI controls saved.', 'success')
-            return redirect(url_for('main.organization_ai_controls'))
-        except Exception:
-            db.session.rollback()
-            flash('Failed to save AI controls. Please try again.', 'error')
-    elif request.method == 'POST':
-        current_app.logger.warning('AI controls form validation failed: %s', form.errors)
-
-    event_filter = (request.args.get('event') or '').strip()
-    time_range = (request.args.get('time_range') or '7d').strip().lower()
-    page = _clamp_int(request.args.get('page', 1), default=1, minimum=1, maximum=10_000)
-    per_page = 25
-
-    from datetime import datetime, timezone, timedelta
-
-    now = datetime.now(timezone.utc)
-    range_map = {
-        '24h': timedelta(hours=24),
-        '7d': timedelta(days=7),
-        '30d': timedelta(days=30),
-        'all': None,
-    }
-    selected_delta = range_map.get(time_range, timedelta(days=7))
-    start_time = (now - selected_delta) if selected_delta is not None else None
-
-    usage_query = AIUsageEvent.query.filter_by(organization_id=int(org_id))
-    if event_filter:
-        usage_query = usage_query.filter(AIUsageEvent.event == event_filter)
-    if start_time is not None:
-        usage_query = usage_query.filter(AIUsageEvent.created_at >= start_time)
-
-    total_usage_events = usage_query.count()
-    usage_events = (
-        usage_query
-        .order_by(AIUsageEvent.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
-    total_pages = max(1, (total_usage_events + per_page - 1) // per_page)
-    if page > total_pages:
-        page = total_pages
-
-    available_events = [
-        row[0]
-        for row in (
-            db.session.query(AIUsageEvent.event)
-            .filter(AIUsageEvent.organization_id == int(org_id))
-            .distinct()
-            .order_by(AIUsageEvent.event.asc())
-            .all()
-        )
-        if row and row[0]
-    ]
-
-    return render_template(
-        'main/organization_ai_controls.html',
-        title='AI Controls',
-        form=form,
-        retention_form=retention_form,
-        organization=organization,
-        usage_events=usage_events,
-        usage_total=total_usage_events,
-        usage_page=page,
-        usage_pages=total_pages,
-        usage_event_filter=event_filter,
-        usage_time_range=time_range,
-        usage_available_events=available_events,
-    )
+    flash('AI Controls has been retired. Use Organisation Profile instead.', 'info')
+    return redirect(url_for('main.organization_settings'))
 
 
 @bp.route('/organization/ai-controls/retention-run', methods=['POST'])
@@ -3171,7 +2766,7 @@ def organization_ai_retention_run():
     form = OrganizationAIUsageRetentionForm()
     if not form.validate_on_submit():
         flash('Invalid retention request. Check retention days.', 'error')
-        return redirect(url_for('main.organization_ai_controls'))
+        return redirect(url_for('main.organization_settings'))
 
     org_id = _active_org_id()
     days = max(1, int(form.days.data or (current_app.config.get('AI_USAGE_RETENTION_DAYS') or 90)))
@@ -3187,7 +2782,7 @@ def organization_ai_retention_run():
 
     if dry_run:
         flash(f'Dry run: {candidate_rows} AI usage events older than {days} days would be deleted.', 'info')
-        return redirect(url_for('main.organization_ai_controls'))
+        return redirect(url_for('main.organization_settings'))
 
     try:
         deleted = int(q.delete(synchronize_session=False) or 0)
@@ -3198,7 +2793,7 @@ def organization_ai_retention_run():
         current_app.logger.exception('Failed to run AI usage retention cleanup for org %s', org_id)
         flash('Retention cleanup failed. Please try again.', 'error')
 
-    return redirect(url_for('main.organization_ai_controls'))
+    return redirect(url_for('main.organization_settings'))
 
 
 @bp.route('/organization/ai-controls/usage.csv')
@@ -3465,6 +3060,7 @@ def compliance_requirements():
     module_filter = (request.args.get('module') or '').strip()
     bucket_filter = (request.args.get('bucket') or '').strip().lower()
     due_filter = (request.args.get('due') or '').strip().lower()
+    show_requirements_panel = (request.args.get('show_requirements_panel') or '').strip().lower() in {'1', 'true', 'yes'}
 
     page = _clamp_int(request.args.get('page', 1), default=1, minimum=1, maximum=10_000)
     per_page = 25
@@ -3662,6 +3258,7 @@ def compliance_requirements():
         db.session.query(
             RequirementEvidenceLink.document_id,
             RequirementEvidenceLink.linked_at,
+            RequirementEvidenceLink.rationale_note,
             ComplianceRequirement.requirement_id,
             ComplianceRequirement.quality_indicator_text,
             ComplianceRequirement.outcome_text,
@@ -3672,12 +3269,12 @@ def compliance_requirements():
         .all()
     )
 
-    req_preview_by_doc: dict[int, list[str]] = {}
-    for doc_id, _linked_at, req_code, qi_text, outcome_text in doc_requirement_rows:
+    req_preview_by_doc: dict[int, list[dict]] = {}
+    for doc_id, _linked_at, rationale_note, req_code, qi_text, outcome_text in doc_requirement_rows:
         did = int(doc_id or 0)
         if not did:
             continue
-        labels = req_preview_by_doc.setdefault(did, [])
+        entries = req_preview_by_doc.setdefault(did, [])
         display_value = ' '.join((req_code or '').split()).strip()
         if not display_value:
             text_source = ' '.join((qi_text or outcome_text or '').split()).strip()
@@ -3685,10 +3282,26 @@ def compliance_requirements():
                 display_value = text_source[:42].rstrip() + ('...' if len(text_source) > 42 else '')
             else:
                 display_value = 'Requirement'
-        if display_value in labels:
+
+        existing_codes = {(entry.get('code') or '').strip() for entry in entries}
+        if display_value in existing_codes:
             continue
-        if len(labels) < 4:
-            labels.append(display_value)
+
+        reason_text = ' '.join((rationale_note or '').split()).strip()
+        if not reason_text:
+            reason_source = ' '.join((qi_text or outcome_text or '').split()).strip()
+            if reason_source:
+                reason_text = reason_source[:180].rstrip() + ('...' if len(reason_source) > 180 else '')
+            else:
+                reason_text = 'Linked by document evidence matching for this requirement.'
+
+        if len(entries) < 6:
+            entries.append(
+                {
+                    'code': display_value,
+                    'reason': reason_text,
+                }
+            )
 
     document_link_overview: list[dict] = []
     for doc_id, filename, uploaded_at, last_linked_at, link_count in doc_rows:
@@ -3793,6 +3406,7 @@ def compliance_requirements():
         module_filter=module_filter,
         bucket_filter=bucket_filter,
         due_filter=due_filter,
+        show_requirements_panel=show_requirements_panel,
         module_options=sorted(module_options),
         summary=summary,
         monthly_snapshot=monthly_snapshot,
@@ -4915,12 +4529,6 @@ def _assistant_is_org_admin(org_id: int) -> bool:
 def _assistant_default_actions() -> list[dict]:
     return [
         {
-            'id': 'open_compliance_journey',
-            'kind': 'navigate',
-            'label': 'Open Compliance Journey',
-            'url': url_for('main.compliance_journey'),
-        },
-        {
             'id': 'open_requirements',
             'kind': 'navigate',
             'label': 'Open Requirements Workboard',
@@ -4963,7 +4571,7 @@ def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, l
     lower = (query_text or '').strip().lower()
     if not lower:
         return (
-            'Ask me things like: "Show me the compliance journey", "Open requirements workboard", or "Mark all notifications as read".',
+            'Ask me things like: "Open requirements workboard", "Open AI review", or "Mark all notifications as read".',
             _assistant_default_actions(),
         )
 
@@ -4996,10 +4604,10 @@ def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, l
             ),
             [
                 {
-                    'id': 'open_compliance_journey',
+                    'id': 'open_requirements',
                     'kind': 'navigate',
-                    'label': 'Open Compliance Journey',
-                    'url': url_for('main.compliance_journey'),
+                    'label': 'Open Requirements',
+                    'url': url_for('main.compliance_requirements'),
                 },
                 {
                     'id': 'open_repository',
@@ -5024,15 +4632,15 @@ def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, l
     ):
         return (
             (
-                'Use Compliance Journey for a simple step-by-step path: setup -> upload evidence -> run AI review -> verify links -> confirm assessments -> export audit pack. '
-                'It shows what is complete, what is in progress, and the next best action.'
+                'Use Requirements as your main workflow: upload evidence -> run AI review -> verify links -> confirm assessment status -> export reports. '
+                'The requirements workboard now includes a simple document-link view first, with advanced planning hidden by default.'
             ),
             [
                 {
-                    'id': 'open_compliance_journey',
+                    'id': 'open_requirements',
                     'kind': 'navigate',
-                    'label': 'Open Compliance Journey',
-                    'url': url_for('main.compliance_journey'),
+                    'label': 'Open Requirements',
+                    'url': url_for('main.compliance_requirements'),
                 },
                 {
                     'id': 'open_ai_review',
