@@ -42,6 +42,11 @@
     color: var(--bs-secondary-color);
   }
 
+  .muted-microcopy {
+    font-size: 0.82rem;
+    color: var(--bs-secondary-color);
+  }
+
   .workboard-kpi {
     border: 1px solid var(--bs-border-color);
     border-radius: 0.85rem;
@@ -127,24 +132,24 @@
       >
         Show Advanced Planning (Optional)
       </button>
-      <div class="advanced-help-text mt-1">Advanced = monthly snapshot, owner queue, and upcoming review queue.</div>
+      <div class="advanced-help-text mt-1">Monthly snapshot and planning queues.</div>
     </div>
   </div>
 
   <div class="collapse mb-3" id="requirementsUsageHelp">
     <div class="workboard-note p-3">
       <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Simple way to use this page</div>
-      <div class="small text-body-secondary">Try <strong>Auto-link From Analyzed Docs</strong> first. Then open only remaining risky rows.</div>
-      <div class="small text-body-secondary mt-2">Legend: <strong>S</strong>=System policy, <strong>I</strong>=Implementation proof, <strong>W</strong>=Workforce proof, <strong>P</strong>=Participant proof.</div>
+      <div class="small text-body-secondary">Use auto-link first, then review only flagged rows.</div>
+      <div class="small text-body-secondary mt-2">Legend: <strong>S</strong> System, <strong>I</strong> Implementation, <strong>W</strong> Workforce, <strong>P</strong> Participant.</div>
     </div>
   </div>
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-header bg-body-tertiary border-bottom d-flex justify-content-between align-items-center">
       <h5 class="card-title mb-0"><i class="bi bi-link-45deg me-2 text-primary"></i>Simple Document Link View</h5>
-      <span class="small text-body-secondary">Which uploaded file is linked to what</span>
+      <span class="muted-microcopy">Uploaded file to requirement links</span>
     </div>
-    <div class="px-3 pt-2 small text-body-secondary">Tip: hover or click a requirement code to see why it was linked.</div>
+    <div class="px-3 pt-2 muted-microcopy">Tip: hover/click a code for the link reason.</div>
     <div class="px-3 pb-2 pt-2 border-bottom">
       <div class="row g-2 align-items-center">
         <div class="col-md-8">
@@ -346,7 +351,7 @@
   </div>
 
   <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-    <div class="small text-body-secondary">Requirement assessment table is optional and can stay hidden for a cleaner view.</div>
+    <div class="muted-microcopy">Requirement assessment table is optional.</div>
     <button
       class="btn btn-outline-secondary btn-sm"
       type="button"
