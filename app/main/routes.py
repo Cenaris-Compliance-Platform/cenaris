@@ -645,7 +645,7 @@ def org_admin_initialize_compliance_data():
         return redirect(url_for('main.org_admin_dashboard'))
 
     org_id = _active_org_id()
-    mapping_file_path = os.path.abspath(
+    mapping_dir = os.path.abspath(
         os.path.join(
             current_app.root_path,
             os.pardir,
@@ -653,9 +653,11 @@ def org_admin_initialize_compliance_data():
             'sources',
             'ndis',
             'mapping',
-            'MASTER Cenaris_NDIS_Audit_Master_Mapping_v1.xlsx',
         )
     )
+    mapping_csv_path = os.path.join(mapping_dir, 'MASTER Cenaris_NDIS_Audit_Master_Mapping_v1.csv')
+    mapping_xlsx_path = os.path.join(mapping_dir, 'MASTER Cenaris_NDIS_Audit_Master_Mapping_v1.xlsx')
+    mapping_file_path = mapping_csv_path if os.path.exists(mapping_csv_path) else mapping_xlsx_path
 
     if not os.path.exists(mapping_file_path):
         flash('NDIS mapping file is missing. Please upload or restore it in data/sources/ndis/mapping.', 'error')
@@ -3568,6 +3570,8 @@ def compliance_requirements():
                 'requirement': requirement,
                 'assessment': assessment,
                 'module_name': module_name,
+                'plain_title': _requirement_plain_title(requirement),
+                'display_code': _requirement_display_code(requirement),
                 'owner_role': (requirement.evidence_owner_role or '').strip() or 'Not assigned',
                 'bucket_counts': bucket_counts,
                 'required_buckets': required_buckets,
@@ -3629,6 +3633,77 @@ def compliance_requirements():
         ),
     }
 
+    doc_rows = (
+        db.session.query(
+            Document.id,
+            Document.filename,
+            Document.uploaded_at,
+            func.max(RequirementEvidenceLink.linked_at),
+            func.count(RequirementEvidenceLink.id),
+        )
+        .outerjoin(
+            RequirementEvidenceLink,
+            and_(
+                RequirementEvidenceLink.document_id == Document.id,
+                RequirementEvidenceLink.organization_id == int(org_id),
+            ),
+        )
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+        )
+        .group_by(Document.id, Document.filename, Document.uploaded_at)
+        .order_by(func.max(RequirementEvidenceLink.linked_at).desc().nullslast(), Document.uploaded_at.desc())
+        .limit(25)
+        .all()
+    )
+
+    doc_requirement_rows = (
+        db.session.query(
+            RequirementEvidenceLink.document_id,
+            RequirementEvidenceLink.linked_at,
+            ComplianceRequirement.requirement_id,
+            ComplianceRequirement.quality_indicator_text,
+            ComplianceRequirement.outcome_text,
+        )
+        .join(ComplianceRequirement, ComplianceRequirement.id == RequirementEvidenceLink.requirement_id)
+        .filter(RequirementEvidenceLink.organization_id == int(org_id))
+        .order_by(RequirementEvidenceLink.linked_at.desc().nullslast())
+        .all()
+    )
+
+    req_preview_by_doc: dict[int, list[str]] = {}
+    for doc_id, _linked_at, req_code, qi_text, outcome_text in doc_requirement_rows:
+        did = int(doc_id or 0)
+        if not did:
+            continue
+        labels = req_preview_by_doc.setdefault(did, [])
+        display_value = ' '.join((req_code or '').split()).strip()
+        if not display_value:
+            text_source = ' '.join((qi_text or outcome_text or '').split()).strip()
+            if text_source:
+                display_value = text_source[:42].rstrip() + ('...' if len(text_source) > 42 else '')
+            else:
+                display_value = 'Requirement'
+        if display_value in labels:
+            continue
+        if len(labels) < 4:
+            labels.append(display_value)
+
+    document_link_overview: list[dict] = []
+    for doc_id, filename, uploaded_at, last_linked_at, link_count in doc_rows:
+        did = int(doc_id or 0)
+        document_link_overview.append(
+            {
+                'document_id': did,
+                'filename': (filename or '').strip() or f'Document #{did}',
+                'uploaded_at': uploaded_at,
+                'last_linked_at': last_linked_at,
+                'linked_count': int(link_count or 0),
+                'requirements_preview': req_preview_by_doc.get(did, []),
+            }
+        )
+
     owner_action_queue: list[dict] = []
     for row in work_rows:
         assessment = row.get('assessment')
@@ -3661,6 +3736,8 @@ def compliance_requirements():
             {
                 'priority_score': int(priority_score),
                 'requirement_id': row.get('requirement').requirement_id,
+                'plain_title': row.get('plain_title') or _requirement_plain_title(row.get('requirement')),
+                'display_code': row.get('display_code') or _requirement_display_code(row.get('requirement')),
                 'module_name': row.get('module_name'),
                 'owner_role': row.get('owner_role'),
                 'reason': ', '.join(reasons),
@@ -3685,6 +3762,8 @@ def compliance_requirements():
             {
                 'days_left': int(due_days),
                 'requirement_id': row.get('requirement').requirement_id,
+                'plain_title': row.get('plain_title') or _requirement_plain_title(row.get('requirement')),
+                'display_code': row.get('display_code') or _requirement_display_code(row.get('requirement')),
                 'module_name': row.get('module_name'),
                 'owner_role': row.get('owner_role'),
                 'due_label': row.get('due', {}).get('label') or '',
@@ -3717,6 +3796,7 @@ def compliance_requirements():
         module_options=sorted(module_options),
         summary=summary,
         monthly_snapshot=monthly_snapshot,
+        document_link_overview=document_link_overview,
         owner_action_queue=owner_action_queue,
         upcoming_review_queue=upcoming_review_queue,
         pagination=pagination,
@@ -3803,6 +3883,182 @@ def _required_buckets_for_requirement(requirement: ComplianceRequirement) -> lis
     return required
 
 
+def _requirement_display_code(requirement: ComplianceRequirement | None) -> str:
+    if not requirement:
+        return 'Requirement'
+    return (
+        (getattr(requirement, 'requirement_id', None) or '')
+        or (getattr(requirement, 'quality_indicator_code', None) or '')
+        or (getattr(requirement, 'outcome_code', None) or '')
+        or 'Requirement'
+    ).strip()
+
+
+def _requirement_plain_title(requirement: ComplianceRequirement | None, *, max_chars: int = 120) -> str:
+    if not requirement:
+        return 'Compliance requirement'
+
+    candidates = [
+        getattr(requirement, 'quality_indicator_text', None),
+        getattr(requirement, 'outcome_text', None),
+        getattr(requirement, 'standard_name', None),
+    ]
+
+    source = ''
+    for raw in candidates:
+        text = ' '.join(str(raw or '').split()).strip()
+        if text:
+            source = text
+            break
+
+    if not source:
+        return _requirement_display_code(requirement)
+
+    sentence = source.split('. ')[0].strip() or source
+    if len(sentence) > max_chars:
+        sentence = sentence[: max_chars - 1].rstrip() + '...'
+    return sentence
+
+
+def _requirement_bucket_counts(*, org_id: int, requirement_id: int) -> dict[str, int]:
+    counts = {'system': 0, 'implementation': 0, 'workforce': 0, 'participant': 0}
+    rows = (
+        db.session.query(
+            RequirementEvidenceLink.evidence_bucket,
+            func.count(RequirementEvidenceLink.id),
+        )
+        .filter(
+            RequirementEvidenceLink.organization_id == int(org_id),
+            RequirementEvidenceLink.requirement_id == int(requirement_id),
+        )
+        .group_by(RequirementEvidenceLink.evidence_bucket)
+        .all()
+    )
+    for bucket, total in rows:
+        key = (bucket or '').strip().lower()
+        if key in counts:
+            counts[key] = int(total or 0)
+    return counts
+
+
+def _pick_bucket_for_requirement(*, requirement: ComplianceRequirement, bucket_counts: dict[str, int], preferred_bucket: str | None = None) -> str:
+    required = _required_buckets_for_requirement(requirement)
+    preferred = (preferred_bucket or '').strip().lower()
+    allowed = {'system', 'implementation', 'workforce', 'participant'}
+
+    if preferred in required and int(bucket_counts.get(preferred, 0)) <= 0:
+        return preferred
+
+    for bucket in required:
+        if int(bucket_counts.get(bucket, 0)) <= 0:
+            return bucket
+
+    if preferred in allowed:
+        return preferred
+
+    return 'implementation'
+
+
+def _auto_link_from_analyzed_documents(*, org_id: int, user_id: int, target_requirement_id: int | None = None) -> dict[str, int]:
+    """Auto-create requirement evidence links from already analyzed/extracted documents."""
+    docs = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+            Document.extracted_text.isnot(None),
+        )
+        .order_by(Document.ai_analysis_at.desc().nullslast(), Document.uploaded_at.desc())
+        .all()
+    )
+
+    existing_query = RequirementEvidenceLink.query.filter_by(organization_id=int(org_id))
+    if target_requirement_id is not None:
+        existing_query = existing_query.filter_by(requirement_id=int(target_requirement_id))
+
+    existing_links = {
+        (int(link.requirement_id), int(link.document_id), (link.evidence_bucket or '').strip().lower())
+        for link in existing_query.all()
+    }
+
+    bucket_counts_cache: dict[int, dict[str, int]] = {}
+    touched_requirements: set[int] = set()
+    links_added = 0
+    docs_scanned = 0
+
+    for document in docs:
+        text = (document.extracted_text or '').strip()
+        if not text:
+            continue
+
+        docs_scanned += 1
+        matched = document_analysis_service._match_requirements(
+            text=text,
+            filename=document.filename or '',
+            organization_id=int(org_id),
+            top_k=5,
+        )
+
+        for item in matched:
+            requirement_id = int(item.get('requirement_db_id') or 0)
+            if not requirement_id:
+                continue
+            if target_requirement_id is not None and int(target_requirement_id) != int(requirement_id):
+                continue
+
+            requirement = db.session.get(ComplianceRequirement, int(requirement_id))
+            if requirement is None:
+                continue
+
+            counts = bucket_counts_cache.get(int(requirement_id))
+            if counts is None:
+                counts = _requirement_bucket_counts(org_id=int(org_id), requirement_id=int(requirement_id))
+                bucket_counts_cache[int(requirement_id)] = counts
+
+            selected_bucket = _pick_bucket_for_requirement(
+                requirement=requirement,
+                bucket_counts=counts,
+                preferred_bucket=item.get('evidence_bucket') or '',
+            )
+            dedupe_key = (int(requirement_id), int(document.id), selected_bucket)
+            if dedupe_key in existing_links:
+                continue
+
+            db.session.add(
+                RequirementEvidenceLink(
+                    organization_id=int(org_id),
+                    requirement_id=int(requirement_id),
+                    document_id=int(document.id),
+                    evidence_bucket=selected_bucket,
+                    rationale_note=(item.get('rationale_note') or None),
+                    linked_by_user_id=int(user_id),
+                )
+            )
+            existing_links.add(dedupe_key)
+            counts[selected_bucket] = int(counts.get(selected_bucket, 0)) + 1
+            links_added += 1
+            touched_requirements.add(int(requirement_id))
+
+    if touched_requirements:
+        for requirement_id in touched_requirements:
+            try:
+                compliance_scoring_service.recompute_requirement_assessment(
+                    organization_id=int(org_id),
+                    requirement_id=int(requirement_id),
+                    assessed_by_user_id=int(user_id),
+                    commit=False,
+                )
+            except Exception:
+                current_app.logger.exception('Failed to recompute assessment for requirement %s', requirement_id)
+        db.session.commit()
+
+    return {
+        'docs_scanned': int(docs_scanned),
+        'links_added': int(links_added),
+        'requirements_updated': int(len(touched_requirements)),
+    }
+
+
 def _get_org_visible_requirement_or_404(requirement_db_id: int, org_id: int):
     requirement = (
         db.session.query(ComplianceRequirement)
@@ -3849,6 +4105,9 @@ def compliance_requirement_detail(requirement_db_id):
     )
 
     linked_doc_ids = {int(link.document_id) for link in linked_evidence}
+    bucket_counts = _requirement_bucket_counts(org_id=int(org_id), requirement_id=int(requirement.id))
+    required_buckets = _required_buckets_for_requirement(requirement)
+    missing_required_buckets = [bucket for bucket in required_buckets if int(bucket_counts.get(bucket, 0)) <= 0]
     available_documents = (
         Document.query
         .filter_by(organization_id=int(org_id), is_active=True)
@@ -3858,13 +4117,86 @@ def compliance_requirement_detail(requirement_db_id):
 
     return render_template(
         'main/compliance_requirement_detail.html',
-        title=f'Requirement {requirement.requirement_id}',
+        title=_requirement_plain_title(requirement),
         requirement=requirement,
+        requirement_plain_title=_requirement_plain_title(requirement),
+        requirement_display_code=_requirement_display_code(requirement),
         assessment=assessment,
         linked_evidence=linked_evidence,
         available_documents=available_documents,
         linked_doc_ids=linked_doc_ids,
+        required_buckets=required_buckets,
+        bucket_counts=bucket_counts,
+        missing_required_buckets=missing_required_buckets,
     )
+
+
+@bp.route('/compliance-requirements/auto-link', methods=['POST'])
+@login_required
+def compliance_requirements_auto_link():
+    """Easy-mode action: auto-link all analyzed documents into requirements."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    try:
+        result = _auto_link_from_analyzed_documents(org_id=int(org_id), user_id=int(current_user.id))
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Bulk auto-link failed for org %s', org_id)
+        flash('Auto-link failed. Please try again.', 'error')
+        return redirect(url_for('main.compliance_requirements'))
+
+    if int(result.get('links_added') or 0) > 0:
+        flash(
+            f"Auto-linked {int(result.get('links_added') or 0)} evidence item(s) across {int(result.get('requirements_updated') or 0)} requirement(s).",
+            'success',
+        )
+    else:
+        flash('No new auto-links were found. Analyze more documents first or link manually.', 'info')
+
+    return redirect(url_for('main.compliance_requirements'))
+
+
+@bp.route('/compliance-requirements/<int:requirement_db_id>/auto-link', methods=['POST'])
+@login_required
+def compliance_requirement_auto_link(requirement_db_id):
+    """Easy-mode action: auto-link analyzed documents for one requirement."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    requirement = _get_org_visible_requirement_or_404(requirement_db_id=int(requirement_db_id), org_id=int(org_id))
+
+    try:
+        result = _auto_link_from_analyzed_documents(
+            org_id=int(org_id),
+            user_id=int(current_user.id),
+            target_requirement_id=int(requirement.id),
+        )
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Requirement auto-link failed for requirement %s', requirement_db_id)
+        flash('Auto-link failed for this requirement. Please try again.', 'error')
+        return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
+
+    if int(result.get('links_added') or 0) > 0:
+        flash(
+            f"Auto-linked {int(result.get('links_added') or 0)} evidence item(s) for requirement {requirement.requirement_id}.",
+            'success',
+        )
+    else:
+        flash('No new auto-links found for this requirement. Try analyzing more documents first.', 'info')
+
+    return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
 
 
 @bp.route('/compliance-requirements/<int:requirement_db_id>/link', methods=['POST'])
@@ -3886,9 +4218,6 @@ def compliance_requirement_link_evidence(requirement_db_id):
     rationale_note = (request.form.get('rationale_note') or '').strip() or None
 
     allowed_buckets = {'system', 'implementation', 'workforce', 'participant'}
-    if evidence_bucket not in allowed_buckets:
-        flash('Please choose a valid evidence bucket.', 'error')
-        return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
 
     document = Document.query.filter_by(
         id=document_id,
@@ -3897,6 +4226,17 @@ def compliance_requirement_link_evidence(requirement_db_id):
     ).first()
     if not document:
         abort(404)
+
+    if evidence_bucket in {'', 'auto'}:
+        counts = _requirement_bucket_counts(org_id=int(org_id), requirement_id=int(requirement.id))
+        evidence_bucket = _pick_bucket_for_requirement(
+            requirement=requirement,
+            bucket_counts=counts,
+            preferred_bucket='',
+        )
+    elif evidence_bucket not in allowed_buckets:
+        flash('Please choose a valid evidence bucket.', 'error')
+        return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
 
     existing = RequirementEvidenceLink.query.filter_by(
         organization_id=int(org_id),
@@ -5069,6 +5409,39 @@ def ai_demo():
         )
 
     selected_document_ids = [int(document.id) for document in selected_documents]
+    selected_document_meta: dict[str, dict] = {}
+    for document in selected_documents:
+        analyzed = bool(
+            getattr(document, 'ai_analysis_at', None)
+            and (
+                ' '.join((getattr(document, 'ai_summary', '') or '').split()).strip()
+                or ' '.join((getattr(document, 'ai_status', '') or '').split()).strip()
+            )
+        )
+        preview_checklist = _build_checklist_from_analysis(
+            {
+                'status': document.ai_status,
+                'summary': document.ai_summary,
+                'focus_area': document.ai_focus_area or 'General compliance coverage',
+            }
+        ) if analyzed else {'items': [], 'summary': {'clear': [], 'partial': [], 'gap': []}}
+
+        analyzed_at = getattr(document, 'ai_analysis_at', None)
+        if analyzed_at and analyzed_at.tzinfo is None:
+            analyzed_at = analyzed_at.replace(tzinfo=timezone.utc)
+
+        selected_document_meta[str(int(document.id))] = {
+            'filename': (document.filename or '').strip(),
+            'analyzed': bool(analyzed),
+            'status': (document.ai_status or '').strip(),
+            'confidence': float(document.ai_confidence or 0),
+            'question': (document.ai_question or '').strip(),
+            'summary': (document.ai_summary or '').strip(),
+            'provider': (document.ai_provider or '').strip(),
+            'model': (document.ai_model or '').strip(),
+            'analysis_at': analyzed_at.isoformat() if analyzed_at else '',
+            'checklist': preview_checklist,
+        }
 
     active_doc_id_raw = (request.args.get('active_doc_id') or '').strip()
     active_doc_id = int(active_doc_id_raw) if active_doc_id_raw.isdigit() else None
@@ -5106,6 +5479,7 @@ def ai_demo():
         has_ndis_corpus=bool(os.path.exists(corpus_abs)),
         recent_analyses=recent_analyses,
         selected_documents=selected_documents,
+        selected_document_meta=selected_document_meta,
         selected_document_ids=selected_document_ids,
         active_doc_id=active_doc_id,
         autostart=autostart,
@@ -5139,11 +5513,20 @@ def ai_demo_analyze_api():
 
     document = _authorized_org_document_or_404(int(stored_doc_id))
     source_filename = (document.filename or '').strip()
+    has_previous_analysis = bool(
+        getattr(document, 'ai_analysis_at', None)
+        and (
+            ' '.join((getattr(document, 'ai_summary', '') or '').split()).strip()
+            or ' '.join((getattr(document, 'ai_status', '') or '').split()).strip()
+        )
+    )
+    force_reanalyze = bool(has_previous_analysis and not reuse_last)
 
     normalized_question = ' '.join((question or '').split()).lower()
     cached_question = ' '.join(((document.ai_question or '')).split()).lower()
     if (
         reuse_last
+        and not force_reanalyze
         and normalized_question
         and normalized_question == cached_question
         and (document.ai_summary or '').strip()
@@ -5180,6 +5563,8 @@ def ai_demo_analyze_api():
                     'source': 'repository',
                     'stored_doc_id': int(stored_doc_id) if stored_doc_id.isdigit() else None,
                     'cached_result': True,
+                    'question': (document.ai_question or '').strip(),
+                    'analysis_at': document.ai_analysis_at.isoformat() if document.ai_analysis_at else '',
                 },
             }
         )
@@ -5251,6 +5636,7 @@ def ai_demo_analyze_api():
         model_label = used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
 
     # Persist result (non-blocking — never fail the API on a DB error)
+    analyzed_at = datetime.now(timezone.utc)
     try:
         from app.models import DemoAnalysisResult
 
@@ -5264,7 +5650,7 @@ def ai_demo_analyze_api():
         document.ai_provider = provider_label
         document.ai_model = model_label
         document.ai_retrieval_mode = _demo_retrieval_mode
-        document.ai_analysis_at = datetime.now(timezone.utc)
+        document.ai_analysis_at = analyzed_at
 
         record = DemoAnalysisResult(
             organization_id=int(org_id),
@@ -5325,6 +5711,8 @@ def ai_demo_analyze_api():
                 'source': 'repository',
                 'stored_doc_id': int(stored_doc_id) if stored_doc_id.isdigit() else None,
                 'cached_result': False,
+                'question': question,
+                'analysis_at': analyzed_at.isoformat(),
             },
         }
     )
@@ -5349,18 +5737,27 @@ def _checklist_status_from_overall(status: str | None) -> str:
 
 
 def _build_checklist_from_analysis(analysis: dict) -> dict:
+    def _compact_text(value: str, *, max_chars: int = 140) -> str:
+        text = ' '.join((value or '').split()).strip()
+        if not text:
+            return ''
+        sentence = text.split('. ')[0].strip() or text
+        if len(sentence) > max_chars:
+            sentence = sentence[: max_chars - 1].rstrip() + '...'
+        return sentence
+
     def format_note(*, status: str, missing: str, rationale: str) -> str:
         missing_value = (missing or '').strip()
         rationale_value = (rationale or '').strip()
         if status == 'Clear':
             if rationale_value:
-                return f"Covered: {rationale_value}"
-            return 'Covered by the provided evidence.'
+                return f"Covered: {_compact_text(rationale_value, max_chars=130)}"
+            return 'Covered by clear document evidence.'
         if missing_value:
-            return f"Missing: {missing_value}"
+            return f"Missing: {_compact_text(missing_value, max_chars=130)}"
         if rationale_value:
-            return f"Partially addressed: {rationale_value}"
-        return 'Needs clearer evidence in the document.'
+            return f"Partially addressed: {_compact_text(rationale_value, max_chars=130)}"
+        return 'Needs clearer evidence in this document.'
 
     items = []
     matched = analysis.get('matched_requirements') or []
@@ -5383,10 +5780,38 @@ def _build_checklist_from_analysis(analysis: dict) -> dict:
             }
         )
 
+    default_areas = [
+        ('Policy scope and intent', 'Define what this policy covers and where it applies.'),
+        ('Operational evidence records', 'Provide logs, registers, and implementation proof.'),
+        ('Review cadence and ownership', 'Name owners and confirm review and approval dates.'),
+    ]
+
+    def add_fallback_items(*, base_status: str) -> None:
+        existing_labels = {' '.join((item.get('label') or '').lower().split()) for item in items}
+        for area_label, area_note in default_areas:
+            if len(items) >= 3:
+                break
+            normalized = ' '.join(area_label.lower().split())
+            if normalized in existing_labels:
+                continue
+            items.append(
+                {
+                    'label': area_label,
+                    'status': base_status,
+                    'note': area_note,
+                    'score': None,
+                    'requirement_id': None,
+                }
+            )
+            existing_labels.add(normalized)
+
     if not items:
         overall_status = _checklist_status_from_overall(analysis.get('status'))
         label = (analysis.get('focus_area') or 'General compliance coverage').strip()
-        note = (analysis.get('summary') or 'Use more detailed evidence to improve assessment coverage.').strip()
+        note = _compact_text(
+            (analysis.get('summary') or 'Use more detailed evidence to improve assessment coverage.').strip(),
+            max_chars=150,
+        )
         items.append(
             {
                 'label': label,
@@ -5396,6 +5821,9 @@ def _build_checklist_from_analysis(analysis: dict) -> dict:
                 'requirement_id': None,
             }
         )
+        add_fallback_items(base_status=overall_status)
+    elif len(items) < 3:
+        add_fallback_items(base_status=_checklist_status_from_overall(analysis.get('status')))
 
     summary = {'clear': [], 'partial': [], 'gap': []}
     for item in items:

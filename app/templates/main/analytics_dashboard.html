@@ -59,6 +59,50 @@
   </div>
 
   <div class="row g-3 mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary">
+          <strong>Analyzed Documents</strong>
+        </div>
+        <div class="card-body">
+          <div class="row g-3 align-items-stretch">
+            <div class="col-sm-6 col-lg-3">
+              <div class="border rounded p-3 h-100 bg-body-tertiary">
+                <div class="text-body-secondary small">Analyzed Files</div>
+                <div class="h4 mb-0">{{ summary.analyzed_documents or 0 }}</div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+              <div class="border rounded p-3 h-100 bg-body-tertiary">
+                <div class="text-body-secondary small">Analyzed in Last 30 Days</div>
+                <div class="h4 mb-0">{{ summary.analyzed_documents_30d or 0 }}</div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+              <div class="border rounded p-3 h-100 bg-body-tertiary">
+                <div class="text-body-secondary small">Analysis Coverage</div>
+                <div class="h4 mb-0">{{ summary.analyzed_coverage_rate or 0 }}%</div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+              <div class="border rounded p-3 h-100 bg-body-tertiary">
+                <div class="text-body-secondary small">Average AI Confidence</div>
+                <div class="h4 mb-0">
+                  {% if summary.average_ai_confidence is not none %}
+                    {{ summary.average_ai_confidence }}%
+                  {% else %}
+                    —
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
     <div class="col-lg-8">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-header bg-body-tertiary">
@@ -154,6 +198,80 @@
           {% else %}
           <tr>
             <td colspan="5" class="text-center text-body-secondary py-4">No framework analytics available yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-body-tertiary">
+      <strong>Analyzed Documents History</strong>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-striped align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Document</th>
+            <th>Status</th>
+            <th>Confidence</th>
+            <th>Analyzed At</th>
+            <th class="text-end">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in (analytics_payload.get('analysis', {}).get('history') or []) %}
+          <tr>
+            <td class="fw-semibold">{{ item.filename }}</td>
+            <td>
+              {% set status = (item.status or '')|lower %}
+              {% if status in ['mature'] %}
+              <span class="badge bg-primary">{{ item.status }}</span>
+              {% elif status in ['ok'] %}
+              <span class="badge bg-success">{{ item.status }}</span>
+              {% elif status in ['high risk gap'] %}
+              <span class="badge bg-warning text-dark">{{ item.status }}</span>
+              {% elif status in ['critical gap'] %}
+              <span class="badge bg-danger">{{ item.status }}</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ item.status }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if item.confidence_pct is not none %}
+              {{ item.confidence_pct }}%
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td>
+              {% if item.analysis_at %}
+              {{ item.analysis_at | datetime_format('%b %d, %Y %I:%M %p') }}
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <details class="d-inline-block text-start">
+                <summary class="btn btn-sm btn-outline-primary">View details</summary>
+                <div class="border rounded p-2 mt-2 bg-body-tertiary" style="min-width: 360px; max-width: 520px;">
+                  <div class="small fw-semibold mb-1">Question</div>
+                  <div class="small text-body-secondary mb-2">{{ item.question or '—' }}</div>
+                  <div class="small fw-semibold mb-1">Summary Snapshot</div>
+                  <div class="small text-body-secondary mb-2">{{ item.summary_preview or '—' }}</div>
+                  {% if item.document_id %}
+                  <div class="text-end">
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.document_details', doc_id=item.document_id) }}">Open document</a>
+                  </div>
+                  {% endif %}
+                </div>
+              </details>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-body-secondary py-4">No analyzed documents yet.</td>
           </tr>
           {% endfor %}
         </tbody>
