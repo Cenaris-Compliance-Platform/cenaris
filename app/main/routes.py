@@ -5205,6 +5205,10 @@ def policy_studio():
     if prefill_document_id is not None and all(int(doc.id) != int(prefill_document_id) for doc in documents):
         prefill_document_id = None
 
+    prefill_source = (request.args.get('source') or '').strip().lower()
+    if prefill_source not in {'scratch', 'document'}:
+        prefill_source = 'document' if prefill_document_id is not None else 'scratch'
+
     return render_template(
         'main/policy_studio.html',
         title='Policy Studio',
@@ -5213,7 +5217,18 @@ def policy_studio():
         prefill_scope=prefill_scope,
         prefill_requirement=prefill_requirement,
         prefill_document_id=prefill_document_id,
+        prefill_source=prefill_source,
     )
+
+
+@bp.route('/plans-preview')
+@login_required
+def plans_preview():
+    """Client-facing feature matrix preview for plan discussions."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+    return render_template('main/plans_preview.html', title='Plans Preview')
 
 
 @bp.route('/api/ai/demo/analyze', methods=['POST'])
@@ -5981,7 +5996,7 @@ def policy_draft_api():
     if not policy_type:
         return jsonify({'success': False, 'error': 'policy_type is required'}), 400
     if not query_text and not requirement_id and document_id is None:
-        return jsonify({'success': False, 'error': 'query or requirement_id is required'}), 400
+        query_text = f"Create a comprehensive {policy_type} from scratch with practical procedures, ownership, and review cadence."
 
     selected_document = None
     linked_requirement_codes: list[str] = []
@@ -6172,6 +6187,7 @@ def policy_draft_api():
                 'policy_tone': policy_tone,
                 'strictness': strictness,
                 'organization_size': organization_size,
+                'source_mode': 'document' if selected_document else 'scratch',
                 'document_id': int(selected_document.id) if selected_document else None,
                 'requirement_scope': requirement_scope,
                 'linked_requirements_count': int(len(linked_requirement_codes)),

@@ -6,7 +6,7 @@
     <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
         <h1 class="h3 fw-bold mb-1">Policy Studio</h1>
-        <p class="text-body-secondary mb-0">Create one full policy in a single run from either one requirement or all requirements linked to a selected document.</p>
+        <p class="text-body-secondary mb-0">Create a full policy from scratch with clean structure and formatting. Uploaded-document context is optional.</p>
       </div>
       <a href="{{ url_for('main.compliance_requirements') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-list-check me-1"></i>Back to Requirements
@@ -19,15 +19,13 @@
       <form id="policyStudioForm" class="row g-3">
         <input type="hidden" id="policyStudioCsrf" value="{{ csrf_token() }}" />
 
-        <div class="col-md-5">
-          <label for="policyStudioDocument" class="form-label">Evidence document</label>
-          <select id="policyStudioDocument" class="form-select">
-            <option value="">Select document...</option>
-            {% for document in documents %}
-            <option value="{{ document.id }}" {% if prefill_document_id and prefill_document_id == document.id %}selected{% endif %}>{{ document.filename }}</option>
-            {% endfor %}
+        <div class="col-md-4">
+          <label for="policyStudioSource" class="form-label">Generation source</label>
+          <select id="policyStudioSource" class="form-select">
+            <option value="scratch" {% if prefill_source != 'document' %}selected{% endif %}>From scratch (recommended)</option>
+            <option value="document" {% if prefill_source == 'document' %}selected{% endif %}>Use uploaded document context</option>
           </select>
-          <div class="form-text">Pick the source document for this policy.</div>
+          <div class="form-text">Use document context only when you intentionally want policy content grounded in one uploaded file.</div>
         </div>
 
         <div class="col-md-4">
@@ -42,7 +40,7 @@
           </select>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-4">
           <label for="policyStudioOutputMode" class="form-label">Output mode</label>
           <select id="policyStudioOutputMode" class="form-select">
             <option value="template">Smart Template</option>
@@ -51,9 +49,20 @@
           </select>
         </div>
 
+        <div class="col-md-6 {% if prefill_source != 'document' %}d-none{% endif %}" id="policyStudioDocumentWrap">
+          <label for="policyStudioDocument" class="form-label">Evidence document context</label>
+          <select id="policyStudioDocument" class="form-select">
+            <option value="">Select document...</option>
+            {% for document in documents %}
+            <option value="{{ document.id }}" {% if prefill_document_id and prefill_document_id == document.id %}selected{% endif %}>{{ document.filename }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Only required if generation source is set to uploaded document context.</div>
+        </div>
+
         <div class="col-12">
           <div class="alert alert-light border py-2 px-3 small mb-0">
-            <strong>Default:</strong> one full policy covering all requirements linked to the selected document.
+            <strong>Default:</strong> one full, formatted policy draft generated from scratch.
           </div>
         </div>
 
@@ -76,7 +85,7 @@
               <div class="col-md-6">
                 <label for="policyStudioScope" class="form-label">Requirement scope</label>
                 <select id="policyStudioScope" class="form-select">
-                  <option value="linked" {% if prefill_scope != 'single' %}selected{% endif %}>All linked requirements from selected document</option>
+                  <option value="linked" {% if prefill_scope != 'single' %}selected{% endif %}>{% if prefill_source == 'document' %}All linked requirements from selected document{% else %}Comprehensive coverage (from scratch){% endif %}</option>
                   <option value="single" {% if prefill_scope == 'single' %}selected{% endif %}>Single requirement only</option>
                 </select>
               </div>
@@ -177,6 +186,8 @@
     const metaEl = document.getElementById('policyStudioMeta');
     const warningsEl = document.getElementById('policyStudioWarnings');
 
+    const sourceEl = document.getElementById('policyStudioSource');
+    const documentWrap = document.getElementById('policyStudioDocumentWrap');
     const documentEl = document.getElementById('policyStudioDocument');
     const scopeEl = document.getElementById('policyStudioScope');
     const requirementWrap = document.getElementById('policyStudioRequirementWrap');
@@ -205,6 +216,25 @@
       statusEl.classList.add(isError ? 'text-danger' : 'text-body-secondary');
     };
 
+    const toggleSourceUI = () => {
+      const source = (sourceEl?.value || 'scratch').trim();
+      const useDocument = source === 'document';
+      if (documentWrap) {
+        documentWrap.classList.toggle('d-none', !useDocument);
+      }
+      if (!useDocument && documentEl) {
+        documentEl.value = '';
+      }
+      if (scopeEl) {
+        const linkedOption = scopeEl.querySelector('option[value="linked"]');
+        if (linkedOption) {
+          linkedOption.textContent = useDocument
+            ? 'All linked requirements from selected document'
+            : 'Comprehensive coverage (from scratch)';
+        }
+      }
+    };
+
     const toggleScopeUI = () => {
       const scope = (scopeEl?.value || 'linked').trim();
       if (!requirementWrap) return;
@@ -218,6 +248,7 @@
     };
 
     const runGeneration = async (forcedMode) => {
+      const source = (sourceEl?.value || 'scratch').trim();
       const scope = (scopeEl?.value || 'linked').trim();
       const documentId = (documentEl?.value || '').trim();
       const requirementId = (requirementEl?.value || '').trim();
@@ -226,8 +257,8 @@
         setStatus('Please choose a policy type.', true);
         return;
       }
-      if (!documentId) {
-        setStatus('Please select an evidence document first.', true);
+      if (source === 'document' && !documentId) {
+        setStatus('Please select an evidence document when using document context.', true);
         return;
       }
       if (scope === 'single' && !requirementId) {
@@ -244,9 +275,11 @@
         organization_size: (orgSizeEl?.value || '').trim(),
         query: (goalEl?.value || '').trim(),
         context_brief: (briefEl?.value || '').trim(),
-        document_id: Number(documentId),
         requirement_scope: scope,
       };
+      if (source === 'document' && documentId) {
+        payload.document_id = Number(documentId);
+      }
       if (scope === 'single') {
         payload.requirement_id = requirementId;
       }
@@ -327,7 +360,9 @@
       }
     });
 
+    sourceEl?.addEventListener('change', toggleSourceUI);
     scopeEl?.addEventListener('change', toggleScopeUI);
+    toggleSourceUI();
     toggleScopeUI();
   })();
 </script>
