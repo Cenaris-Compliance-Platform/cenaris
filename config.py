@@ -113,6 +113,8 @@ class Config:
     AI_POLICY_RATE_LIMIT = os.environ.get('AI_POLICY_RATE_LIMIT') or '10 per minute'
     AI_USAGE_RETENTION_DAYS = int(os.environ.get('AI_USAGE_RETENTION_DAYS') or 90)
     ASSISTANT_CHAT_USE_LLM = (os.environ.get('ASSISTANT_CHAT_USE_LLM') or '1').strip().lower() in {'1', 'true', 'yes', 'on'}
+    ASSISTANT_CHAT_MAX_OUTPUT_TOKENS = int(os.environ.get('ASSISTANT_CHAT_MAX_OUTPUT_TOKENS') or 550)
+    ASSISTANT_CHAT_TEMPERATURE = float(os.environ.get('ASSISTANT_CHAT_TEMPERATURE') or 0.2)
 
     # Azure OpenAI (used when POLICY_DRAFT_USE_LLM=true)
     AZURE_OPENAI_ENDPOINT = os.environ.get('AZURE_OPENAI_ENDPOINT')
@@ -121,6 +123,11 @@ class Config:
     AZURE_OPENAI_CHAT_DEPLOYMENT = os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT')
     AZURE_OPENAI_CHAT_DEPLOYMENT_MINI = os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI')
     AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER = os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER')
+    AZURE_OPENAI_ASSISTANT_DEPLOYMENT = (
+        os.environ.get('AZURE_OPENAI_ASSISTANT_DEPLOYMENT')
+        or os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI')
+        or os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT')
+    )
     AZURE_OPENAI_TIMEOUT_SECONDS = int(os.environ.get('AZURE_OPENAI_TIMEOUT_SECONDS') or 30)
     AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS_TEMPLATE = int(os.environ.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS_TEMPLATE') or 1200)
     AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS_TEMPLATE_PLUS = int(os.environ.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS_TEMPLATE_PLUS') or 2200)
@@ -131,6 +138,7 @@ class Config:
     # Demo provider for fast validation of AI flow (non-production helper)
     OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
     OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
+    OPENROUTER_ASSISTANT_MODEL = os.environ.get('OPENROUTER_ASSISTANT_MODEL') or OPENROUTER_MODEL
     
     # Azure Application Insights (Milestone 2: System Logging)
     APPINSIGHTS_CONNECTION_STRING = os.environ.get('APPLICATIONINSIGHTS_CONNECTION_STRING')
