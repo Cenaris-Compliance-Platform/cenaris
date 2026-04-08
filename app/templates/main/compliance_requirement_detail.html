@@ -127,104 +127,18 @@
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm mb-3" id="policyDraftCard" data-requirement-id="{{ requirement.requirement_id }}">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <h5 class="card-title mb-0">Policy Studio</h5>
-        <button type="button" class="btn btn-outline-success btn-sm" id="generatePolicyDraftBtn">
-          <i class="bi bi-file-earmark-text me-1"></i>Generate
-        </button>
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h5 class="card-title mb-1">Policy Studio</h5>
+        <p class="text-body-secondary mb-0 small">Use the standalone screen to generate one complete policy from linked requirements, or switch to single-requirement mode in Advanced options.</p>
       </div>
-      <p class="text-body-secondary mb-3">Create a smart template first, then expand to a full draft when ready.</p>
-
-      <div class="row g-2 mb-3">
-        <div class="col-md-4">
-          <label for="policyTypeSelect" class="form-label">Policy type</label>
-          <select id="policyTypeSelect" class="form-select">
-            <option value="Incident Management Policy">Incident Management Policy</option>
-            <option value="Risk Management Policy">Risk Management Policy</option>
-            <option value="Complaints Handling Policy">Complaints Handling Policy</option>
-            <option value="Quality and Safeguards Policy">Quality and Safeguards Policy</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label for="policyOutputModeSelect" class="form-label">Output mode</label>
-          <select id="policyOutputModeSelect" class="form-select">
-            <option value="template" selected>Smart Template</option>
-            <option value="template_plus">Template + Sample Wording</option>
-            <option value="full_draft">Full Draft</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label for="policyToneSelect" class="form-label">Tone</label>
-          <select id="policyToneSelect" class="form-select">
-            <option value="Plain-English" selected>Plain-English</option>
-            <option value="Formal">Formal</option>
-            <option value="Operational">Operational</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row g-2 mb-3">
-        <div class="col-md-4">
-          <label for="policyAudienceSelect" class="form-label">Audience</label>
-          <select id="policyAudienceSelect" class="form-select">
-            <option value="Leadership team and frontline workers" selected>Leadership + frontline teams</option>
-            <option value="Frontline workers">Frontline workers</option>
-            <option value="Managers and compliance leads">Managers + compliance leads</option>
-            <option value="Audit and governance reviewers">Audit + governance reviewers</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label for="policyStrictnessSelect" class="form-label">Strictness</label>
-          <select id="policyStrictnessSelect" class="form-select">
-            <option value="Balanced" selected>Balanced</option>
-            <option value="Strict">Strict</option>
-            <option value="Pragmatic">Pragmatic</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label for="policyOrgSizeSelect" class="form-label">Organisation profile</label>
-          <select id="policyOrgSizeSelect" class="form-select">
-            <option value="Small provider" selected>Small provider</option>
-            <option value="Sole trader">Sole trader</option>
-            <option value="Growing provider">Growing provider</option>
-            <option value="Multi-site provider">Multi-site provider</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row g-2 mb-3">
-        <div class="col-md-7">
-          <label for="policyGoalInput" class="form-label">Goal / context</label>
-          <input id="policyGoalInput" class="form-control" placeholder="Optional context for this draft" />
-        </div>
-        <div class="col-md-5">
-          <label for="policyBriefFileInput" class="form-label">Optional brief file (.txt, .md)</label>
-          <input id="policyBriefFileInput" type="file" class="form-control" accept=".txt,.md,text/plain,text/markdown" />
-        </div>
-        <div class="col-12">
-          <label for="policyBriefInput" class="form-label">Extra brief (optional)</label>
-          <textarea id="policyBriefInput" class="form-control" rows="3" placeholder="Paste policy notes, scope limits, owner names, or clauses you want included."></textarea>
-        </div>
-      </div>
-
-      <div class="alert alert-light border small mb-3">
-        Default path: <strong>Smart Template</strong> -> review placeholders -> <strong>Expand to Full Draft</strong>.
-      </div>
-
-      <div id="policyDraftStatus" class="small text-body-secondary mb-2 d-none"></div>
-
-      <div id="policyDraftResult" class="d-none">
-        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-          <label for="policyDraftOutput" class="form-label fw-semibold mb-0">Draft Output</label>
-          <div class="d-flex gap-2">
-            <button type="button" class="btn btn-sm btn-outline-primary" id="expandPolicyDraftBtn">Expand to Full Draft</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="copyPolicyDraftBtn">Copy</button>
-          </div>
-        </div>
-        <textarea id="policyDraftOutput" class="form-control" rows="14" readonly></textarea>
-      </div>
+      <a
+        href="{{ url_for('main.policy_studio', scope='single', requirement_id=requirement_display_code) }}"
+        class="btn btn-outline-success btn-sm"
+      >
+        <i class="bi bi-file-earmark-text me-1"></i>Open Policy Studio
+      </a>
     </div>
   </div>
 
@@ -340,22 +254,6 @@
     const resultEl = document.getElementById('ragExplainResult');
     const answerEl = document.getElementById('ragAnswerText');
     const citationListEl = document.getElementById('ragCitationList');
-    const policyCard = document.getElementById('policyDraftCard');
-    const policyBtn = document.getElementById('generatePolicyDraftBtn');
-    const policyTypeSelect = document.getElementById('policyTypeSelect');
-    const policyOutputModeSelect = document.getElementById('policyOutputModeSelect');
-    const policyAudienceSelect = document.getElementById('policyAudienceSelect');
-    const policyToneSelect = document.getElementById('policyToneSelect');
-    const policyStrictnessSelect = document.getElementById('policyStrictnessSelect');
-    const policyOrgSizeSelect = document.getElementById('policyOrgSizeSelect');
-    const policyGoalInput = document.getElementById('policyGoalInput');
-    const policyBriefInput = document.getElementById('policyBriefInput');
-    const policyBriefFileInput = document.getElementById('policyBriefFileInput');
-    const policyStatusEl = document.getElementById('policyDraftStatus');
-    const policyResultEl = document.getElementById('policyDraftResult');
-    const policyOutputEl = document.getElementById('policyDraftOutput');
-    const expandPolicyDraftBtn = document.getElementById('expandPolicyDraftBtn');
-    const copyPolicyDraftBtn = document.getElementById('copyPolicyDraftBtn');
     const csrfToken = "{{ csrf_token() }}";
 
     if (!card || !runBtn || !queryInput || !statusEl || !resultEl || !answerEl || !citationListEl) {
@@ -446,164 +344,6 @@
         runBtn.disabled = false;
       }
     });
-
-    const setPolicyStatus = (message, isError) => {
-      if (!policyStatusEl) return;
-      policyStatusEl.textContent = message || '';
-      policyStatusEl.classList.remove('d-none', 'text-danger', 'text-body-secondary');
-      policyStatusEl.classList.add(isError ? 'text-danger' : 'text-body-secondary');
-    };
-
-    if (
-      policyCard &&
-      policyBtn &&
-      policyTypeSelect &&
-      policyOutputModeSelect &&
-      policyAudienceSelect &&
-      policyToneSelect &&
-      policyStrictnessSelect &&
-      policyOrgSizeSelect &&
-      policyGoalInput &&
-      policyBriefInput &&
-      policyResultEl &&
-      policyOutputEl
-    ) {
-      const readOptionalBriefFile = async () => {
-        if (!policyBriefFileInput || !policyBriefFileInput.files || policyBriefFileInput.files.length === 0) {
-          return '';
-        }
-
-        const file = policyBriefFileInput.files[0];
-        const maxBytes = 64 * 1024;
-        if (!file || file.size > maxBytes) {
-          throw new Error('Brief file is too large. Keep it below 64KB.');
-        }
-
-        const text = await file.text();
-        return (text || '').trim();
-      };
-
-      const updateGenerateButtonLabel = () => {
-        const mode = (policyOutputModeSelect.value || 'template').trim();
-        if (mode === 'full_draft') {
-          policyBtn.innerHTML = '<i class="bi bi-file-earmark-text me-1"></i>Generate Full Draft';
-          return;
-        }
-        if (mode === 'template_plus') {
-          policyBtn.innerHTML = '<i class="bi bi-file-earmark-text me-1"></i>Generate Template + Samples';
-          return;
-        }
-        policyBtn.innerHTML = '<i class="bi bi-file-earmark-text me-1"></i>Generate Smart Template';
-      };
-
-      const runPolicyGeneration = async (forcedMode) => {
-        const policyType = (policyTypeSelect.value || '').trim();
-        const goal = (policyGoalInput.value || '').trim();
-        const outputMode = (forcedMode || policyOutputModeSelect.value || 'template').trim();
-        const audience = (policyAudienceSelect.value || '').trim();
-        const policyTone = (policyToneSelect.value || '').trim();
-        const strictness = (policyStrictnessSelect.value || '').trim();
-        const organizationSize = (policyOrgSizeSelect.value || '').trim();
-        const manualBrief = (policyBriefInput.value || '').trim();
-
-        if (!policyType) {
-          setPolicyStatus('Please select a policy type.', true);
-          return;
-        }
-
-        let fileBrief = '';
-        try {
-          fileBrief = await readOptionalBriefFile();
-        } catch (err) {
-          setPolicyStatus(err.message || 'Unable to read brief file.', true);
-          return;
-        }
-        const contextBrief = [manualBrief, fileBrief].filter(Boolean).join('\n\n');
-
-        policyBtn.disabled = true;
-        if (expandPolicyDraftBtn) {
-          expandPolicyDraftBtn.disabled = true;
-        }
-        policyResultEl.classList.add('d-none');
-        setPolicyStatus('Generating policy draft…', false);
-
-        try {
-          const response = await fetch("{{ url_for('main.policy_draft_api') }}", {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': csrfToken,
-            },
-            body: JSON.stringify({
-              policy_type: policyType,
-              query: goal || (queryInput ? (queryInput.value || '').trim() : ''),
-              requirement_id: requirementId,
-              top_k: 3,
-              output_mode: outputMode,
-              audience: audience,
-              policy_tone: policyTone,
-              strictness: strictness,
-              organization_size: organizationSize,
-              context_brief: contextBrief,
-            }),
-          });
-
-          const payload = await parseJsonOrThrow(response);
-          if (!response.ok || !payload.success) {
-            throw new Error((payload && payload.error) || 'Policy draft generation failed.');
-          }
-
-          policyOutputEl.value = payload.draft_text || '';
-          policyResultEl.classList.remove('d-none');
-          const modeLabel = outputMode === 'full_draft'
-            ? 'Full draft generated.'
-            : (outputMode === 'template_plus' ? 'Template with sample wording generated.' : 'Smart template generated.');
-          setPolicyStatus(modeLabel + ' Review before use.', false);
-        } catch (err) {
-          setPolicyStatus(err.message || 'Failed to generate policy draft.', true);
-        } finally {
-          policyBtn.disabled = false;
-          if (expandPolicyDraftBtn) {
-            expandPolicyDraftBtn.disabled = false;
-          }
-          updateGenerateButtonLabel();
-        }
-      };
-
-      policyBtn.addEventListener('click', async function () {
-        await runPolicyGeneration();
-      });
-
-      if (policyOutputModeSelect) {
-        policyOutputModeSelect.addEventListener('change', updateGenerateButtonLabel);
-      }
-
-      if (expandPolicyDraftBtn) {
-        expandPolicyDraftBtn.addEventListener('click', async function () {
-          policyOutputModeSelect.value = 'full_draft';
-          updateGenerateButtonLabel();
-          await runPolicyGeneration('full_draft');
-        });
-      }
-
-      if (copyPolicyDraftBtn) {
-        copyPolicyDraftBtn.addEventListener('click', async function () {
-          const text = (policyOutputEl.value || '').trim();
-          if (!text) {
-            setPolicyStatus('Nothing to copy yet. Generate output first.', true);
-            return;
-          }
-          try {
-            await navigator.clipboard.writeText(text);
-            setPolicyStatus('Draft copied to clipboard.', false);
-          } catch (_err) {
-            setPolicyStatus('Copy failed. You can select and copy manually.', true);
-          }
-        });
-      }
-
-      updateGenerateButtonLabel();
-    }
 
     const advancedBucketSelect = document.getElementById('evidence_bucket_advanced');
     const hiddenBucketInput = document.getElementById('evidence_bucket_hidden');
