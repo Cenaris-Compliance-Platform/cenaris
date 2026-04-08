@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h1 class="h3 fw-bold mb-1">Plans & Features (Discussion Draft)</h1>
+        <p class="text-body-secondary mb-0">Table-only preview for client discussion. No plan enforcement is implemented from this page.</p>
+      </div>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th scope="col" style="min-width: 260px;">Capability</th>
+              <th scope="col">Core</th>
+              <th scope="col">Team</th>
+              <th scope="col">Scale</th>
+              <th scope="col">Enterprise</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Clause Mapping</th>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">Evidence Repository</th>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">Gap Analysis</th>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">Task Workflow</th>
+              <td>Not included</td>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">Risk Register</th>
+              <td>Not included</td>
+              <td>Included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">Multi-site Reporting</th>
+              <td>Not included</td>
+              <td>Not included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">AI Tagging</th>
+              <td>Not included</td>
+              <td>Not included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">Regulatory Updates</th>
+              <td>Not included</td>
+              <td>Not included</td>
+              <td>Included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">SSO / API</th>
+              <td>Not included</td>
+              <td>Not included</td>
+              <td>Not included</td>
+              <td>Included</td>
+            </tr>
+            <tr>
+              <th scope="row">Price (monthly)</th>
+              <td>TBA</td>
+              <td>TBA</td>
+              <td>TBA</td>
+              <td>Custom</td>
+            </tr>
+            <tr>
+              <th scope="row">Price (annual, 20% discount)</th>
+              <td>TBA</td>
+              <td>TBA</td>
+              <td>TBA</td>
+              <td>Custom</td>
+            </tr>
+            <tr>
+              <th scope="row">Additional Framework (monthly)</th>
+              <td>TBA</td>
+              <td>TBA</td>
+              <td>TBA</td>
+              <td>Negotiated</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

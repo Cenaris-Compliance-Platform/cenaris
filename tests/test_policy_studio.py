@@ -108,7 +108,23 @@ def test_policy_studio_route_loads(client, app):
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert 'Policy Studio' in body
-    assert 'All linked requirements from selected document' in body
+    assert 'From scratch (recommended)' in body
+
+
+def test_plans_preview_route_loads(client, app):
+    with app.app_context():
+        org = _create_org()
+        _create_admin_user(int(org.id))
+        db.session.commit()
+
+    _login(client)
+    response = client.get('/plans-preview')
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'Plans & Features (Discussion Draft)' in body
+    assert 'Clause Mapping' in body
+    assert 'Enterprise' in body
 
 
 def test_policy_draft_api_supports_document_wide_generation(client, app, monkeypatch):
