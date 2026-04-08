@@ -64,6 +64,11 @@ def _seed_analytics_data(app, org_id: int, user_id: int):
             file_size=1024,
             content_type='application/pdf',
             uploaded_at=now - timedelta(days=12),
+            ai_status='OK',
+            ai_confidence=0.82,
+            ai_question='Does this document demonstrate compliance?',
+            ai_summary='The document includes clear policy statements and implementation records.',
+            ai_analysis_at=now - timedelta(days=2),
             is_active=True,
             uploaded_by=int(user_id),
             organization_id=int(org_id),
@@ -112,6 +117,10 @@ def test_analytics_dashboard_page_loads(client, app, seed_org_user):
     assert response.status_code == 200
     assert b'Analytics Dashboard' in response.data
     assert b'Framework Analytics' in response.data
+    assert b'Analyzed Documents' in response.data
+    assert b'Analyzed Files' in response.data
+    assert b'Analyzed Documents History' in response.data
+    assert b'View details' in response.data
 
 
 def test_analytics_export_xlsx(client, app, seed_org_user):

@@ -1,21 +1,54 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+  .ai-review-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .ai-review-help-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+  }
+
+  .ai-options-toggle {
+    font-size: 0.9rem;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="fade-in">
   <div class="row mb-4">
-    <div class="col-12 d-flex justify-content-between align-items-center">
+    <div class="col-12">
       <div>
-        <h1 class="h3 fw-bold mb-1">AI Review</h1>
+        <div class="ai-review-title-wrap mb-1">
+          <h1 class="h3 fw-bold mb-0">AI Review</h1>
+          <button
+            class="btn btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center ai-review-help-btn"
+            type="button"
+            id="aiReviewHelpBtn"
+            aria-expanded="false"
+            aria-controls="aiReviewHelpPanel"
+            title="AI Review help"
+          >
+            <i class="bi bi-info-lg"></i>
+          </button>
+        </div>
         <p class="text-body-secondary mb-0">Review repository documents in one dedicated AI experience.</p>
       </div>
     </div>
   </div>
 
-  <div class="alert alert-warning alert-permanent border d-flex flex-column gap-1" role="alert">
-    <div class="fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i>Decision-support output</div>
-    <div class="small">
-      Results support review decisions but are not final audit or legal outcomes.
-      Analysis uses documents already uploaded to your repository.
+  <div id="aiReviewHelpPanel" class="collapse mb-3">
+    <div class="alert alert-light border d-flex flex-column gap-1" role="alert">
+      <div class="fw-semibold"><i class="bi bi-info-circle me-1"></i>AI Review guidance</div>
+      <div class="small">Use this for decision support, not final audit/legal decisions.</div>
+      <div class="small"><strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}</div>
+      <div class="small">Reuse saves time for the same document + question.</div>
     </div>
   </div>
 
@@ -53,53 +86,71 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <div class="row g-2 small text-body-secondary">
-        <div class="col-md-4"><strong>Provider:</strong> {{ demo_provider }}</div>
-        <div class="col-md-4"><strong>Model:</strong> {{ demo_model }}</div>
-        <div class="col-md-4"><strong>OpenRouter Key:</strong> {{ 'Configured' if has_openrouter_key else 'Missing (fallback mode)' }}</div>
-      </div>
-      <div class="mt-2 small text-body-secondary">
-        <strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}
-      </div>
-    </div>
-  </div>
-
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body">
       <form id="aiDemoForm" class="row g-3" data-skip-loading="1">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="col-md-5">
           <label for="storedDocId" class="form-label">Repository document</label>
           <select id="storedDocId" name="stored_doc_id" class="form-select" {% if not selected_documents %}disabled{% endif %}>
             {% for document in selected_documents %}
-            <option value="{{ document.id }}" {% if active_doc_id and active_doc_id == document.id %}selected{% elif not active_doc_id and loop.first %}selected{% endif %}>{{ document.filename }}</option>
+            {% set meta = selected_document_meta.get(document.id|string) %}
+            <option value="{{ document.id }}" {% if active_doc_id and active_doc_id == document.id %}selected{% elif not active_doc_id and loop.first %}selected{% endif %}>{{ document.filename }}{% if meta and meta.analyzed %} (Analyzed){% endif %}</option>
             {% endfor %}
           </select>
-          <div class="form-text">Analyzes the selected stored document in this screen.</div>
+          <div class="form-text">Pick one document.</div>
         </div>
         <div class="col-md-7">
           <label for="demoQuestion" class="form-label">Question to AI</label>
-          <textarea id="demoQuestion" name="question" class="form-control" rows="3" placeholder="e.g., Does this document provide enough incident-management evidence for NDIS audit readiness?"></textarea>
-          <div class="mt-2">
-            <label for="demoQuestionPreset" class="form-label small mb-1">Use a common question</label>
-            <select id="demoQuestionPreset" class="form-select form-select-sm">
-              <option value="">Select a sample question...</option>
-              <option value="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident reporting readiness</option>
-              <option value="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Evidence and gap summary</option>
-              <option value="Does this policy clearly assign control owners, review cadence, and monitoring responsibilities?">Governance and ownership check</option>
-              <option value="How well does this document support audit readiness, and what are the top 3 remediation actions?">Audit readiness and actions</option>
-              <option value="Which sections of this document align with participant rights, safeguarding, and quality management obligations?">Participant rights and safeguarding alignment</option>
-            </select>
-          </div>
-          <div class="mt-2 d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident Readiness</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Evidence Gaps</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="How well does this document support audit readiness, and what are the top 3 remediation actions?">Audit Actions</button>
+          <textarea id="demoQuestion" name="question" class="form-control" rows="3" placeholder="e.g., What evidence gaps should I fix first?"></textarea>
+        </div>
+
+        <div class="col-12">
+          <button
+            class="btn btn-sm btn-outline-secondary ai-options-toggle"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#aiReviewOptions"
+            aria-expanded="false"
+            aria-controls="aiReviewOptions"
+          >
+            More options
+          </button>
+        </div>
+
+        <div class="col-12 collapse" id="aiReviewOptions">
+          <div class="border rounded p-3 bg-body-tertiary">
+            <div class="row g-3">
+              <div class="col-md-8">
+                <label for="demoQuestionPreset" class="form-label small mb-1">Common questions</label>
+                <select id="demoQuestionPreset" class="form-select form-select-sm">
+                  <option value="">Select a sample question...</option>
+                  <option value="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident reporting readiness</option>
+                  <option value="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Evidence and gap summary</option>
+                  <option value="Does this policy clearly assign control owners, review cadence, and monitoring responsibilities?">Governance and ownership check</option>
+                  <option value="How well does this document support audit readiness, and what are the top 3 remediation actions?">Audit readiness and actions</option>
+                  <option value="Which sections of this document align with participant rights, safeguarding, and quality management obligations?">Participant rights and safeguarding alignment</option>
+                </select>
+                <div class="mt-2 d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Gaps</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="How well does this document support audit readiness, and what are the top 3 remediation actions?">Actions</button>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="small text-body-secondary mb-2">Mode: <strong>Balanced</strong></div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="1" id="reuseLastResult" name="reuse_last" checked>
+                  <label class="form-check-label small" for="reuseLastResult">Reuse previous result</label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <input type="hidden" name="mode" value="balanced" />
-        <div class="col-12">
-          <div class="small text-body-secondary">Analysis mode: <strong>Balanced</strong></div>
+        <div class="col-12 d-none" id="storedAnalysisHint">
+          <div class="alert alert-info border mb-0 py-2 px-3 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <div class="small" id="storedAnalysisHintText"></div>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="showStoredAnalysisBtn">Show Last Saved Result</button>
+          </div>
         </div>
         <div class="col-12 d-flex gap-2 align-items-center">
           <button id="runDemoBtn" type="submit" class="btn btn-primary" {% if not selected_documents %}disabled{% endif %}>
@@ -139,6 +190,11 @@
 
       <div class="small text-body-secondary mb-3" id="resultDiagnostics"></div>
 
+      <div class="mb-3">
+        <h6 class="fw-semibold mb-2">Analysis Summary</h6>
+        <div id="resultSummaryText" class="small text-body-secondary border rounded p-3 bg-body-tertiary"></div>
+      </div>
+
       <div id="resultWarnings" class="d-flex flex-column gap-2 mb-3"></div>
 
       <div class="mb-3">
@@ -176,6 +232,14 @@
             </div>
           </div>
         </div>
+
+        <div class="mt-3 d-none" id="improvementGuideWrap">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="showImprovementGuideBtn">How can I improve this document?</button>
+          <div class="border rounded p-3 bg-body-tertiary mt-2 d-none" id="improvementGuidePanel">
+            <div class="fw-semibold mb-2">Improvement Guidance</div>
+            <ul class="small text-body-secondary mb-0" id="improvementGuideList"></ul>
+          </div>
+        </div>
       </div>
 
       <div class="row g-3">
@@ -200,6 +264,15 @@
 {% block extra_js %}
 <script>
   (function () {
+    const helpPanel = document.getElementById('aiReviewHelpPanel');
+    const helpBtn = document.getElementById('aiReviewHelpBtn');
+    if (helpPanel && helpBtn && window.bootstrap && window.bootstrap.Collapse) {
+      const collapse = window.bootstrap.Collapse.getOrCreateInstance(helpPanel, { toggle: false });
+      helpBtn.addEventListener('click', function () {
+        collapse.toggle();
+      });
+    }
+
     const form = document.getElementById('aiDemoForm');
     const button = document.getElementById('runDemoBtn');
     const buttonLabel = document.getElementById('runDemoLabel');
@@ -219,9 +292,19 @@
     const checklistGap = document.getElementById('demoChecklistGap');
     const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
     const resultSourceMetaEl = document.getElementById('resultSourceMeta');
+    const resultSummaryEl = document.getElementById('resultSummaryText');
+    const improvementGuideWrap = document.getElementById('improvementGuideWrap');
+    const showImprovementGuideBtn = document.getElementById('showImprovementGuideBtn');
+    const improvementGuidePanel = document.getElementById('improvementGuidePanel');
+    const improvementGuideList = document.getElementById('improvementGuideList');
     const progressWrap = document.getElementById('demoProgressWrap');
     const progressBar = document.getElementById('demoProgressBar');
     const storedDocSelect = document.getElementById('storedDocId');
+    const reuseLastResult = document.getElementById('reuseLastResult');
+    const storedAnalysisHint = document.getElementById('storedAnalysisHint');
+    const storedAnalysisHintText = document.getElementById('storedAnalysisHintText');
+    const showStoredAnalysisBtn = document.getElementById('showStoredAnalysisBtn');
+    const analysisByDoc = {{ selected_document_meta|tojson }};
     const AUTO_START = {{ 'true' if autostart else 'false' }};
     const ACTIVE_DOC_ID = {{ active_doc_id if active_doc_id else 'null' }};
     let progressTimer = null;
@@ -239,23 +322,105 @@
       }
     }
 
+    const getSelectedDocMeta = () => {
+      if (!storedDocSelect) {
+        return null;
+      }
+      const key = String(storedDocSelect.value || '').trim();
+      return analysisByDoc[key] || null;
+    };
+
+    const getIdleButtonLabel = () => {
+      const meta = getSelectedDocMeta();
+      if (meta && meta.analyzed) {
+        return 'Reanalyze Document';
+      }
+      return 'Analyze Document';
+    };
+
+    const getRunningButtonLabel = () => {
+      const meta = getSelectedDocMeta();
+      if (meta && meta.analyzed) {
+        return 'Reanalyzing...';
+      }
+      return 'Analyzing...';
+    };
+
     const renderIdleButton = () => {
+      const label = getIdleButtonLabel();
       if (buttonLabel) {
-        buttonLabel.textContent = 'Analyze Document';
+        buttonLabel.textContent = label;
       } else if (button) {
-        button.textContent = 'Analyze Document';
+        button.textContent = label;
       }
     };
 
     const renderLoadingButton = () => {
+      const label = getRunningButtonLabel();
       if (buttonLabel) {
-        buttonLabel.textContent = 'Analyzing...';
+        buttonLabel.textContent = label;
       } else if (button) {
-        button.textContent = 'Analyzing...';
+        button.textContent = label;
       }
     };
 
     renderIdleButton();
+
+    const formatAnalysisTime = (rawValue) => {
+      const value = String(rawValue || '').trim();
+      if (!value) {
+        return '';
+      }
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) {
+        return '';
+      }
+      return dt.toLocaleString();
+    };
+
+    const clearResultBlocks = () => {
+      resultCard.classList.add('d-none');
+      warningsEl.innerHTML = '';
+      snippetsEl.innerHTML = '';
+      citationsEl.innerHTML = '';
+      checklistTable.innerHTML = '';
+      checklistClear.innerHTML = '';
+      checklistPartial.innerHTML = '';
+      checklistGap.innerHTML = '';
+      if (resultSummaryEl) {
+        resultSummaryEl.textContent = '';
+      }
+      if (resultDiagnosticsEl) {
+        resultDiagnosticsEl.textContent = '';
+      }
+      if (resultSourceMetaEl) {
+        resultSourceMetaEl.textContent = '';
+      }
+      if (improvementGuideWrap) {
+        improvementGuideWrap.classList.add('d-none');
+      }
+      if (improvementGuidePanel) {
+        improvementGuidePanel.classList.add('d-none');
+      }
+      if (improvementGuideList) {
+        improvementGuideList.innerHTML = '';
+      }
+    };
+
+    const appendListItems = (listEl, listItems) => {
+      listEl.innerHTML = '';
+      if (!listItems || listItems.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'None.';
+        listEl.appendChild(li);
+        return;
+      }
+      listItems.forEach(function (item) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        listEl.appendChild(li);
+      });
+    };
 
     const setRunning = (running, text) => {
       requestInFlight = !!running;
@@ -379,6 +544,217 @@
       return div;
     };
 
+    const renderImprovementGuide = (payload) => {
+      if (!improvementGuideWrap || !improvementGuideList) {
+        return;
+      }
+
+      const checklist = (payload.checklist || {});
+      const items = Array.isArray(checklist.items) ? checklist.items : [];
+      const actions = [];
+
+      items.forEach(function (item) {
+        const status = String(item.status || '').toLowerCase();
+        if (!['gap', 'partial'].includes(status)) {
+          return;
+        }
+        const label = String(item.label || 'this area').trim();
+        const note = String(item.note || '').trim();
+        if (note) {
+          actions.push(`Strengthen ${label}: ${note}`);
+        } else {
+          actions.push(`Add clearer evidence for ${label}.`);
+        }
+      });
+
+      const overallStatus = String(payload.status || '').toLowerCase();
+      if (actions.length === 0 && ['ok', 'mature'].includes(overallStatus)) {
+        actions.push('Maintain current evidence quality and keep review dates up to date.');
+        actions.push('Add one implementation example and one recent review record to keep audit readiness strong.');
+      }
+
+      if (actions.length === 0) {
+        actions.push('Add explicit policy scope, owner responsibility, and review frequency in the document.');
+        actions.push('Attach implementation proof such as logs, checklists, or completed records.');
+      }
+
+      improvementGuideList.innerHTML = '';
+      actions.slice(0, 6).forEach(function (actionText) {
+        const li = document.createElement('li');
+        li.textContent = actionText;
+        improvementGuideList.appendChild(li);
+      });
+
+      improvementGuideWrap.classList.remove('d-none');
+      if (improvementGuidePanel) {
+        improvementGuidePanel.classList.add('d-none');
+      }
+    };
+
+    const renderPayload = (payload) => {
+      renderBadge(payload.status);
+      confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
+      const provider = ((payload.meta || {}).provider) || 'deterministic';
+      const model = ((payload.meta || {}).model) || '-';
+      const source = ((payload.meta || {}).source) || 'repository';
+      const filename = ((payload.meta || {}).filename) || 'Untitled document';
+      const cachedResult = Boolean((payload.meta || {}).cached_result);
+      const usedQuestion = ((payload.meta || {}).question || '').trim();
+      const analyzedAtText = formatAnalysisTime((payload.meta || {}).analysis_at);
+      resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
+      if (resultSourceMetaEl) {
+        resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}${usedQuestion ? ` | Question: ${usedQuestion}` : ''}`;
+      }
+      if (resultSummaryEl) {
+        const summaryText = String(payload.summary || '').trim();
+        resultSummaryEl.textContent = summaryText || 'No summary available.';
+      }
+
+      const checklist = (payload.checklist || {});
+      const items = checklist.items || [];
+      items.forEach(function (item) {
+        const row = document.createElement('tr');
+
+        const labelCell = document.createElement('td');
+        labelCell.textContent = item.label || '-';
+        row.appendChild(labelCell);
+
+        const statusCell = document.createElement('td');
+        const badge = document.createElement('span');
+        const status = item.status || 'Gap';
+        badge.className = 'badge';
+        if (status === 'Clear') {
+          badge.classList.add('bg-success');
+        } else if (status === 'Partial') {
+          badge.classList.add('bg-warning', 'text-dark');
+        } else {
+          badge.classList.add('bg-danger');
+        }
+        badge.textContent = status;
+        statusCell.appendChild(badge);
+        row.appendChild(statusCell);
+
+        const noteCell = document.createElement('td');
+        noteCell.textContent = item.note || '-';
+        row.appendChild(noteCell);
+
+        checklistTable.appendChild(row);
+      });
+
+      appendListItems(checklistClear, (checklist.summary || {}).clear || []);
+      appendListItems(checklistPartial, (checklist.summary || {}).partial || []);
+      appendListItems(checklistGap, (checklist.summary || {}).gap || []);
+
+      const warningItems = payload.warning_items || [];
+      if (warningItems.length > 0) {
+        warningItems.forEach(function (item) {
+          const warning = document.createElement('div');
+          warning.className = 'alert alert-warning py-2 px-3 mb-0 small';
+          const sourceLabel = ((item && item.source) || 'system').toUpperCase();
+          const message = (item && item.message) || '';
+          warning.textContent = `[${sourceLabel}] ${message}`;
+          warningsEl.appendChild(warning);
+        });
+      } else {
+        warningsEl.innerHTML = '';
+      }
+
+      const snippets = payload.snippets || [];
+      if (snippets.length === 0) {
+        snippetsEl.appendChild(asCard('No strong evidence snippets found in this file.', { score: 0 }));
+      } else {
+        snippets.forEach(function (item) {
+          snippetsEl.appendChild(asCard(item.text, { score: item.score }));
+        });
+      }
+
+      const citations = payload.citations || [];
+      if (citations.length === 0) {
+        citationsEl.appendChild(asCard('No NDIS citations retrieved.', { score: 0 }));
+      } else {
+        citations.forEach(function (item) {
+          const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'}`;
+          citationsEl.appendChild(asCard(item.text, { score: item.score || 0, meta: meta }));
+        });
+      }
+
+      renderImprovementGuide(payload);
+      resultCard.classList.remove('d-none');
+    };
+
+    const showStoredHint = (meta) => {
+      if (!storedAnalysisHint || !storedAnalysisHintText) {
+        return;
+      }
+      if (!meta || !meta.analyzed) {
+        storedAnalysisHint.classList.add('d-none');
+        storedAnalysisHintText.textContent = '';
+        return;
+      }
+      const whenText = formatAnalysisTime(meta.analysis_at);
+      const status = String(meta.status || 'Unknown').trim() || 'Unknown';
+      const confidence = `${(Number(meta.confidence || 0) * 100).toFixed(0)}%`;
+      storedAnalysisHintText.textContent = `Last saved analysis: ${status} (${confidence})${whenText ? `, ${whenText}` : ''}.`;
+      storedAnalysisHint.classList.remove('d-none');
+    };
+
+    const renderStoredAnalysis = () => {
+      const meta = getSelectedDocMeta();
+      if (!meta || !meta.analyzed) {
+        return;
+      }
+      clearResultBlocks();
+      renderPayload({
+        status: meta.status || 'Unknown',
+        confidence: Number(meta.confidence || 0),
+        summary: meta.summary || '',
+        checklist: meta.checklist || { items: [], summary: { clear: [], partial: [], gap: [] } },
+        snippets: [],
+        citations: [],
+        warning_items: [
+          {
+            source: 'cache',
+            message: 'Showing the last saved analysis. Click Reanalyze Document for a fresh run.',
+          },
+        ],
+        meta: {
+          provider: meta.provider || 'stored',
+          model: meta.model || 'stored',
+          source: 'repository',
+          filename: meta.filename || '',
+          cached_result: true,
+          question: meta.question || '',
+          analysis_at: meta.analysis_at || '',
+        },
+      });
+      statusText.classList.remove('d-none');
+      statusText.textContent = 'Showing last saved analysis.';
+    };
+
+    const onDocumentSelectionChanged = (opts) => {
+      const options = opts || {};
+      const meta = getSelectedDocMeta();
+      renderIdleButton();
+      showStoredHint(meta);
+
+      if (meta && meta.analyzed) {
+        if (reuseLastResult) {
+          reuseLastResult.checked = false;
+        }
+        if (questionInput && !String(questionInput.value || '').trim() && String(meta.question || '').trim()) {
+          questionInput.value = String(meta.question || '').trim();
+        }
+        if (options.showStored !== false) {
+          renderStoredAnalysis();
+        }
+      } else {
+        if (reuseLastResult) {
+          reuseLastResult.checked = true;
+        }
+        clearResultBlocks();
+      }
+    };
+
     if (questionPreset && questionInput) {
       questionPreset.addEventListener('change', function () {
         const selected = (questionPreset.value || '').trim();
@@ -411,14 +787,7 @@
       if (requestInFlight) {
         return;
       }
-      resultCard.classList.add('d-none');
-      warningsEl.innerHTML = '';
-      snippetsEl.innerHTML = '';
-      citationsEl.innerHTML = '';
-      checklistTable.innerHTML = '';
-      checklistClear.innerHTML = '';
-      checklistPartial.innerHTML = '';
-      checklistGap.innerHTML = '';
+      clearResultBlocks();
 
       if (!storedDocSelect || !storedDocSelect.value) {
         setRunning(false, 'Choose a repository document first.');
@@ -455,101 +824,7 @@
           throw new Error((payload && payload.error) || 'Analysis failed');
         }
 
-        renderBadge(payload.status);
-        confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
-        const provider = ((payload.meta || {}).provider) || 'deterministic';
-        const model = ((payload.meta || {}).model) || '-';
-        const source = ((payload.meta || {}).source) || 'repository';
-        const filename = ((payload.meta || {}).filename) || 'Untitled document';
-        resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}`;
-        if (resultSourceMetaEl) {
-          resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}`;
-        }
-
-        const checklist = (payload.checklist || {});
-        const items = checklist.items || [];
-        items.forEach(function (item) {
-          const row = document.createElement('tr');
-
-          const labelCell = document.createElement('td');
-          labelCell.textContent = item.label || '-';
-          row.appendChild(labelCell);
-
-          const statusCell = document.createElement('td');
-          const badge = document.createElement('span');
-          const status = item.status || 'Gap';
-          badge.className = 'badge';
-          if (status === 'Clear') {
-            badge.classList.add('bg-success');
-          } else if (status === 'Partial') {
-            badge.classList.add('bg-warning', 'text-dark');
-          } else {
-            badge.classList.add('bg-danger');
-          }
-          badge.textContent = status;
-          statusCell.appendChild(badge);
-          row.appendChild(statusCell);
-
-          const noteCell = document.createElement('td');
-          noteCell.textContent = item.note || '-';
-          row.appendChild(noteCell);
-
-          checklistTable.appendChild(row);
-        });
-
-        const appendListItems = (listEl, listItems) => {
-          listEl.innerHTML = '';
-          if (!listItems || listItems.length === 0) {
-            const li = document.createElement('li');
-            li.textContent = 'None.';
-            listEl.appendChild(li);
-            return;
-          }
-          listItems.forEach(function (item) {
-            const li = document.createElement('li');
-            li.textContent = item;
-            listEl.appendChild(li);
-          });
-        };
-
-        appendListItems(checklistClear, (checklist.summary || {}).clear || []);
-        appendListItems(checklistPartial, (checklist.summary || {}).partial || []);
-        appendListItems(checklistGap, (checklist.summary || {}).gap || []);
-
-        const warningItems = payload.warning_items || [];
-        if (warningItems.length > 0) {
-          warningItems.forEach(function (item) {
-            const warning = document.createElement('div');
-            warning.className = 'alert alert-warning py-2 px-3 mb-0 small';
-            const source = ((item && item.source) || 'system').toUpperCase();
-            const message = (item && item.message) || '';
-            warning.textContent = `[${source}] ${message}`;
-            warningsEl.appendChild(warning);
-          });
-        } else {
-          warningsEl.innerHTML = '';
-        }
-
-        const snippets = payload.snippets || [];
-        if (snippets.length === 0) {
-          snippetsEl.appendChild(asCard('No strong evidence snippets found in this file.', { score: 0 }));
-        } else {
-          snippets.forEach(function (item) {
-            snippetsEl.appendChild(asCard(item.text, { score: item.score }));
-          });
-        }
-
-        const citations = payload.citations || [];
-        if (citations.length === 0) {
-          citationsEl.appendChild(asCard('No NDIS citations retrieved.', { score: 0 }));
-        } else {
-          citations.forEach(function (item) {
-            const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'}`;
-            citationsEl.appendChild(asCard(item.text, { score: item.score || 0, meta: meta }));
-          });
-        }
-
-        resultCard.classList.remove('d-none');
+        renderPayload(payload);
         resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         setRunning(false, 'Done.');
       } catch (error) {
@@ -567,6 +842,26 @@
         form.dispatchEvent(new Event('submit', { cancelable: true }));
       }, 200);
     }
+
+    if (storedDocSelect) {
+      storedDocSelect.addEventListener('change', function () {
+        onDocumentSelectionChanged({ showStored: true });
+      });
+    }
+
+    if (showStoredAnalysisBtn) {
+      showStoredAnalysisBtn.addEventListener('click', function () {
+        renderStoredAnalysis();
+      });
+    }
+
+    if (showImprovementGuideBtn && improvementGuidePanel) {
+      showImprovementGuideBtn.addEventListener('click', function () {
+        improvementGuidePanel.classList.toggle('d-none');
+      });
+    }
+
+    onDocumentSelectionChanged({ showStored: true });
 
     window.addEventListener('pagehide', function () {
       forceResetUi();

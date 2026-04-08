@@ -13,9 +13,6 @@
           <a href="{{ url_for('main.org_admin_dashboard') }}" class="btn btn-outline-primary">
             <i class="bi bi-people me-2"></i>Team Management
           </a>
-          <a href="{{ url_for('main.organization_ai_controls') }}" class="btn btn-outline-secondary ms-2">
-            <i class="bi bi-sliders me-2"></i>AI Controls
-          </a>
         </div>
       </div>
     </div>
@@ -171,6 +168,22 @@
     </div>
 
     <div class="col-lg-4 mt-4 mt-lg-0">
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-table me-2 text-primary"></i>Plans & Features
+          </h5>
+        </div>
+        <div class="card-body p-4">
+          <p class="text-body-secondary mb-3">
+            Open the client discussion table for plan packaging and feature comparison.
+          </p>
+          <a href="{{ url_for('main.plans_preview') }}" class="btn btn-outline-primary w-100">
+            <i class="bi bi-layout-text-window-reverse me-2"></i>Open Plans Table
+          </a>
+        </div>
+      </div>
+
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">

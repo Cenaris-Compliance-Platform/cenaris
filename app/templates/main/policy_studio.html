@@ -1,0 +1,431 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h1 class="h3 fw-bold mb-1">Policy Studio</h1>
+        <p class="text-body-secondary mb-0">Create a full policy from scratch with clean structure and formatting. Uploaded-document context is optional.</p>
+      </div>
+      <a href="{{ url_for('main.compliance_requirements') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-list-check me-1"></i>Back to Requirements
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form id="policyStudioForm" class="row g-3">
+        <input type="hidden" id="policyStudioCsrf" value="{{ csrf_token() }}" />
+
+        <div class="col-md-4">
+          <label for="policyStudioSource" class="form-label">Generation source</label>
+          <select id="policyStudioSource" class="form-select">
+            <option value="scratch" {% if prefill_source != 'document' %}selected{% endif %}>From scratch (recommended)</option>
+            <option value="document" {% if prefill_source == 'document' %}selected{% endif %}>Use uploaded document context</option>
+          </select>
+          <div class="form-text">Use document context only when you intentionally want policy content grounded in one uploaded file.</div>
+        </div>
+
+        <div class="col-md-4">
+          <label for="policyStudioType" class="form-label">Policy type</label>
+          <select id="policyStudioType" class="form-select">
+            <option value="Incident Management Policy">Incident Management Policy</option>
+            <option value="Risk Management Policy">Risk Management Policy</option>
+            <option value="Participant Safeguarding Policy">Participant Safeguarding Policy</option>
+            <option value="Workforce Screening and Training Policy">Workforce Screening and Training Policy</option>
+            <option value="Service Delivery Governance Policy">Service Delivery Governance Policy</option>
+            <option value="Quality and Safeguards Policy">Quality and Safeguards Policy</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label for="policyStudioOutputMode" class="form-label">Output mode</label>
+          <select id="policyStudioOutputMode" class="form-select">
+            <option value="template">Smart Template</option>
+            <option value="template_plus">Template + Sample Wording</option>
+            <option value="full_draft" selected>Full Draft</option>
+          </select>
+        </div>
+
+        <div class="col-md-6 {% if prefill_source != 'document' %}d-none{% endif %}" id="policyStudioDocumentWrap">
+          <label for="policyStudioDocument" class="form-label">Evidence document context</label>
+          <select id="policyStudioDocument" class="form-select">
+            <option value="">Select document...</option>
+            {% for document in documents %}
+            <option value="{{ document.id }}" {% if prefill_document_id and prefill_document_id == document.id %}selected{% endif %}>{{ document.filename }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Only required if generation source is set to uploaded document context.</div>
+        </div>
+
+        <div class="col-12">
+          <div class="alert alert-light border py-2 px-3 small mb-0">
+            <strong>Default:</strong> one full, formatted policy draft generated from scratch.
+          </div>
+        </div>
+
+        <div class="col-12">
+          <button
+            class="btn btn-sm btn-outline-secondary"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#policyStudioAdvanced"
+            aria-expanded="{% if prefill_scope == 'single' or prefill_requirement %}true{% else %}false{% endif %}"
+            aria-controls="policyStudioAdvanced"
+          >
+            Advanced options
+          </button>
+        </div>
+
+        <div class="col-12 collapse {% if prefill_scope == 'single' or prefill_requirement %}show{% endif %}" id="policyStudioAdvanced">
+          <div class="border rounded p-3 bg-body-tertiary">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label for="policyStudioScope" class="form-label">Requirement scope</label>
+                <select id="policyStudioScope" class="form-select">
+                  <option value="linked" {% if prefill_scope != 'single' %}selected{% endif %}>{% if prefill_source == 'document' %}All linked requirements from selected document{% else %}Comprehensive coverage (from scratch){% endif %}</option>
+                  <option value="single" {% if prefill_scope == 'single' %}selected{% endif %}>Single requirement only</option>
+                </select>
+              </div>
+
+              <div class="col-md-6 d-none" id="policyStudioRequirementWrap">
+                <label for="policyStudioRequirement" class="form-label">Requirement (single mode)</label>
+                <select id="policyStudioRequirement" class="form-select">
+                  <option value="">Select requirement...</option>
+                  {% for option in requirement_options %}
+                  <option value="{{ option.value }}" {% if prefill_requirement and prefill_requirement == option.value %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-3">
+                <label for="policyStudioTone" class="form-label">Tone</label>
+                <select id="policyStudioTone" class="form-select">
+                  <option value="Plain-English" selected>Plain-English</option>
+                  <option value="Formal">Formal</option>
+                  <option value="Operational">Operational</option>
+                </select>
+              </div>
+
+              <div class="col-md-3">
+                <label for="policyStudioAudience" class="form-label">Audience</label>
+                <select id="policyStudioAudience" class="form-select">
+                  <option value="Leadership team and frontline workers" selected>Leadership + frontline teams</option>
+                  <option value="Frontline workers">Frontline workers</option>
+                  <option value="Managers and compliance leads">Managers + compliance leads</option>
+                  <option value="Audit and governance reviewers">Audit + governance reviewers</option>
+                </select>
+              </div>
+
+              <div class="col-md-3">
+                <label for="policyStudioStrictness" class="form-label">Strictness</label>
+                <select id="policyStudioStrictness" class="form-select">
+                  <option value="Balanced" selected>Balanced</option>
+                  <option value="Strict">Strict</option>
+                  <option value="Pragmatic">Pragmatic</option>
+                </select>
+              </div>
+
+              <div class="col-md-3">
+                <label for="policyStudioOrgSize" class="form-label">Organisation profile</label>
+                <select id="policyStudioOrgSize" class="form-select">
+                  <option value="Small provider" selected>Small provider</option>
+                  <option value="Sole trader">Sole trader</option>
+                  <option value="Growing provider">Growing provider</option>
+                  <option value="Multi-site provider">Multi-site provider</option>
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label for="policyStudioGoal" class="form-label">Goal / context (optional)</label>
+                <input id="policyStudioGoal" class="form-control" placeholder="e.g., Build a complete incident policy with clear escalation and review cadence" />
+              </div>
+
+              <div class="col-12">
+                <label for="policyStudioBrief" class="form-label">Extra brief (optional)</label>
+                <textarea id="policyStudioBrief" rows="3" class="form-control" placeholder="Add organisation-specific details, owner roles, exclusions, or wording constraints."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 d-flex align-items-center gap-2 flex-wrap">
+          <button type="submit" class="btn btn-primary" id="policyStudioGenerateBtn">
+            <i class="bi bi-file-earmark-text me-1"></i>Generate Policy
+          </button>
+          <button type="button" class="btn btn-outline-primary d-none" id="policyStudioExpandBtn">Expand to Full Draft</button>
+          <button type="button" class="btn btn-outline-success d-none" id="policyStudioWordBtn">
+            <i class="bi bi-file-earmark-word me-1"></i>Download Word
+          </button>
+          <button type="button" class="btn btn-outline-secondary d-none" id="policyStudioCopyBtn">Copy</button>
+          <span class="small text-body-secondary" id="policyStudioStatus"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm d-none" id="policyStudioResultCard">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+        <h5 class="card-title mb-0">Generated Draft</h5>
+        <div class="small text-body-secondary" id="policyStudioMeta"></div>
+      </div>
+      <div class="alert alert-light border py-2 px-3 small mb-3" id="policyStudioWarnings"></div>
+      <textarea id="policyStudioOutput" class="form-control" rows="18" readonly></textarea>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const form = document.getElementById('policyStudioForm');
+    const statusEl = document.getElementById('policyStudioStatus');
+    const resultCard = document.getElementById('policyStudioResultCard');
+    const outputEl = document.getElementById('policyStudioOutput');
+    const metaEl = document.getElementById('policyStudioMeta');
+    const warningsEl = document.getElementById('policyStudioWarnings');
+
+    const sourceEl = document.getElementById('policyStudioSource');
+    const documentWrap = document.getElementById('policyStudioDocumentWrap');
+    const documentEl = document.getElementById('policyStudioDocument');
+    const scopeEl = document.getElementById('policyStudioScope');
+    const requirementWrap = document.getElementById('policyStudioRequirementWrap');
+    const requirementEl = document.getElementById('policyStudioRequirement');
+
+    const typeEl = document.getElementById('policyStudioType');
+    const modeEl = document.getElementById('policyStudioOutputMode');
+    const toneEl = document.getElementById('policyStudioTone');
+    const audienceEl = document.getElementById('policyStudioAudience');
+    const strictnessEl = document.getElementById('policyStudioStrictness');
+    const orgSizeEl = document.getElementById('policyStudioOrgSize');
+    const goalEl = document.getElementById('policyStudioGoal');
+    const briefEl = document.getElementById('policyStudioBrief');
+
+    const generateBtn = document.getElementById('policyStudioGenerateBtn');
+    const expandBtn = document.getElementById('policyStudioExpandBtn');
+    const wordBtn = document.getElementById('policyStudioWordBtn');
+    const copyBtn = document.getElementById('policyStudioCopyBtn');
+    const csrfToken = document.getElementById('policyStudioCsrf')?.value || '';
+
+    let lastPayload = null;
+
+    const setStatus = (msg, isError) => {
+      if (!statusEl) return;
+      statusEl.textContent = msg || '';
+      statusEl.classList.remove('text-danger', 'text-body-secondary');
+      statusEl.classList.add(isError ? 'text-danger' : 'text-body-secondary');
+    };
+
+    const toggleSourceUI = () => {
+      const source = (sourceEl?.value || 'scratch').trim();
+      const useDocument = source === 'document';
+      if (documentWrap) {
+        documentWrap.classList.toggle('d-none', !useDocument);
+      }
+      if (!useDocument && documentEl) {
+        documentEl.value = '';
+      }
+      if (scopeEl) {
+        const linkedOption = scopeEl.querySelector('option[value="linked"]');
+        if (linkedOption) {
+          linkedOption.textContent = useDocument
+            ? 'All linked requirements from selected document'
+            : 'Comprehensive coverage (from scratch)';
+        }
+      }
+    };
+
+    const toggleScopeUI = () => {
+      const scope = (scopeEl?.value || 'linked').trim();
+      if (!requirementWrap) return;
+      requirementWrap.classList.toggle('d-none', scope !== 'single');
+    };
+
+    const setBusy = (busy) => {
+      if (generateBtn) generateBtn.disabled = busy;
+      if (expandBtn) expandBtn.disabled = busy;
+      if (wordBtn) wordBtn.disabled = busy;
+      if (copyBtn) copyBtn.disabled = busy;
+    };
+
+    const runGeneration = async (forcedMode) => {
+      const source = (sourceEl?.value || 'scratch').trim();
+      const scope = (scopeEl?.value || 'linked').trim();
+      const documentId = (documentEl?.value || '').trim();
+      const requirementId = (requirementEl?.value || '').trim();
+
+      if (!typeEl?.value) {
+        setStatus('Please choose a policy type.', true);
+        return;
+      }
+      if (source === 'document' && !documentId) {
+        setStatus('Please select an evidence document when using document context.', true);
+        return;
+      }
+      if (scope === 'single' && !requirementId) {
+        setStatus('Select a requirement for single mode.', true);
+        return;
+      }
+
+      const payload = {
+        policy_type: (typeEl.value || '').trim(),
+        output_mode: (forcedMode || modeEl?.value || 'full_draft').trim(),
+        audience: (audienceEl?.value || '').trim(),
+        policy_tone: (toneEl?.value || '').trim(),
+        strictness: (strictnessEl?.value || '').trim(),
+        organization_size: (orgSizeEl?.value || '').trim(),
+        query: (goalEl?.value || '').trim(),
+        context_brief: (briefEl?.value || '').trim(),
+        requirement_scope: scope,
+      };
+      if (source === 'document' && documentId) {
+        payload.document_id = Number(documentId);
+      }
+      if (scope === 'single') {
+        payload.requirement_id = requirementId;
+      }
+
+      lastPayload = payload;
+      setBusy(true);
+      resultCard?.classList.add('d-none');
+      setStatus('Generating draft...', false);
+
+      try {
+        const response = await fetch("{{ url_for('main.policy_draft_api') }}", {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+            'X-CSRF-Token': csrfToken,
+            'X-Requested-With': 'fetch',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.error || 'Failed to generate policy draft.');
+        }
+
+        if (outputEl) {
+          outputEl.value = data.draft_text || '';
+        }
+        if (metaEl) {
+          const llm = data.llm || {};
+          metaEl.textContent = `mode: ${data.draft_mode || 'deterministic'} | model: ${llm.model || 'deterministic'}`;
+        }
+        if (warningsEl) {
+          const warnings = data.warnings || [];
+          if (warnings.length) {
+            warningsEl.textContent = warnings.join(' ');
+            warningsEl.classList.remove('d-none');
+          } else {
+            warningsEl.textContent = '';
+            warningsEl.classList.add('d-none');
+          }
+        }
+        resultCard?.classList.remove('d-none');
+        expandBtn?.classList.remove('d-none');
+        wordBtn?.classList.remove('d-none');
+        copyBtn?.classList.remove('d-none');
+        setStatus('Draft generated. Review before use.', false);
+      } catch (err) {
+        setStatus(err?.message || 'Failed to generate draft.', true);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await runGeneration();
+    });
+
+    expandBtn?.addEventListener('click', async () => {
+      if (!lastPayload) return;
+      if (modeEl) modeEl.value = 'full_draft';
+      await runGeneration('full_draft');
+    });
+
+    copyBtn?.addEventListener('click', async () => {
+      const text = (outputEl?.value || '').trim();
+      if (!text) {
+        setStatus('Nothing to copy yet.', true);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus('Draft copied to clipboard.', false);
+      } catch (_err) {
+        setStatus('Copy failed. Please copy manually.', true);
+      }
+    });
+
+    wordBtn?.addEventListener('click', async () => {
+      const draftText = (outputEl?.value || '').trim();
+      if (!draftText) {
+        setStatus('Generate a draft before downloading Word.', true);
+        return;
+      }
+
+      setBusy(true);
+      setStatus('Preparing Word document...', false);
+
+      try {
+        const response = await fetch("{{ url_for('main.policy_export_docx_api') }}", {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+            'X-CSRF-Token': csrfToken,
+            'X-Requested-With': 'fetch',
+            'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/json',
+          },
+          body: JSON.stringify({
+            policy_type: (typeEl?.value || 'Policy Draft').trim(),
+            draft_text: draftText,
+          }),
+        });
+
+        if (!response.ok) {
+          let message = 'Failed to export Word document.';
+          try {
+            const errPayload = await response.json();
+            message = errPayload?.error || message;
+          } catch (_ignore) {
+            // Ignore non-JSON error payloads.
+          }
+          throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        const safeName = ((typeEl?.value || 'policy-draft').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'policy-draft');
+        anchor.href = blobUrl;
+        anchor.download = `${safeName}.docx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(blobUrl);
+        setStatus('Word document downloaded.', false);
+      } catch (err) {
+        setStatus(err?.message || 'Failed to download Word document.', true);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    sourceEl?.addEventListener('change', toggleSourceUI);
+    scopeEl?.addEventListener('change', toggleScopeUI);
+    toggleSourceUI();
+    toggleScopeUI();
+  })();
+</script>
+{% endblock %}

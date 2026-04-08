@@ -205,49 +205,52 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db)
     
-    # Initialize logging system (Milestone 2)
-    from app.services.logging_service import app_logger
-    app_logger.init_app(app)
-    
-    # Initialize enhanced monitoring service (System Monitoring)
-    from app.services.monitoring_service import monitoring_service
-    monitoring_service.init_app(app)
+    # Initialize telemetry only outside tests to avoid early DB engine binding.
+    if not app.config.get('TESTING'):
+        # Initialize logging system (Milestone 2)
+        from app.services.logging_service import app_logger
+        app_logger.init_app(app)
+
+        # Initialize enhanced monitoring service (System Monitoring)
+        from app.services.monitoring_service import monitoring_service
+        monitoring_service.init_app(app)
 
     # ---- Optional SQL performance instrumentation ----
     # This is extremely useful for diagnosing 2-3s page loads (DB vs template vs network).
     # It is lightweight, but we still keep it "quiet" unless PERF_SQL_LOG=1 or the request is slow.
-    try:
-        from sqlalchemy import event
+    if not app.config.get('TESTING'):
+        try:
+            from sqlalchemy import event
 
-        if not getattr(app, '_perf_sql_listeners_installed', False):
-            with app.app_context():
-                engine = db.engine
+            if not getattr(app, '_perf_sql_listeners_installed', False):
+                with app.app_context():
+                    engine = db.engine
 
-            @event.listens_for(engine, 'before_cursor_execute')
-            def _perf_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-                try:
-                    conn.info['__perf_query_start_time'] = time.perf_counter()
-                except Exception:
-                    pass
+                @event.listens_for(engine, 'before_cursor_execute')
+                def _perf_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+                    try:
+                        conn.info['__perf_query_start_time'] = time.perf_counter()
+                    except Exception:
+                        pass
 
-            @event.listens_for(engine, 'after_cursor_execute')
-            def _perf_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-                try:
-                    start = conn.info.pop('__perf_query_start_time', None)
-                    if start is None:
-                        return
-                    duration = time.perf_counter() - float(start)
-                    # Only count if we're in a request context.
-                    with contextlib.suppress(Exception):
-                        g.sql_query_count = int(getattr(g, 'sql_query_count', 0) or 0) + 1
-                        g.sql_query_time_s = float(getattr(g, 'sql_query_time_s', 0.0) or 0.0) + float(duration)
-                except Exception:
-                    pass
+                @event.listens_for(engine, 'after_cursor_execute')
+                def _perf_after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+                    try:
+                        start = conn.info.pop('__perf_query_start_time', None)
+                        if start is None:
+                            return
+                        duration = time.perf_counter() - float(start)
+                        # Only count if we're in a request context.
+                        with contextlib.suppress(Exception):
+                            g.sql_query_count = int(getattr(g, 'sql_query_count', 0) or 0) + 1
+                            g.sql_query_time_s = float(getattr(g, 'sql_query_time_s', 0.0) or 0.0) + float(duration)
+                    except Exception:
+                        pass
 
-            app._perf_sql_listeners_installed = True
-    except Exception:
-        # Don't ever break app startup due to perf tooling.
-        pass
+                app._perf_sql_listeners_installed = True
+        except Exception:
+            # Don't ever break app startup due to perf tooling.
+            pass
 
     # Initialize OAuth + Mail
     oauth.init_app(app)

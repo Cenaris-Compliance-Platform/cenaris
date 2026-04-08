@@ -19,6 +19,8 @@ class AzurePolicyDraftResponse:
 class AzureOpenAIPolicyService:
     """Generate policy drafts from Azure OpenAI chat completions."""
 
+    _VALID_OUTPUT_MODES = {'template', 'template_plus', 'full_draft'}
+
     @staticmethod
     def is_configured(config: dict[str, Any]) -> bool:
         return bool(
@@ -31,15 +33,30 @@ class AzureOpenAIPolicyService:
         )
 
     @staticmethod
-    def select_deployment(config: dict[str, Any]) -> str:
-        ai_env = (config.get('AI_ENVIRONMENT') or 'development').strip().lower()
+    def select_deployment(config: dict[str, Any], *, output_mode: str) -> str:
         mini = (config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI') or '').strip()
         writer = (config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER') or '').strip()
         legacy = (config.get('AZURE_OPENAI_CHAT_DEPLOYMENT') or '').strip()
 
-        if ai_env != 'production':
-            return mini or writer or legacy
-        return writer or mini or legacy
+        mode = (output_mode or 'full_draft').strip().lower()
+        if mode == 'full_draft':
+            return writer or mini or legacy
+        return mini or writer or legacy
+
+    @staticmethod
+    def select_max_output_tokens(config: dict[str, Any], *, output_mode: str) -> int:
+        mode = (output_mode or 'full_draft').strip().lower()
+        if mode == 'template':
+            value = int(config.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS_TEMPLATE') or 1200)
+        elif mode == 'template_plus':
+            value = int(config.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS_TEMPLATE_PLUS') or 2200)
+        elif mode == 'full_draft':
+            value = int(config.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS_FULL_DRAFT') or 3800)
+        else:
+            value = int(config.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS') or 1400)
+
+        # Keep a hard guardrail to avoid excessive output spend in one call.
+        return max(256, min(value, 4500))
 
     @staticmethod
     def _read_prompt_excerpt(prompt_path: str | None) -> str:
@@ -64,16 +81,33 @@ class AzureOpenAIPolicyService:
         user_goal: str,
         citations: list[dict],
         prompt_path: str | None,
+        output_mode: str = 'full_draft',
+        audience: str = 'Leadership team and frontline workers',
+        policy_tone: str = 'Plain-English',
+        strictness: str = 'Balanced',
+        organization_size: str = 'Small provider',
+        context_brief: str = '',
     ) -> AzurePolicyDraftResponse:
         endpoint = (config.get('AZURE_OPENAI_ENDPOINT') or '').strip().rstrip('/')
         api_key = (config.get('AZURE_OPENAI_API_KEY') or '').strip()
-        deployment = self.select_deployment(config)
         api_version = (config.get('AZURE_OPENAI_API_VERSION') or '2024-10-21').strip()
         timeout_seconds = int(config.get('AZURE_OPENAI_TIMEOUT_SECONDS') or 30)
-        max_output_tokens = int(config.get('AZURE_OPENAI_POLICY_MAX_OUTPUT_TOKENS') or 1400)
+
+        output_mode = (output_mode or 'full_draft').strip().lower()
+        if output_mode not in self._VALID_OUTPUT_MODES:
+            output_mode = 'full_draft'
+
+        deployment = self.select_deployment(config, output_mode=output_mode)
+        max_output_tokens = self.select_max_output_tokens(config, output_mode=output_mode)
 
         if not endpoint or not api_key or not deployment:
             raise RuntimeError('Azure OpenAI is not fully configured')
+
+        audience = (audience or 'Leadership team and frontline workers').strip()
+        policy_tone = (policy_tone or 'Plain-English').strip()
+        strictness = (strictness or 'Balanced').strip()
+        organization_size = (organization_size or 'Small provider').strip()
+        context_brief = (context_brief or '').strip()
 
         url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
 
@@ -105,9 +139,18 @@ class AzureOpenAIPolicyService:
             f"Policy type: {policy_type}\n"
             f"Organisation: {organization_name}\n"
             f"Requirement reference: {requirement_id or 'N/A'}\n"
+            f"Output mode: {output_mode}\n"
+            f"Audience: {audience}\n"
+            f"Tone: {policy_tone}\n"
+            f"Strictness: {strictness}\n"
+            f"Organisation size profile: {organization_size}\n"
             f"User goal/context: {user_goal or 'N/A'}\n\n"
+            f"Context brief (optional): {context_brief or 'N/A'}\n\n"
             f"Citations:\n" + ('\n'.join(citation_lines) if citation_lines else 'No citations available.') +
-            "\n\nReturn JSON with keys draft_text and disclaimer only. "
+            "\n\nIf output mode is template, produce a structured fill-in template with placeholders. "
+            "If output mode is template_plus, produce template sections with sample wording. "
+            "If output mode is full_draft, produce full policy prose with clear sections. "
+            "Return JSON with keys draft_text and disclaimer only. "
             "Use this disclaimer verbatim: "
             "'Draft generated for compliance support only. This is not legal advice or certification. A qualified reviewer must approve before use.'"
         )

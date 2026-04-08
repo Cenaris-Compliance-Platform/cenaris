@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <style>
+    .plans-matrix {
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.98rem;
+    }
+
+    .plans-matrix th,
+    .plans-matrix td {
+      border: 1px solid var(--bs-border-color);
+      vertical-align: middle;
+      padding: 0.6rem 0.55rem;
+    }
+
+    .plans-matrix .cap-col {
+      min-width: 260px;
+      font-weight: 700;
+      background: var(--bs-body-bg);
+    }
+
+    .plans-matrix .tier-core {
+      background: #dce8f8;
+    }
+
+    .plans-matrix .tier-team {
+      background: #d9efe0;
+    }
+
+    .plans-matrix .tier-scale {
+      background: #e4dcf8;
+    }
+
+    .plans-matrix .tier-enterprise {
+      background: #f5dce3;
+    }
+
+    .plans-matrix .explain-col {
+      min-width: 120px;
+      background: var(--bs-body-bg);
+      text-align: center;
+    }
+
+    .plans-matrix .section-row th {
+      background: #f4f4f4;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-size: 0.8rem;
+      color: var(--bs-secondary-color);
+    }
+
+    .plans-matrix .icon-cell {
+      text-align: center;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .plans-matrix .status-on {
+      color: #14753b;
+    }
+
+    .plans-matrix .status-off {
+      color: #a53a49;
+    }
+  </style>
+
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h1 class="h3 fw-bold mb-1">Plans & Features (Discussion Draft)</h1>
+        <p class="text-body-secondary mb-0">Table-only preview for client discussion. No plan enforcement is implemented from this page.</p>
+      </div>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0 plans-matrix">
+          <thead>
+            <tr>
+              <th scope="col" class="cap-col">Pricing</th>
+              <th scope="col" class="tier-core text-center">Tier 1: Core</th>
+              <th scope="col" class="tier-team text-center">Tier 2: Team</th>
+              <th scope="col" class="tier-scale text-center">Tier 3: Scale</th>
+              <th scope="col" class="tier-enterprise text-center">Tier 4: Enterprise</th>
+              <th scope="col" class="explain-col">Explain</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="section-row">
+              <th colspan="6">Pricing</th>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Monthly Subscription Price</th>
+              <td class="tier-core">TBA</td>
+              <td class="tier-team">TBA</td>
+              <td class="tier-scale">TBA</td>
+              <td class="tier-enterprise">Custom</td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="price_monthly">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Annual Subscription Price (20% discount)</th>
+              <td class="tier-core">TBA</td>
+              <td class="tier-team">TBA</td>
+              <td class="tier-scale">TBA</td>
+              <td class="tier-enterprise">Custom</td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="price_annual">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Additional Framework (Monthly)</th>
+              <td class="tier-core">TBA</td>
+              <td class="tier-team">TBA</td>
+              <td class="tier-scale">TBA</td>
+              <td class="tier-enterprise">Negotiated</td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="additional_framework">Explain</button>
+              </td>
+            </tr>
+
+            <tr class="section-row">
+              <th colspan="6">Inclusions</th>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Clause Mapping</th>
+              <td class="tier-core icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="clause_mapping">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Evidence Repository</th>
+              <td class="tier-core icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="evidence_repository">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Gap Analysis</th>
+              <td class="tier-core icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="gap_analysis">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Task Workflow</th>
+              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="task_workflow">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Risk Register</th>
+              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="risk_register">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Multi-site Reporting</th>
+              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="multi_site_reporting">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">AI Tagging</th>
+              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="ai_tagging">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">Regulatory Updates</th>
+              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="regulatory_updates">Explain</button>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" class="cap-col">SSO / API</th>
+              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-team icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-scale icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
+              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
+              <td class="explain-col">
+                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="sso_api">Explain</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mt-4" id="planExplainCard">
+    <div class="card-body">
+      <h5 class="card-title mb-2" id="planExplainTitle">Click any Explain button</h5>
+      <p class="text-body-secondary mb-0" id="planExplainText">
+        You will see a practical explanation here for that capability and what each plan level means.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const details = {
+      clause_mapping: {
+        title: 'Clause Mapping',
+        text: 'Maps uploaded evidence and controls to framework clauses so teams can see what is covered and what still needs action. In all plans, this remains the baseline compliance view.'
+      },
+      evidence_repository: {
+        title: 'Evidence Repository',
+        text: 'Central place to store and organize files used for audits and internal reviews. Included across all plans so every customer has one source of truth for compliance artifacts.'
+      },
+      gap_analysis: {
+        title: 'Gap Analysis',
+        text: 'Highlights missing controls and weak evidence areas against selected requirements. Included in all plans because it is core to understanding current readiness.'
+      },
+      task_workflow: {
+        title: 'Task Workflow',
+        text: 'Adds assignable remediation tasks, owners, due dates, and completion tracking. Starts from Team plan because it supports collaboration and operational follow-through.'
+      },
+      risk_register: {
+        title: 'Risk Register',
+        text: 'Tracks identified compliance risks, severity, mitigation actions, and residual risk over time. Starts from Team plan to support governance and accountability.'
+      },
+      multi_site_reporting: {
+        title: 'Multi-site Reporting',
+        text: 'Consolidates reporting across multiple business units, locations, or entities. Starts from Scale plan where cross-site visibility and aggregation become critical.'
+      },
+      ai_tagging: {
+        title: 'AI Tagging',
+        text: 'Automatically labels and classifies evidence to speed mapping and review cycles. Included from Scale upward to align with higher-volume operations.'
+      },
+      regulatory_updates: {
+        title: 'Regulatory Updates',
+        text: 'Delivers update signals when standards, obligations, or interpretations change. Included from Scale upward for organizations that need proactive change management.'
+      },
+      sso_api: {
+        title: 'SSO / API',
+        text: 'Enterprise identity integration and API access for IT-managed workflows and system-to-system automation. Reserved for Enterprise where security and integration requirements are highest.'
+      },
+      price_monthly: {
+        title: 'Price (monthly)',
+        text: 'Shown as TBA while packaging is being finalized with clients. Enterprise remains custom because scope, seats, and integrations typically vary by contract.'
+      },
+      price_annual: {
+        title: 'Price (annual, 20% discount)',
+        text: 'Annual pricing is intended to reward longer commitments with a discount relative to monthly billing, while still following the same feature boundaries per plan.'
+      },
+      additional_framework: {
+        title: 'Additional Framework (monthly)',
+        text: 'Optional add-on when clients need coverage for more frameworks beyond the base package. Enterprise is negotiated due to complexity and volume differences.'
+      }
+    };
+
+    const titleEl = document.getElementById('planExplainTitle');
+    const textEl = document.getElementById('planExplainText');
+    const buttons = Array.from(document.querySelectorAll('.plan-explain-btn'));
+
+    const setActive = (activeButton) => {
+      buttons.forEach((btn) => {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-primary');
+      });
+      if (activeButton) {
+        activeButton.classList.remove('btn-outline-primary');
+        activeButton.classList.add('btn-primary');
+      }
+    };
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const topic = (btn.getAttribute('data-topic') || '').trim();
+        const item = details[topic];
+        if (!item) {
+          return;
+        }
+        if (titleEl) {
+          titleEl.textContent = item.title;
+        }
+        if (textEl) {
+          textEl.textContent = item.text;
+        }
+        setActive(btn);
+      });
+    });
+  })();
+</script>
+{% endblock %}

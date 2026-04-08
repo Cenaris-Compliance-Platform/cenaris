@@ -69,7 +69,10 @@ def _api_rate_limit_key() -> str:
 
 
 def _jwt_secret() -> str:
-    return str(current_app.config.get('SECRET_KEY') or 'dev-secret-key-change-in-production')
+    secret = str(current_app.config.get('SECRET_KEY') or '').strip()
+    if not secret:
+        raise RuntimeError('SECRET_KEY is not configured for JWT signing')
+    return secret
 
 
 def _issue_jwt(*, user: User, org_id: int, token_type: str, ttl_minutes: int) -> str:

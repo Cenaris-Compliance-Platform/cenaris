@@ -90,6 +90,52 @@ class AnalyticsService:
             .all()
         )
 
+        analyzed_documents = [
+            doc
+            for doc in documents
+            if getattr(doc, 'ai_analysis_at', None)
+            and (
+                ' '.join((getattr(doc, 'ai_summary', '') or '').split()).strip()
+                or ' '.join((getattr(doc, 'ai_status', '') or '').split()).strip()
+            )
+        ]
+
+        analyzed_documents_sorted = sorted(
+            analyzed_documents,
+            key=lambda doc: self._to_utc(getattr(doc, 'ai_analysis_at', None)) or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+
+        analyzed_history: list[dict] = []
+        for doc in analyzed_documents_sorted[:25]:
+            analyzed_at = self._to_utc(getattr(doc, 'ai_analysis_at', None))
+            question_text = ' '.join((getattr(doc, 'ai_question', '') or '').split()).strip()
+            summary_text = ' '.join((getattr(doc, 'ai_summary', '') or '').split()).strip()
+
+            summary_preview = summary_text.split('. ')[0].strip() or summary_text
+            if len(summary_preview) > 140:
+                summary_preview = summary_preview[:139].rstrip() + '...'
+
+            confidence_value = getattr(doc, 'ai_confidence', None)
+            confidence_pct = None
+            if confidence_value is not None:
+                try:
+                    confidence_pct = round(float(confidence_value) * 100, 1)
+                except Exception:
+                    confidence_pct = None
+
+            analyzed_history.append(
+                {
+                    'document_id': int(getattr(doc, 'id', 0) or 0),
+                    'filename': (getattr(doc, 'filename', None) or 'Untitled document').strip(),
+                    'status': (' '.join((getattr(doc, 'ai_status', '') or '').split()).strip() or 'Unknown'),
+                    'confidence_pct': confidence_pct,
+                    'analysis_at': analyzed_at.isoformat() if analyzed_at else '',
+                    'question': question_text,
+                    'summary_preview': summary_preview,
+                }
+            )
+
         member_ids = [
             int(m.user_id)
             for m in OrganizationMembership.query.filter_by(organization_id=org_id, is_active=True).all()
@@ -195,6 +241,39 @@ class AnalyticsService:
         login_failure_by_week = [0 for _ in week_points]
         active_users_last_30_days: set[int] = set()
         thirty_days_ago = self._utcnow() - timedelta(days=30)
+        analyzed_30d = sum(
+            1
+            for doc in analyzed_documents
+            if self._to_utc(getattr(doc, 'ai_analysis_at', None))
+            and self._to_utc(getattr(doc, 'ai_analysis_at', None)) >= thirty_days_ago
+        )
+
+        analyzed_status_distribution = {
+            'Critical gap': 0,
+            'High risk gap': 0,
+            'OK': 0,
+            'Mature': 0,
+            'Other': 0,
+        }
+        analyzed_confidences: list[float] = []
+        last_analyzed_at: datetime | None = None
+        for doc in analyzed_documents:
+            status = ' '.join((getattr(doc, 'ai_status', '') or '').split()).strip()
+            if status in analyzed_status_distribution:
+                analyzed_status_distribution[status] += 1
+            else:
+                analyzed_status_distribution['Other'] += 1
+
+            confidence = getattr(doc, 'ai_confidence', None)
+            if confidence is not None:
+                try:
+                    analyzed_confidences.append(float(confidence))
+                except Exception:
+                    pass
+
+            analyzed_at = self._to_utc(getattr(doc, 'ai_analysis_at', None))
+            if analyzed_at and (last_analyzed_at is None or analyzed_at > last_analyzed_at):
+                last_analyzed_at = analyzed_at
 
         for event in login_events:
             created = self._to_utc(event.created_at)
@@ -243,6 +322,8 @@ class AnalyticsService:
 
         avg_time_to_compliance_days = round((sum(durations_days) / len(durations_days)), 1) if durations_days else None
         median_time_to_compliance_days = round(float(median(durations_days)), 1) if durations_days else None
+        analyzed_coverage_rate = round((len(analyzed_documents) / max(1, len(documents))) * 100, 1) if documents else 0.0
+        average_ai_confidence = round((sum(analyzed_confidences) / len(analyzed_confidences)) * 100, 1) if analyzed_confidences else None
 
         week_labels = [w.strftime('%Y-%m-%d') for w in week_points]
 
@@ -254,6 +335,10 @@ class AnalyticsService:
                 'gap_requirements': int(gap_count),
                 'compliance_rate': compliance_rate,
                 'document_count': int(len(documents)),
+                'analyzed_documents': int(len(analyzed_documents)),
+                'analyzed_documents_30d': int(analyzed_30d),
+                'analyzed_coverage_rate': analyzed_coverage_rate,
+                'average_ai_confidence': average_ai_confidence,
                 'active_users_30d': int(len(active_users_last_30_days)),
                 'gap_closure_rate_90d': gap_closure_rate,
                 'avg_time_to_compliance_days': avg_time_to_compliance_days,
@@ -272,6 +357,11 @@ class AnalyticsService:
             },
             'uploads': {
                 'content_type_distribution': dict(sorted(upload_content_types.items(), key=lambda kv: kv[1], reverse=True)),
+            },
+            'analysis': {
+                'status_distribution': analyzed_status_distribution,
+                'last_analyzed_at': last_analyzed_at.isoformat() if last_analyzed_at else '',
+                'history': analyzed_history,
             },
         }
 
