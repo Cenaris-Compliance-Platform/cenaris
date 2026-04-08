@@ -5142,6 +5142,80 @@ def ai_demo():
     )
 
 
+@bp.route('/policy-studio')
+@login_required
+def policy_studio():
+    """Standalone policy drafting studio with document-wide generation support."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    documents = (
+        Document.query
+        .filter(
+            Document.organization_id == int(org_id),
+            Document.is_active.is_(True),
+        )
+        .order_by(Document.uploaded_at.desc())
+        .limit(200)
+        .all()
+    )
+
+    requirements = (
+        ComplianceRequirement.query
+        .join(ComplianceFrameworkVersion, ComplianceFrameworkVersion.id == ComplianceRequirement.framework_version_id)
+        .filter(
+            ComplianceFrameworkVersion.is_active.is_(True),
+            or_(
+                ComplianceFrameworkVersion.organization_id.is_(None),
+                ComplianceFrameworkVersion.organization_id == int(org_id),
+            ),
+        )
+        .order_by(
+            ComplianceRequirement.requirement_id.asc(),
+            ComplianceRequirement.quality_indicator_code.asc(),
+            ComplianceRequirement.id.asc(),
+        )
+        .limit(500)
+        .all()
+    )
+    requirement_options = [
+        {
+            'value': _requirement_display_code(requirement),
+            'label': f"{_requirement_display_code(requirement)} - {_requirement_plain_title(requirement, max_chars=90)}",
+        }
+        for requirement in requirements
+    ]
+
+    prefill_scope = (request.args.get('scope') or 'linked').strip().lower()
+    if prefill_scope not in {'linked', 'single'}:
+        prefill_scope = 'linked'
+
+    prefill_requirement = (request.args.get('requirement_id') or '').strip()
+    known_requirement_values = {item['value'] for item in requirement_options}
+    if prefill_requirement not in known_requirement_values:
+        prefill_requirement = ''
+
+    prefill_document_id_raw = (request.args.get('document_id') or '').strip()
+    prefill_document_id = int(prefill_document_id_raw) if prefill_document_id_raw.isdigit() else None
+    if prefill_document_id is not None and all(int(doc.id) != int(prefill_document_id) for doc in documents):
+        prefill_document_id = None
+
+    return render_template(
+        'main/policy_studio.html',
+        title='Policy Studio',
+        documents=documents,
+        requirement_options=requirement_options,
+        prefill_scope=prefill_scope,
+        prefill_requirement=prefill_requirement,
+        prefill_document_id=prefill_document_id,
+    )
+
+
 @bp.route('/api/ai/demo/analyze', methods=['POST'])
 @login_required
 @limiter.limit('8 per minute', key_func=_ai_rate_limit_key)
@@ -5883,6 +5957,11 @@ def policy_draft_api():
     policy_type = (payload.get('policy_type') or '').strip()
     query_text = _limit_text((payload.get('query') or '').strip(), max_chars=max_query_chars)
     requirement_id = (payload.get('requirement_id') or '').strip()
+    document_id_raw = str(payload.get('document_id') or '').strip()
+    document_id = int(document_id_raw) if document_id_raw.isdigit() else None
+    requirement_scope = (payload.get('requirement_scope') or 'linked').strip().lower()
+    if requirement_scope not in {'linked', 'single'}:
+        requirement_scope = 'linked'
     top_k = _clamp_int(payload.get('top_k', 3), default=3, minimum=1, maximum=max_top_k)
     output_mode = (payload.get('output_mode') or 'full_draft').strip().lower()
     audience = _limit_text((payload.get('audience') or '').strip(), max_chars=160)
@@ -5901,8 +5980,55 @@ def policy_draft_api():
 
     if not policy_type:
         return jsonify({'success': False, 'error': 'policy_type is required'}), 400
-    if not query_text and not requirement_id:
+    if not query_text and not requirement_id and document_id is None:
         return jsonify({'success': False, 'error': 'query or requirement_id is required'}), 400
+
+    selected_document = None
+    linked_requirement_codes: list[str] = []
+    linked_requirement_labels: list[str] = []
+    if document_id is not None:
+        selected_document = db.session.get(Document, int(document_id))
+        if (
+            not selected_document
+            or int(getattr(selected_document, 'organization_id', 0) or 0) != int(org_id)
+            or not bool(getattr(selected_document, 'is_active', True))
+        ):
+            return jsonify({'success': False, 'error': 'document_id is invalid for this organization'}), 400
+
+        if requirement_scope == 'linked':
+            linked_requirements = (
+                ComplianceRequirement.query
+                .join(RequirementEvidenceLink, RequirementEvidenceLink.requirement_id == ComplianceRequirement.id)
+                .filter(
+                    RequirementEvidenceLink.organization_id == int(org_id),
+                    RequirementEvidenceLink.document_id == int(selected_document.id),
+                )
+                .order_by(ComplianceRequirement.requirement_id.asc(), ComplianceRequirement.id.asc())
+                .all()
+            )
+
+            seen_codes: set[str] = set()
+            for requirement in linked_requirements:
+                code = _requirement_display_code(requirement)
+                if not code or code in seen_codes:
+                    continue
+                seen_codes.add(code)
+                linked_requirement_codes.append(code)
+                linked_requirement_labels.append(f"{code} - {_requirement_plain_title(requirement, max_chars=90)}")
+
+            if linked_requirement_codes and not query_text:
+                code_list = ', '.join(linked_requirement_codes[:25])
+                query_text = f"Create a comprehensive {policy_type} that covers linked requirements: {code_list}."
+
+            if not linked_requirement_codes:
+                # Fall back to document-driven drafting even when no explicit links exist yet.
+                if not query_text:
+                    query_text = f"Create a comprehensive {policy_type} based on the selected evidence document."
+        elif not query_text and not requirement_id:
+            query_text = f"Create a comprehensive {policy_type} for the selected requirement."
+
+    if not query_text and requirement_id:
+        query_text = f"Create a {policy_type} for requirement {requirement_id}."
 
     corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
     corpus_path = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
@@ -5936,6 +6062,23 @@ def policy_draft_api():
         }
         for c in rag_result.citations
     ]
+
+    context_parts = []
+    if context_brief:
+        context_parts.append(context_brief)
+    if selected_document is not None:
+        context_parts.append(f"Selected evidence document: {selected_document.filename}")
+        extracted = _limit_text(
+            ' '.join((getattr(selected_document, 'extracted_text', '') or '').split()),
+            max_chars=max(1200, int(max_query_chars)),
+        )
+        if extracted:
+            context_parts.append('Document excerpt:\n' + extracted)
+    if linked_requirement_labels:
+        context_parts.append(
+            'Linked requirements to cover:\n' + '\n'.join(f"- {label}" for label in linked_requirement_labels[:40])
+        )
+    context_brief = _limit_text('\n\n'.join(context_parts), max_chars=max(2400, int(max_query_chars) * 2))
 
     draft_result = policy_draft_service.build_draft(
         policy_type=policy_type,
@@ -6029,6 +6172,9 @@ def policy_draft_api():
                 'policy_tone': policy_tone,
                 'strictness': strictness,
                 'organization_size': organization_size,
+                'document_id': int(selected_document.id) if selected_document else None,
+                'requirement_scope': requirement_scope,
+                'linked_requirements_count': int(len(linked_requirement_codes)),
                 'context_brief_present': bool(context_brief),
             },
             'limits': {
