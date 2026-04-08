@@ -4615,6 +4615,200 @@ def _assistant_default_actions() -> list[dict]:
     ]
 
 
+def _assistant_is_action_intent(query_text: str) -> bool:
+    lower = (query_text or '').strip().lower()
+    if not lower:
+        return False
+    command_prefixes = (
+        'open ',
+        'show ',
+        'go to ',
+        'take me to ',
+        'navigate to ',
+    )
+    if lower.startswith(command_prefixes):
+        return True
+    if ('mark' in lower and 'notification' in lower and 'read' in lower) or ('clear notifications' in lower):
+        return True
+    return False
+
+
+def _assistant_feature_context_text() -> str:
+    return (
+        'Cenaris product capability map:\n'
+        '- Dashboard: operational starting point with readiness overview and shortcuts.\n'
+        '- Evidence Repository: upload, preview, tag, and manage evidence documents.\n'
+        '- AI Review Workspace: analyze documents, produce summaries, snippets, and NDIS-style citations.\n'
+        '- Requirements Workboard: map evidence to requirements, track statuses, and due-state.\n'
+        '- Policy Studio: create policies from scratch or optional document context; supports Word export.\n'
+        '- Analytics Dashboard: readiness trends and framework analytics visualizations.\n'
+        '- Organisation Profile: organisation settings, billing, and plans preview navigation.\n'
+        '- Notifications: admin-focused operational alerts with mark-as-read actions.\n'
+        '\n'
+        'Rules:\n'
+        '- Answer Cenaris-related product/workflow questions in detail.\n'
+        '- Do not invent features not listed or not inferable from this context.\n'
+        '- If asked about non-Cenaris topics, politely redirect to Cenaris help scope.\n'
+        '- Prefer practical, step-by-step guidance when user asks how-to questions.'
+    )
+
+
+def _assistant_generate_ai_reply(
+    *,
+    org_id: int,
+    query_text: str,
+    fallback_reply: str,
+    doc_count: int,
+    reviewed_doc_count: int,
+    dashboard_summary: dict,
+    bridge: dict,
+) -> str | None:
+    if not bool(current_app.config.get('ASSISTANT_CHAT_USE_LLM')):
+        return None
+
+    query = (query_text or '').strip()
+    if not query:
+        return None
+
+    feature_map = _assistant_feature_context_text()
+    compliance_rate = round(float((dashboard_summary or {}).get('compliance_rate') or 0), 1)
+    linked_requirements = int((bridge or {}).get('linked_requirements') or 0)
+    pending_assessment = int((bridge or {}).get('linked_requirements_pending_assessment') or 0)
+
+    user_prompt = (
+        f"User question: {query}\n\n"
+        f"Org snapshot: uploads={int(doc_count)}, ai_reviewed={int(reviewed_doc_count)}, "
+        f"compliance_rate={compliance_rate}%, linked_requirements={linked_requirements}, "
+        f"pending_assessment={pending_assessment}.\n\n"
+        f"Fallback guidance (if needed): {fallback_reply}\n\n"
+        f"{feature_map}\n\n"
+        "Respond with practical detail and clear language."
+    )
+
+    endpoint = (current_app.config.get('AZURE_OPENAI_ENDPOINT') or '').strip().rstrip('/')
+    api_key = (current_app.config.get('AZURE_OPENAI_API_KEY') or '').strip()
+    api_version = (current_app.config.get('AZURE_OPENAI_API_VERSION') or '2024-10-21').strip()
+    deployment = (
+        (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI') or '').strip()
+        or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT') or '').strip()
+        or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER') or '').strip()
+    )
+    timeout_seconds = int(current_app.config.get('AZURE_OPENAI_TIMEOUT_SECONDS') or 30)
+
+    started = time.perf_counter()
+
+    # Prefer Azure OpenAI when configured.
+    if endpoint and api_key and deployment:
+        try:
+            import requests
+
+            url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
+            response = requests.post(
+                url,
+                headers={
+                    'Content-Type': 'application/json',
+                    'api-key': api_key,
+                },
+                json={
+                    'messages': [
+                        {
+                            'role': 'system',
+                            'content': 'You are Cenaris Compass, an in-product assistant for Cenaris only. Be accurate, detailed, and practical.',
+                        },
+                        {'role': 'user', 'content': user_prompt},
+                    ],
+                    'temperature': 0.2,
+                    'max_tokens': 900,
+                },
+                timeout=timeout_seconds,
+            )
+
+            if response.status_code < 400:
+                payload = response.json() if response.content else {}
+                choices = payload.get('choices') or []
+                if choices:
+                    reply = (((choices[0] or {}).get('message') or {}).get('content') or '').strip()
+                    if reply:
+                        usage = payload.get('usage') or {}
+                        _log_ai_call(
+                            'assistant_chat',
+                            org_id=int(org_id),
+                            mode='llm',
+                            provider='azure-openai',
+                            model=deployment,
+                            usage={
+                                'prompt_tokens': int(usage.get('prompt_tokens') or 0),
+                                'completion_tokens': int(usage.get('completion_tokens') or 0),
+                                'total_tokens': int(usage.get('total_tokens') or 0),
+                            },
+                            latency_ms=int((time.perf_counter() - started) * 1000),
+                        )
+                        return reply
+        except Exception:
+            current_app.logger.exception('Assistant Azure LLM request failed; falling back')
+
+    # Optional fallback: OpenRouter when configured.
+    openrouter_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()
+    openrouter_model = (current_app.config.get('OPENROUTER_MODEL') or '').strip() or 'openrouter/auto'
+    if not openrouter_key:
+        return None
+
+    try:
+        import requests
+
+        response = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {openrouter_key}',
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://cenaris.local',
+                'X-Title': 'Cenaris Compass Assistant',
+            },
+            json={
+                'model': openrouter_model,
+                'messages': [
+                    {
+                        'role': 'system',
+                        'content': 'You are Cenaris Compass, an in-product assistant for Cenaris only. Be accurate, detailed, and practical.',
+                    },
+                    {'role': 'user', 'content': user_prompt},
+                ],
+                'temperature': 0.2,
+                'max_tokens': 900,
+            },
+            timeout=timeout_seconds,
+        )
+
+        if response.status_code >= 400:
+            return None
+        payload = response.json() if response.content else {}
+        choices = payload.get('choices') or []
+        if not choices:
+            return None
+        reply = (((choices[0] or {}).get('message') or {}).get('content') or '').strip()
+        if not reply:
+            return None
+
+        usage = payload.get('usage') or {}
+        _log_ai_call(
+            'assistant_chat',
+            org_id=int(org_id),
+            mode='llm',
+            provider='openrouter',
+            model=openrouter_model,
+            usage={
+                'prompt_tokens': int(usage.get('prompt_tokens') or 0),
+                'completion_tokens': int(usage.get('completion_tokens') or 0),
+                'total_tokens': int(usage.get('total_tokens') or 0),
+            },
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        return reply
+    except Exception:
+        current_app.logger.exception('Assistant OpenRouter request failed; falling back')
+        return None
+
+
 def _assistant_compose_response(*, org_id: int, query_text: str) -> tuple[str, list[dict]]:
     lower = (query_text or '').strip().lower()
     if not lower:
@@ -5016,12 +5210,48 @@ def assistant_chat_api():
         )
 
     reply, actions = _assistant_compose_response(org_id=int(org_id), query_text=message)
+    assistant_mode = 'rules'
+
+    if message and not _assistant_is_action_intent(message):
+        try:
+            doc_count = (
+                Document.query
+                .filter(Document.organization_id == int(org_id), Document.is_active.is_(True))
+                .count()
+            )
+            reviewed_doc_count = (
+                Document.query
+                .filter(
+                    Document.organization_id == int(org_id),
+                    Document.is_active.is_(True),
+                    Document.ai_analysis_at.isnot(None),
+                )
+                .count()
+            )
+            dashboard_summary = (analytics_service.build_dashboard_payload(organization_id=int(org_id)).get('summary') or {})
+            bridge = _build_dashboard_bridge_stats(org_id=int(org_id))
+            ai_reply = _assistant_generate_ai_reply(
+                org_id=int(org_id),
+                query_text=message,
+                fallback_reply=reply,
+                doc_count=int(doc_count),
+                reviewed_doc_count=int(reviewed_doc_count),
+                dashboard_summary=dashboard_summary,
+                bridge=bridge,
+            )
+            if ai_reply:
+                reply = _limit_text(ai_reply, max_chars=3000)
+                assistant_mode = 'llm'
+        except Exception:
+            current_app.logger.exception('Assistant AI enrich failed; using rules reply')
+
     return jsonify(
         {
             'success': True,
             'reply': reply,
             'actions': actions,
             'executed_action': None,
+            'assistant_mode': assistant_mode,
         }
     )
 
@@ -6201,6 +6431,95 @@ def policy_draft_api():
             },
         }
     )
+
+
+@bp.route('/api/policy/export-docx', methods=['POST'])
+@login_required
+@limiter.limit('20 per minute', key_func=_ai_rate_limit_key)
+def policy_export_docx_api():
+    """Export a generated policy draft to DOCX with basic structure formatting."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    policy_type = _limit_text((payload.get('policy_type') or 'Policy Draft').strip(), max_chars=180) or 'Policy Draft'
+    draft_text = (payload.get('draft_text') or '').strip()
+    if not draft_text:
+        return jsonify({'success': False, 'error': 'draft_text is required'}), 400
+
+    lines = [line.rstrip() for line in draft_text.splitlines()]
+
+    try:
+        from docx import Document as WordDocument
+        from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+        from docx.shared import Pt
+
+        doc = WordDocument()
+
+        title = doc.add_paragraph()
+        title_run = title.add_run(policy_type)
+        title_run.bold = True
+        title_run.font.size = Pt(18)
+        title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+
+        subtitle = doc.add_paragraph()
+        subtitle_run = subtitle.add_run(f"Generated on {datetime.now(timezone.utc).strftime('%d %b %Y')}")
+        subtitle_run.italic = True
+        subtitle_run.font.size = Pt(10)
+        subtitle.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+
+        doc.add_paragraph('')
+
+        for raw_line in lines:
+            line = (raw_line or '').strip()
+            if not line:
+                continue
+
+            if line.startswith('# '):
+                doc.add_heading(line[2:].strip(), level=1)
+                continue
+            if line.startswith('## '):
+                doc.add_heading(line[3:].strip(), level=2)
+                continue
+            if line.startswith('### '):
+                doc.add_heading(line[4:].strip(), level=3)
+                continue
+
+            if line.endswith(':') and len(line) <= 120:
+                doc.add_heading(line.rstrip(':'), level=2)
+                continue
+
+            if line.startswith('- ') or line.startswith('* '):
+                doc.add_paragraph(line[2:].strip(), style='List Bullet')
+                continue
+
+            if line[:2].isdigit() and line[1] == '.':
+                doc.add_paragraph(line[2:].strip(), style='List Number')
+                continue
+
+            paragraph = doc.add_paragraph(line)
+            paragraph.paragraph_format.space_after = Pt(8)
+
+        output = io.BytesIO()
+        doc.save(output)
+        output.seek(0)
+
+        safe_name = ''.join(ch if ch.isalnum() else '-' for ch in policy_type.lower()).strip('-') or 'policy-draft'
+        filename = f"{safe_name}.docx"
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+    except Exception:
+        current_app.logger.exception('Policy DOCX export failed')
+        return jsonify({'success': False, 'error': 'Failed to export policy document'}), 500
 
 @bp.route('/reports')
 @login_required

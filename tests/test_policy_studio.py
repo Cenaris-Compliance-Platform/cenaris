@@ -187,3 +187,25 @@ def test_policy_draft_api_supports_document_wide_generation(client, app, monkeyp
     assert payload['inputs']['requirement_scope'] == 'linked'
     assert payload['inputs']['linked_requirements_count'] == 1
     assert 'Incident Management Policy' in payload['draft_text']
+
+
+def test_policy_export_docx_returns_file(client, app):
+    with app.app_context():
+        org = _create_org()
+        _create_admin_user(int(org.id))
+        db.session.commit()
+
+    _login(client)
+    response = client.post(
+        '/api/policy/export-docx',
+        json={
+            'policy_type': 'Incident Management Policy',
+            'draft_text': 'Incident Management Policy\n\nPurpose:\nDefine incident handling steps.\n\n- Log incidents\n- Escalate critical events',
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get('Content-Type', '').startswith(
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    assert response.data[:2] == b'PK'

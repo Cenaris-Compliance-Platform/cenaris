@@ -105,3 +105,30 @@ def test_assistant_chat_handles_profile_and_password_question(client, app, seed_
     assert payload['success'] is True
     assert 'name updates' in (payload.get('reply') or '').lower()
     assert any((action.get('id') == 'open_profile') for action in (payload.get('actions') or []))
+
+
+def test_assistant_chat_uses_ai_when_available(client, app, seed_org_user, monkeypatch):
+    from tests.conftest import login
+    import app.main.routes as routes
+
+    app.config['ASSISTANT_CHAT_USE_LLM'] = True
+
+    def _fake_ai_reply(**_kwargs):
+        return 'Cenaris supports end-to-end workflow guidance across repository, AI review, requirements, policy studio, analytics, and settings.'
+
+    monkeypatch.setattr(routes, '_assistant_generate_ai_reply', _fake_ai_reply)
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    chat_resp = client.post(
+        '/api/assistant/chat',
+        json={'message': 'Explain all Cenaris features in detail'},
+        follow_redirects=False,
+    )
+
+    assert chat_resp.status_code == 200
+    payload = chat_resp.get_json()
+    assert payload['success'] is True
+    assert payload.get('assistant_mode') == 'llm'
+    assert 'end-to-end workflow guidance' in (payload.get('reply') or '').lower()
