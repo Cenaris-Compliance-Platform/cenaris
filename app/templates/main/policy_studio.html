@@ -156,6 +156,9 @@
             <i class="bi bi-file-earmark-text me-1"></i>Generate Policy
           </button>
           <button type="button" class="btn btn-outline-primary d-none" id="policyStudioExpandBtn">Expand to Full Draft</button>
+          <button type="button" class="btn btn-outline-success d-none" id="policyStudioWordBtn">
+            <i class="bi bi-file-earmark-word me-1"></i>Download Word
+          </button>
           <button type="button" class="btn btn-outline-secondary d-none" id="policyStudioCopyBtn">Copy</button>
           <span class="small text-body-secondary" id="policyStudioStatus"></span>
         </div>
@@ -204,6 +207,7 @@
 
     const generateBtn = document.getElementById('policyStudioGenerateBtn');
     const expandBtn = document.getElementById('policyStudioExpandBtn');
+    const wordBtn = document.getElementById('policyStudioWordBtn');
     const copyBtn = document.getElementById('policyStudioCopyBtn');
     const csrfToken = document.getElementById('policyStudioCsrf')?.value || '';
 
@@ -244,6 +248,7 @@
     const setBusy = (busy) => {
       if (generateBtn) generateBtn.disabled = busy;
       if (expandBtn) expandBtn.disabled = busy;
+      if (wordBtn) wordBtn.disabled = busy;
       if (copyBtn) copyBtn.disabled = busy;
     };
 
@@ -326,6 +331,7 @@
         }
         resultCard?.classList.remove('d-none');
         expandBtn?.classList.remove('d-none');
+        wordBtn?.classList.remove('d-none');
         copyBtn?.classList.remove('d-none');
         setStatus('Draft generated. Review before use.', false);
       } catch (err) {
@@ -357,6 +363,62 @@
         setStatus('Draft copied to clipboard.', false);
       } catch (_err) {
         setStatus('Copy failed. Please copy manually.', true);
+      }
+    });
+
+    wordBtn?.addEventListener('click', async () => {
+      const draftText = (outputEl?.value || '').trim();
+      if (!draftText) {
+        setStatus('Generate a draft before downloading Word.', true);
+        return;
+      }
+
+      setBusy(true);
+      setStatus('Preparing Word document...', false);
+
+      try {
+        const response = await fetch("{{ url_for('main.policy_export_docx_api') }}", {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+            'X-CSRF-Token': csrfToken,
+            'X-Requested-With': 'fetch',
+            'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/json',
+          },
+          body: JSON.stringify({
+            policy_type: (typeEl?.value || 'Policy Draft').trim(),
+            draft_text: draftText,
+          }),
+        });
+
+        if (!response.ok) {
+          let message = 'Failed to export Word document.';
+          try {
+            const errPayload = await response.json();
+            message = errPayload?.error || message;
+          } catch (_ignore) {
+            // Ignore non-JSON error payloads.
+          }
+          throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        const safeName = ((typeEl?.value || 'policy-draft').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'policy-draft');
+        anchor.href = blobUrl;
+        anchor.download = `${safeName}.docx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(blobUrl);
+        setStatus('Word document downloaded.', false);
+      } catch (err) {
+        setStatus(err?.message || 'Failed to download Word document.', true);
+      } finally {
+        setBusy(false);
       }
     });
 

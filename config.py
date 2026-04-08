@@ -15,7 +15,7 @@ def _normalize_database_url(url: str | None) -> str | None:
 
 class Config:
     """Base configuration class."""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
+    SECRET_KEY = os.environ.get('SECRET_KEY')
     
     # Azure Storage Configuration
     AZURE_STORAGE_CONNECTION_STRING = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
@@ -112,6 +112,7 @@ class Config:
     AI_RAG_RATE_LIMIT = os.environ.get('AI_RAG_RATE_LIMIT') or '20 per minute'
     AI_POLICY_RATE_LIMIT = os.environ.get('AI_POLICY_RATE_LIMIT') or '10 per minute'
     AI_USAGE_RETENTION_DAYS = int(os.environ.get('AI_USAGE_RETENTION_DAYS') or 90)
+    ASSISTANT_CHAT_USE_LLM = (os.environ.get('ASSISTANT_CHAT_USE_LLM') or '1').strip().lower() in {'1', 'true', 'yes', 'on'}
 
     # Azure OpenAI (used when POLICY_DRAFT_USE_LLM=true)
     AZURE_OPENAI_ENDPOINT = os.environ.get('AZURE_OPENAI_ENDPOINT')
@@ -149,7 +150,13 @@ class Config:
     
     @staticmethod
     def init_app(app):
-        pass
+        if app.config.get('SECRET_KEY'):
+            return
+        if app.config.get('TESTING'):
+            # Keep tests deterministic when SECRET_KEY is not provided by the test harness.
+            app.config['SECRET_KEY'] = 'test-secret-key'
+            return
+        raise RuntimeError('SECRET_KEY is required. Set it via environment variables (for example in .env).')
 
 class DevelopmentConfig(Config):
     """Development configuration."""
@@ -200,6 +207,7 @@ class TestingConfig(DevelopmentConfig):
     # Keep policy draft tests deterministic/offline by default.
     POLICY_DRAFT_USE_LLM = False
     AI_POLICY_LLM_ALLOW_IN_DEVELOPMENT = False
+    ASSISTANT_CHAT_USE_LLM = False
     # Disable secure cookies in testing so they work with test client
     SESSION_COOKIE_SECURE = False
     REMEMBER_COOKIE_SECURE = False
