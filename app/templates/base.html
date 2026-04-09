@@ -1128,6 +1128,24 @@
           }
         };
 
+        const appendInlineFormatting = (target, text) => {
+          const value = String(text || "");
+          if (!value) return;
+
+          // Minimal, safe inline markdown support for bold segments: **text**
+          const segments = value.split(/(\*\*[^*]+\*\*)/g);
+          segments.forEach((segment) => {
+            if (!segment) return;
+            if (segment.startsWith("**") && segment.endsWith("**") && segment.length > 4) {
+              const strong = document.createElement("strong");
+              strong.textContent = segment.slice(2, -2);
+              target.appendChild(strong);
+              return;
+            }
+            target.appendChild(document.createTextNode(segment));
+          });
+        };
+
         const renderAssistantText = (container, text) => {
           const value = String(text || "").replace(/\r\n/g, "\n").trim();
           if (!value) {
@@ -1161,7 +1179,7 @@
                 container.appendChild(activeList);
               }
               const li = document.createElement("li");
-              li.textContent = orderedMatch[2];
+              appendInlineFormatting(li, orderedMatch[2]);
               activeList.appendChild(li);
               return;
             }
@@ -1173,14 +1191,14 @@
                 container.appendChild(activeList);
               }
               const li = document.createElement("li");
-              li.textContent = bulletMatch[1];
+              appendInlineFormatting(li, bulletMatch[1]);
               activeList.appendChild(li);
               return;
             }
 
             flushList();
             const p = document.createElement("p");
-            p.textContent = trimmed;
+            appendInlineFormatting(p, trimmed);
             container.appendChild(p);
           });
         };
