@@ -489,7 +489,7 @@ def create_app(config_name=None):
                 "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
                 "font-src 'self' https://cdn.jsdelivr.net; "
                 "img-src 'self' data:; "
-                "connect-src 'self'; "
+                "connect-src 'self' https://cdn.jsdelivr.net; "
                 "frame-src https://challenges.cloudflare.com"
             )
             response.headers['Content-Security-Policy'] = csp
