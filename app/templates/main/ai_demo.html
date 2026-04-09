@@ -814,14 +814,18 @@
         });
         window.clearTimeout(timeoutId);
         let payload = null;
+        let rawText = '';
         try {
-          payload = await response.json();
+          rawText = await response.text();
+          payload = rawText ? JSON.parse(rawText) : null;
         } catch (_e) {
           payload = null;
         }
 
         if (!response.ok || !payload || !payload.success) {
-          throw new Error((payload && payload.error) || 'Analysis failed');
+          const backendError = (payload && payload.error) ? String(payload.error) : '';
+          const statusHint = `Analysis request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`;
+          throw new Error(backendError || statusHint || 'Analysis failed');
         }
 
         renderPayload(payload);
