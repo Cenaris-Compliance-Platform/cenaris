@@ -301,7 +301,11 @@ def create_app(config_name=None):
     elif app.debug:
         login_manager.session_protection = 'basic'
     else:
-        login_manager.session_protection = 'strong'
+        # In proxied cloud environments, Flask-Login 'strong' protection can
+        # cause unintended logouts when request fingerprints vary between hops.
+        # Keep production default as 'basic', with env override when needed.
+        sp = (os.environ.get('LOGIN_SESSION_PROTECTION') or 'basic').strip().lower()
+        login_manager.session_protection = sp if sp in {'basic', 'strong'} else 'basic'
     login_manager.refresh_view = 'auth.login'
     login_manager.needs_refresh_message = 'Please re-authenticate to access this page.'
     login_manager.needs_refresh_message_category = 'info'
