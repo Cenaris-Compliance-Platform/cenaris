@@ -5506,7 +5506,10 @@ def ai_demo_analyze_api():
     question = _limit_text((request.form.get('question') or '').strip(), max_chars=700)
     # Demo mode is intentionally fixed to balanced for consistent client-facing behavior.
     analysis_mode = 'balanced'
-    reuse_last = str(request.form.get('reuse_last') or '').strip().lower() not in {'0', 'false', 'no', 'off'}
+    # Checkbox semantics: explicit truthy value means reuse previous analysis.
+    # Unchecked checkboxes are omitted from form payload and must resolve to False.
+    reuse_last_raw = str(request.form.get('reuse_last') or '').strip().lower()
+    reuse_last = reuse_last_raw in {'1', 'true', 'yes', 'on'}
 
     if not question:
         question = 'Assess this document against NDIS-style compliance evidence expectations.'

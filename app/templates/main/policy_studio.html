@@ -307,9 +307,19 @@
           },
           body: JSON.stringify(payload),
         });
-        const data = await response.json();
+        let data = null;
+        let rawText = '';
+        try {
+          rawText = await response.text();
+          data = rawText ? JSON.parse(rawText) : null;
+        } catch (_parseErr) {
+          data = null;
+        }
+
         if (!response.ok || !data?.success) {
-          throw new Error(data?.error || 'Failed to generate policy draft.');
+          const backendError = (data && data.error) ? String(data.error) : '';
+          const statusHint = `Request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`;
+          throw new Error(backendError || statusHint || 'Failed to generate policy draft.');
         }
 
         if (outputEl) {
