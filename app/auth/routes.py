@@ -91,44 +91,57 @@ def _get_pending_reset_email() -> str:
 
 
 def _after_login_redirect():
-    # Always verify the user has an active membership for their current org.
-    # If organization_id is set but there's no active membership, fix it.
-    org_id = getattr(current_user, 'organization_id', None)
-    
-    if org_id:
-        # Verify this org_id has an active membership
-        membership = (
-            OrganizationMembership.query
-            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
-            .first()
-        )
-        if not membership:
-            # Current org_id is invalid, clear it and find a valid one
-            org_id = None
-    
-    # If no valid org_id, find the first active membership
-    if not org_id:
-        membership = (
-            OrganizationMembership.query
-            .filter_by(user_id=int(current_user.id), is_active=True)
-            .order_by(OrganizationMembership.created_at.asc())
-            .first()
-        )
-        if membership:
-            current_user.organization_id = int(membership.organization_id)
+    try:
+        # Always verify the user has an active membership for their current org.
+        # If organization_id is set but there's no active membership, fix it.
+        org_id = getattr(current_user, 'organization_id', None)
+
+        if org_id:
+            # Verify this org_id has an active membership
+            membership = (
+                OrganizationMembership.query
+                .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+                .first()
+            )
+            if not membership:
+                # Current org_id is invalid, clear it and find a valid one
+                org_id = None
+
+        # If no valid org_id, find the first active membership
+        if not org_id:
+            membership = (
+                OrganizationMembership.query
+                .filter_by(user_id=int(current_user.id), is_active=True)
+                .order_by(OrganizationMembership.created_at.asc())
+                .first()
+            )
+            if membership:
+                current_user.organization_id = int(membership.organization_id)
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                org_id = current_user.organization_id
+
+        # If still no org, redirect to onboarding
+        if not org_id:
+            return redirect(url_for('onboarding.organization'))
+
+        # User has an organization - go to dashboard
+        # (invited users should go to the org they were invited to, even if onboarding incomplete)
+        return redirect(url_for('main.dashboard'))
+    except Exception as e:
+        current_app.logger.exception('Post-login redirect failed')
+        if _looks_like_schema_mismatch(e):
             try:
-                db.session.commit()
+                logout_user()
+                session.clear()
             except Exception:
-                db.session.rollback()
-            org_id = current_user.organization_id
-
-    # If still no org, redirect to onboarding
-    if not org_id:
-        return redirect(url_for('onboarding.organization'))
-
-    # User has an organization - go to dashboard
-    # (invited users should go to the org they were invited to, even if onboarding incomplete)
-    return redirect(url_for('main.dashboard'))
+                pass
+            flash(_schema_upgrade_hint(), 'error')
+            return redirect(url_for('auth.login'))
+        # Fallback to dashboard for non-schema related issues.
+        return redirect(url_for('main.dashboard'))
 
 
 def _serializer() -> URLSafeTimedSerializer:
@@ -393,14 +406,17 @@ def _ip_block_status(now: datetime) -> tuple[bool, datetime | None]:
     ip = _client_ip()
     if not ip:
         return False, None
-    rec = SuspiciousIP.query.filter_by(ip_address=ip).first()
-    if rec and rec.blocked_until:
-        blocked_until = rec.blocked_until
-        # SQLite often returns naive datetimes; normalize to UTC-aware.
-        if getattr(blocked_until, 'tzinfo', None) is None:
-            blocked_until = blocked_until.replace(tzinfo=timezone.utc)
-        if blocked_until > now:
-            return True, blocked_until
+    try:
+        rec = SuspiciousIP.query.filter_by(ip_address=ip).first()
+        if rec and rec.blocked_until:
+            blocked_until = rec.blocked_until
+            # SQLite often returns naive datetimes; normalize to UTC-aware.
+            if getattr(blocked_until, 'tzinfo', None) is None:
+                blocked_until = blocked_until.replace(tzinfo=timezone.utc)
+            if blocked_until > now:
+                return True, blocked_until
+    except Exception:
+        current_app.logger.exception('Suspicious IP lookup failed')
     return False, None
 
 
@@ -992,6 +1008,23 @@ def oauth_callback(provider):
         except Exception:
             pass
 
+    # Some providers may redirect back with explicit OAuth error query params.
+    # Handle this early and gracefully instead of falling through into token parsing.
+    provider_error = (request.args.get('error') or '').strip()
+    provider_error_desc = (request.args.get('error_description') or '').strip()
+    if provider_error:
+        current_app.logger.warning(
+            'OAuth callback returned provider error: provider=%s error=%s description=%s',
+            provider,
+            provider_error,
+            provider_error_desc,
+        )
+        if provider_error_desc:
+            flash(f'OAuth sign-in failed: {provider_error_desc}', 'error')
+        else:
+            flash(f'OAuth sign-in failed: {provider_error}', 'error')
+        return redirect(url_for('auth.login'))
+
     # Authlib raises specific exception types for common callback issues (state mismatch,
     # provider errors). Import them best-effort so we can show actionable guidance.
     try:  # pragma: no cover
@@ -1054,6 +1087,19 @@ def oauth_callback(provider):
         else:
             flash('OAuth sign-in failed. Please try again.', 'error')
         return redirect(url_for('auth.login'))
+
+    # Defensive guard: Authlib should return a dict-like token payload.
+    # In edge cases (provider/network anomalies) it may be missing/invalid.
+    if not isinstance(token, dict):
+        current_app.logger.warning(
+            'OAuth token exchange returned unexpected payload type: provider=%s type=%s args=%s',
+            provider,
+            type(token).__name__,
+            dict(request.args),
+        )
+        flash('OAuth sign-in failed: invalid token response from provider.', 'error')
+        return redirect(url_for('auth.login'))
+
     # Authlib puts parsed userinfo into token['userinfo'] when an id_token is present.
     userinfo = token.get('userinfo')
     if not userinfo:
