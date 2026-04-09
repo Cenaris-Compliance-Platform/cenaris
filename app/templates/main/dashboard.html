@@ -124,26 +124,26 @@
           <!-- Overall Readiness Summary -->
           <div class="row mb-4">
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.1), rgba(var(--bs-success-rgb), 0.05));">
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.1), rgba(var(--bs-success-rgb), 0.05));">
                 <div class="h2 fw-bold text-success mb-1">{{ (dashboard_summary.compliance_rate or 0)|round(0)|int }}%</div>
                 <div class="text-body-secondary small">Requirement Readiness</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), rgba(var(--bs-info-rgb), 0.05));">
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), rgba(var(--bs-info-rgb), 0.05));">
                 <div class="h2 fw-bold text-info mb-1">{{ dashboard_summary.document_count or total_documents }}</div>
-                <div class="text-body-secondary small">Documents Uploaded</div>
-                <div class="small text-body-secondary">{{ dashboard_reviewed_documents or 0 }} reviewed by AI</div>
+                <div class="text-body-secondary small">Docs Uploaded</div>
+                <div class="small text-body-secondary" style="font-size: 0.78rem;">AI: {{ dashboard_reviewed_documents or 0 }}</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), rgba(var(--bs-warning-rgb), 0.05));">
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), rgba(var(--bs-warning-rgb), 0.05));">
                 <div class="h2 fw-bold text-warning mb-1">{{ dashboard_summary.gap_requirements or 0 }}</div>
                 <div class="text-body-secondary small">Requirement Gaps</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.1), rgba(var(--bs-danger-rgb), 0.05));">
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.1), rgba(var(--bs-danger-rgb), 0.05));">
                 <div class="h2 fw-bold text-danger mb-1">{{ dashboard_deadlines|length }}</div>
                 <div class="text-body-secondary small">Upcoming Deadlines</div>
               </div>
