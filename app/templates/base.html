@@ -432,7 +432,26 @@
         border-radius: 14px;
         padding: 10px 12px;
         font-size: 0.93rem;
-        white-space: pre-wrap;
+        white-space: normal;
+        line-height: 1.45;
+      }
+
+      .assistant-msg p {
+        margin: 0 0 0.45rem 0;
+      }
+
+      .assistant-msg p:last-child {
+        margin-bottom: 0;
+      }
+
+      .assistant-msg ul,
+      .assistant-msg ol {
+        margin: 0.15rem 0 0.5rem 1.1rem;
+        padding: 0;
+      }
+
+      .assistant-msg li {
+        margin-bottom: 0.2rem;
       }
 
       .assistant-msg.assistant {
@@ -1087,6 +1106,7 @@
         const messages = document.getElementById("assistantMessages");
         const chips = document.querySelectorAll(".assistant-chip");
         const csrfToken = "{{ csrf_token() }}";
+        const assistantUserName = {{ ((current_user.first_name or current_user.full_name or current_user.email or '')|trim)|tojson }};
         let busy = false;
 
         if (!panel || !form || !input || !sendBtn || !messages) {
@@ -1108,10 +1128,89 @@
           }
         };
 
+        const appendInlineFormatting = (target, text) => {
+          const value = String(text || "");
+          if (!value) return;
+
+          // Minimal, safe inline markdown support for bold segments: **text**
+          const segments = value.split(/(\*\*[^*]+\*\*)/g);
+          segments.forEach((segment) => {
+            if (!segment) return;
+            if (segment.startsWith("**") && segment.endsWith("**") && segment.length > 4) {
+              const strong = document.createElement("strong");
+              strong.textContent = segment.slice(2, -2);
+              target.appendChild(strong);
+              return;
+            }
+            target.appendChild(document.createTextNode(segment));
+          });
+        };
+
+        const renderAssistantText = (container, text) => {
+          const value = String(text || "").replace(/\r\n/g, "\n").trim();
+          if (!value) {
+            container.textContent = "";
+            return;
+          }
+
+          const lines = value.split("\n");
+          let activeList = null;
+          let activeListType = "";
+
+          const flushList = () => {
+            activeList = null;
+            activeListType = "";
+          };
+
+          lines.forEach((line) => {
+            const trimmed = (line || "").trim();
+            if (!trimmed) {
+              flushList();
+              return;
+            }
+
+            const orderedMatch = trimmed.match(/^(\d+)[\.)]\s+(.+)$/);
+            const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
+
+            if (orderedMatch) {
+              if (!activeList || activeListType !== "ol") {
+                activeList = document.createElement("ol");
+                activeListType = "ol";
+                container.appendChild(activeList);
+              }
+              const li = document.createElement("li");
+              appendInlineFormatting(li, orderedMatch[2]);
+              activeList.appendChild(li);
+              return;
+            }
+
+            if (bulletMatch) {
+              if (!activeList || activeListType !== "ul") {
+                activeList = document.createElement("ul");
+                activeListType = "ul";
+                container.appendChild(activeList);
+              }
+              const li = document.createElement("li");
+              appendInlineFormatting(li, bulletMatch[1]);
+              activeList.appendChild(li);
+              return;
+            }
+
+            flushList();
+            const p = document.createElement("p");
+            appendInlineFormatting(p, trimmed);
+            container.appendChild(p);
+          });
+        };
+
         const addMessage = (role, text, actions) => {
           const item = document.createElement("div");
           item.className = `assistant-msg ${role === "user" ? "user" : "assistant"}`;
-          item.textContent = text || "";
+          if (role === "assistant") {
+            renderAssistantText(item, text || "");
+          } else {
+            item.textContent = text || "";
+          }
           messages.appendChild(item);
 
           if (actions && actions.length > 0) {
@@ -1192,9 +1291,14 @@
           }
         };
 
+        const firstName = String(assistantUserName || "").trim().split(/\s+/)[0] || "";
+        const hour = new Date().getHours();
+        const timeGreeting = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good evening");
+        const personalizedGreeting = `${timeGreeting}${firstName ? `, ${firstName}` : ""}. I am Cenaris Compass.`;
+
         addMessage(
           "assistant",
-          "Hi, I am Cenaris Compass. I can answer workflow questions and run one-click safe actions for your organisation.",
+          `${personalizedGreeting}\nI can answer Cenaris questions in detail and guide you step by step.\nTry asking: "How does Policy Studio work end-to-end?"`,
           [
             { kind: "navigate", label: "Open Dashboard", url: "{{ url_for('main.dashboard') }}" },
             { kind: "navigate", label: "Open AI Review", url: "{{ url_for('main.ai_demo') }}" }

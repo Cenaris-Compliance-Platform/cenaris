@@ -124,26 +124,26 @@
           <!-- Overall Readiness Summary -->
           <div class="row mb-4">
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.1), rgba(var(--bs-success-rgb), 0.05));">
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.1), rgba(var(--bs-success-rgb), 0.05));">
                 <div class="h2 fw-bold text-success mb-1">{{ (dashboard_summary.compliance_rate or 0)|round(0)|int }}%</div>
                 <div class="text-body-secondary small">Requirement Readiness</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), rgba(var(--bs-info-rgb), 0.05));">
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), rgba(var(--bs-info-rgb), 0.05));">
                 <div class="h2 fw-bold text-info mb-1">{{ dashboard_summary.document_count or total_documents }}</div>
-                <div class="text-body-secondary small">Documents Uploaded</div>
-                <div class="small text-body-secondary">{{ dashboard_reviewed_documents or 0 }} reviewed by AI</div>
+                <div class="text-body-secondary small">Docs Uploaded</div>
+                <div class="small text-body-secondary" style="font-size: 0.78rem;">AI: {{ dashboard_reviewed_documents or 0 }}</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), rgba(var(--bs-warning-rgb), 0.05));">
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), rgba(var(--bs-warning-rgb), 0.05));">
                 <div class="h2 fw-bold text-warning mb-1">{{ dashboard_summary.gap_requirements or 0 }}</div>
                 <div class="text-body-secondary small">Requirement Gaps</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.1), rgba(var(--bs-danger-rgb), 0.05));">
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.1), rgba(var(--bs-danger-rgb), 0.05));">
                 <div class="h2 fw-bold text-danger mb-1">{{ dashboard_deadlines|length }}</div>
                 <div class="text-body-secondary small">Upcoming Deadlines</div>
               </div>
@@ -152,73 +152,6 @@
 
           <div class="alert alert-info small mb-4">
             Dashboard readiness is based on <strong>requirement-level assessments</strong>, not just file uploads. AI Review auto-maps likely requirement links, but readiness updates after those mappings are verified and requirement assessments are confirmed.
-          </div>
-
-          <div class="row g-3 mb-4">
-            <div class="col-md-6">
-              <div class="border rounded p-3 bg-body-tertiary h-100">
-                <div class="fw-semibold mb-1">Workflow Bridge</div>
-                <div class="small text-body-secondary mb-3">From document review to requirement compliance</div>
-                <div class="d-flex justify-content-between small mb-2">
-                  <span>Reviewed docs not linked</span>
-                  <span class="fw-semibold">{{ (dashboard_bridge.reviewed_docs_not_linked if dashboard_bridge else 0) or 0 }}</span>
-                </div>
-                <div class="d-flex justify-content-between small mb-2">
-                  <span>Linked requirements pending assessment</span>
-                  <span class="fw-semibold">{{ (dashboard_bridge.linked_requirements_pending_assessment if dashboard_bridge else 0) or 0 }}</span>
-                </div>
-                <div class="d-flex justify-content-between small">
-                  <span>Linked requirements total</span>
-                  <span class="fw-semibold">{{ (dashboard_bridge.linked_requirements if dashboard_bridge else 0) or 0 }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="border rounded p-3 bg-body-tertiary h-100">
-                <div class="fw-semibold mb-1">What To Do Next</div>
-                <ul class="small text-body-secondary mb-0 ps-3">
-                  <li>Open reviewed documents in AI Review.</li>
-                  <li>Link strongest evidence to each requirement.</li>
-                  <li>Complete requirement assessments to move readiness.</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <!-- Framework Compliance Tiles -->
-          <div class="row g-3 mb-4">
-            {% if dashboard_frameworks %}
-              {% for fw in dashboard_frameworks %}
-              {% set pct = fw.compliance_rate or 0 %}
-              {% set tone = 'success' if pct >= 80 else ('warning' if pct >= 60 else 'danger') %}
-              <div class="col-md-6 col-lg-4">
-                <div class="card border h-100">
-                  <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start mb-3">
-                      <div>
-                        <h6 class="fw-bold mb-0">{{ fw.framework }}</h6>
-                        <small class="text-body-secondary">Live framework coverage</small>
-                      </div>
-                      <span class="badge bg-{{ tone }}">{{ pct|round(0)|int }}%</span>
-                    </div>
-                    <div class="progress mb-2" style="height: 8px;">
-                      <div class="progress-bar bg-{{ tone }}" style="width: {{ pct }}%"></div>
-                    </div>
-                    <div class="d-flex justify-content-between text-sm">
-                      <span class="text-{{ tone }}"><i class="bi bi-check-circle-fill me-1"></i>{{ fw.compliant }}/{{ fw.total }}</span>
-                      <span class="text-body-secondary">requirements marked compliant</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {% endfor %}
-            {% else %}
-              <div class="col-12">
-                <div class="alert alert-info mb-0">
-                  No live framework analytics yet. Start linking evidence to requirements and running AI review.
-                </div>
-              </div>
-            {% endif %}
           </div>
 
           <!-- Upcoming Deadlines -->

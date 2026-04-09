@@ -4574,6 +4574,19 @@ def _assistant_is_org_admin(org_id: int) -> bool:
     return role_name in {'admin', 'owner'}
 
 
+def _assistant_display_name() -> str:
+    first = ((getattr(current_user, 'first_name', None) or '')).strip()
+    if first:
+        return first
+    full_name = ((getattr(current_user, 'full_name', None) or '')).strip()
+    if full_name:
+        return full_name.split()[0]
+    email = ((getattr(current_user, 'email', None) or '')).strip()
+    if email and '@' in email:
+        return email.split('@', 1)[0]
+    return ''
+
+
 def _assistant_default_actions() -> list[dict]:
     return [
         {
@@ -4658,6 +4671,7 @@ def _assistant_generate_ai_reply(
     org_id: int,
     query_text: str,
     fallback_reply: str,
+    user_display_name: str,
     doc_count: int,
     reviewed_doc_count: int,
     dashboard_summary: dict,
@@ -4677,23 +4691,35 @@ def _assistant_generate_ai_reply(
 
     user_prompt = (
         f"User question: {query}\n\n"
+        f"User display name: {user_display_name or 'Unknown'}\n"
         f"Org snapshot: uploads={int(doc_count)}, ai_reviewed={int(reviewed_doc_count)}, "
         f"compliance_rate={compliance_rate}%, linked_requirements={linked_requirements}, "
         f"pending_assessment={pending_assessment}.\n\n"
         f"Fallback guidance (if needed): {fallback_reply}\n\n"
         f"{feature_map}\n\n"
-        "Respond with practical detail and clear language."
+        "Response style:\n"
+        "- Speak like a helpful human product specialist.\n"
+        "- Use the user's first name once at the start when available.\n"
+        "- Use short sections and concise bullets for readability.\n"
+        "- Keep the response practical and action-oriented."
     )
 
     endpoint = (current_app.config.get('AZURE_OPENAI_ENDPOINT') or '').strip().rstrip('/')
     api_key = (current_app.config.get('AZURE_OPENAI_API_KEY') or '').strip()
     api_version = (current_app.config.get('AZURE_OPENAI_API_VERSION') or '2024-10-21').strip()
     deployment = (
-        (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI') or '').strip()
+        (current_app.config.get('AZURE_OPENAI_ASSISTANT_DEPLOYMENT') or '').strip()
+        or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI') or '').strip()
         or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT') or '').strip()
-        or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER') or '').strip()
     )
     timeout_seconds = int(current_app.config.get('AZURE_OPENAI_TIMEOUT_SECONDS') or 30)
+    max_tokens = _clamp_int(
+        current_app.config.get('ASSISTANT_CHAT_MAX_OUTPUT_TOKENS') or 550,
+        default=550,
+        minimum=180,
+        maximum=1200,
+    )
+    temperature = float(current_app.config.get('ASSISTANT_CHAT_TEMPERATURE') or 0.2)
 
     started = time.perf_counter()
 
@@ -4717,8 +4743,8 @@ def _assistant_generate_ai_reply(
                         },
                         {'role': 'user', 'content': user_prompt},
                     ],
-                    'temperature': 0.2,
-                    'max_tokens': 900,
+                    'temperature': max(0.0, min(1.0, temperature)),
+                    'max_tokens': int(max_tokens),
                 },
                 timeout=timeout_seconds,
             )
@@ -4749,7 +4775,7 @@ def _assistant_generate_ai_reply(
 
     # Optional fallback: OpenRouter when configured.
     openrouter_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()
-    openrouter_model = (current_app.config.get('OPENROUTER_MODEL') or '').strip() or 'openrouter/auto'
+    openrouter_model = (current_app.config.get('OPENROUTER_ASSISTANT_MODEL') or '').strip() or 'openrouter/auto'
     if not openrouter_key:
         return None
 
@@ -4773,8 +4799,8 @@ def _assistant_generate_ai_reply(
                     },
                     {'role': 'user', 'content': user_prompt},
                 ],
-                'temperature': 0.2,
-                'max_tokens': 900,
+                'temperature': max(0.0, min(1.0, temperature)),
+                'max_tokens': int(max_tokens),
             },
             timeout=timeout_seconds,
         )
@@ -5214,6 +5240,7 @@ def assistant_chat_api():
 
     if message and not _assistant_is_action_intent(message):
         try:
+            display_name = _assistant_display_name()
             doc_count = (
                 Document.query
                 .filter(Document.organization_id == int(org_id), Document.is_active.is_(True))
@@ -5234,6 +5261,7 @@ def assistant_chat_api():
                 org_id=int(org_id),
                 query_text=message,
                 fallback_reply=reply,
+                user_display_name=display_name,
                 doc_count=int(doc_count),
                 reviewed_doc_count=int(reviewed_doc_count),
                 dashboard_summary=dashboard_summary,
