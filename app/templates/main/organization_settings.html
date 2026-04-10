@@ -92,6 +92,25 @@
           </h5>
         </div>
         <div class="card-body p-4">
+          {% if billing_state %}
+          <div class="alert alert-light border mb-4" role="status">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div>
+                <strong>Current plan:</strong> {{ billing_state.plan_label }}
+                <span class="badge text-bg-secondary ms-2">{{ billing_state.billing_status|replace('_', ' ')|title }}</span>
+              </div>
+              <small class="text-body-secondary">Access source: {{ billing_state.source|replace('_', ' ') }}</small>
+            </div>
+            {% if billing_state.demo_override_active %}
+              <small class="text-warning-emphasis d-block mt-2">
+                Demo override active{% if billing_state.demo_override_until %} until {{ billing_state.demo_override_until.strftime('%Y-%m-%d') }}{% endif %}.
+              </small>
+            {% elif billing_state.internal_override %}
+              <small class="text-warning-emphasis d-block mt-2">Internal override active for this organisation.</small>
+            {% endif %}
+          </div>
+          {% endif %}
+
           <form method="POST" novalidate>
             {{ billing_form.hidden_tag() }}
 
@@ -124,6 +143,39 @@
               {{ billing_form.submit() }}
             </div>
           </form>
+
+          <hr class="my-4">
+
+          <h6 class="fw-semibold mb-3">Subscription Actions</h6>
+          {% if billing_state and billing_state.stripe_enabled %}
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              {% for plan_code, plan in billing_catalog.items() %}
+              <form method="POST" action="{{ url_for('main.billing_checkout') }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="plan_code" value="{{ plan_code }}">
+                <button type="submit" class="btn btn-outline-primary btn-sm">
+                  Start {{ plan.label }} Checkout
+                </button>
+              </form>
+              {% endfor %}
+
+              {% if billing_state.customer_id %}
+              <form method="POST" action="{{ url_for('main.billing_portal') }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-secondary btn-sm">
+                  Open Billing Portal
+                </button>
+              </form>
+              {% endif %}
+            </div>
+            <small class="text-body-secondary d-block">
+              Phase 2 soft rollout: entitlements are visible but not hard-enforced yet.
+            </small>
+          {% else %}
+            <small class="text-body-secondary d-block">
+              Stripe is not configured yet. Add Stripe keys and price IDs to enable checkout.
+            </small>
+          {% endif %}
         </div>
       </div>
 

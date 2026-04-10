@@ -23,6 +23,7 @@ from app.services.compliance_scoring_service import compliance_scoring_service
 from app.services.notification_service import notification_service
 from app.services.rag_query_service import rag_query_service
 from app.services.document_analysis_service import document_analysis_service
+from app.services.billing_service import billing_service
 from sqlalchemy import and_, or_, func
 
 import threading
@@ -335,6 +336,44 @@ def _require_org_permission(permission_code: str):
     if not current_user.has_permission(permission_code, org_id=_active_org_id()):
         abort(403)
     return None
+
+
+def _plan_enforcement_enabled() -> bool:
+    # Keep tests deterministic and avoid forcing test fixtures to set plan metadata.
+    if bool(current_app.config.get('TESTING')):
+        return False
+    return True
+
+
+def _require_plan_feature(feature_key: str, *, fallback_endpoint: str = 'main.plans_preview'):
+    if not _plan_enforcement_enabled():
+        return None
+
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not org_id:
+        return redirect(url_for(fallback_endpoint))
+
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        abort(404)
+
+    billing_state = billing_service.resolve_entitlements(organization)
+    feature_access = dict(billing_state.get('feature_access') or {})
+    allowed = bool(feature_access.get((feature_key or '').strip().lower()))
+    if allowed:
+        return None
+
+    min_plan = billing_service.FEATURE_MIN_PLAN.get((feature_key or '').strip().lower(), 'higher')
+    flash(
+        f"This feature requires the {str(min_plan).capitalize()} plan or above. "
+        'Use Plans to switch the test plan and try again.',
+        'warning',
+    )
+    return redirect(url_for(fallback_endpoint))
 
 
 def _membership_has_permission(membership: OrganizationMembership, code: str) -> bool:
@@ -2636,6 +2675,14 @@ def organization_settings():
     billing_form = OrganizationBillingForm(obj=organization)
     monthly_report_form = OrganizationMonthlyReportForm(obj=organization)
     is_org_admin = bool(current_user.has_permission('users.manage', org_id=int(organization.id)))
+    billing_state = billing_service.resolve_entitlements(organization)
+    billing_catalog = billing_service.plan_catalog()
+
+    billing_result = (request.args.get('billing') or '').strip().lower()
+    if billing_result == 'success':
+        flash('Checkout completed. Billing status may take a few moments to update.', 'success')
+    elif billing_result == 'cancelled':
+        flash('Checkout cancelled. No billing changes were made.', 'info')
 
     if request.method == 'POST':
         submitted = (request.form.get('form_name') or '').strip()
@@ -2662,6 +2709,8 @@ def organization_settings():
                             monthly_report_form=monthly_report_form,
                             is_org_admin=is_org_admin,
                             organization=organization,
+                            billing_state=billing_state,
+                            billing_catalog=billing_catalog,
                         )
 
                 try:
@@ -2740,6 +2789,8 @@ def organization_settings():
         monthly_report_form=monthly_report_form,
         is_org_admin=is_org_admin,
         organization=organization,
+        billing_state=billing_state,
+        billing_catalog=billing_catalog,
     )
 
 
@@ -5486,7 +5537,107 @@ def plans_preview():
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
-    return render_template('main/plans_preview.html', title='Plans Preview')
+    organization = db.session.get(Organization, int(_active_org_id()))
+    billing_state = billing_service.resolve_entitlements(organization) if organization else None
+    billing_catalog = billing_service.plan_catalog()
+    return render_template(
+        'main/plans_preview.html',
+        title='Plans Preview',
+        billing_state=billing_state,
+        billing_catalog=billing_catalog,
+    )
+
+
+@bp.route('/plans-preview/select-plan', methods=['POST'])
+@login_required
+def plans_preview_select_plan():
+    maybe = _require_org_permission('org.manage')
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id)) if org_id else None
+    if not organization:
+        abort(404)
+
+    selected_plan = billing_service.normalize_plan_code(request.form.get('plan_code'))
+    organization.billing_plan_code = selected_plan
+    organization.subscription_tier = selected_plan.capitalize()
+    # Test-mode selection should allow immediate in-app gating checks without live billing.
+    organization.billing_status = 'active'
+    organization.billing_internal_override = True
+    organization.billing_override_reason = 'Manual plan selection for testing'
+    try:
+        db.session.commit()
+        invalidate_org_switcher_context_cache(int(current_user.id), int(org_id))
+        flash(f'Test plan set to {selected_plan.capitalize()}. Feature access has been updated.', 'success')
+    except Exception:
+        db.session.rollback()
+        flash('Could not update test plan. Please try again.', 'error')
+
+    return redirect(url_for('main.plans_preview'))
+
+
+@bp.route('/billing/checkout', methods=['POST'])
+@login_required
+def billing_checkout():
+    maybe = _require_org_permission('org.manage')
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id)) if org_id else None
+    if not organization:
+        flash('Organisation not found.', 'error')
+        return redirect(url_for('main.organization_settings'))
+
+    plan_code = (request.form.get('plan_code') or '').strip().lower()
+    try:
+        checkout_url = billing_service.create_checkout_session(organization, plan_code=plan_code)
+        return redirect(checkout_url)
+    except Exception as exc:
+        current_app.logger.exception('Unable to create Stripe checkout session for org %s', int(organization.id))
+        flash(f'Could not start checkout: {exc}', 'error')
+        return redirect(url_for('main.organization_settings'))
+
+
+@bp.route('/billing/portal', methods=['POST'])
+@login_required
+def billing_portal():
+    maybe = _require_org_permission('org.manage')
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id)) if org_id else None
+    if not organization:
+        flash('Organisation not found.', 'error')
+        return redirect(url_for('main.organization_settings'))
+
+    try:
+        portal_url = billing_service.create_portal_session(organization)
+        return redirect(portal_url)
+    except Exception as exc:
+        current_app.logger.exception('Unable to create Stripe portal session for org %s', int(organization.id))
+        flash(f'Could not open billing portal: {exc}', 'error')
+        return redirect(url_for('main.organization_settings'))
+
+
+@bp.route('/billing/webhook', methods=['POST'])
+def billing_webhook():
+    payload = request.get_data(cache=False)
+    signature = request.headers.get('Stripe-Signature')
+
+    try:
+        event = billing_service.verify_webhook(payload, signature)
+        billing_service.apply_webhook_event(event)
+        return jsonify({'received': True}), 200
+    except ValueError as exc:
+        current_app.logger.warning('Stripe webhook rejected: %s', exc)
+        return jsonify({'received': False, 'error': str(exc)}), 400
+    except Exception:
+        current_app.logger.exception('Stripe webhook processing failed')
+        return jsonify({'received': False, 'error': 'Webhook processing failed.'}), 500
 
 
 @bp.route('/api/ai/demo/analyze', methods=['POST'])
@@ -5497,6 +5648,10 @@ def ai_demo_analyze_api():
     maybe = _require_active_org()
     if maybe is not None:
         return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    maybe_plan = _require_plan_feature('ai_tagging')
+    if maybe_plan is not None:
+        return jsonify({'success': False, 'error': 'This action requires Scale plan or above.'}), 403
 
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
@@ -5858,6 +6013,10 @@ def ai_summary_test():
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
+
+    maybe_plan = _require_plan_feature('ai_tagging')
+    if maybe_plan is not None:
+        return maybe_plan
 
     flash('AI Summary Test has been merged into AI Review.', 'info')
     return redirect(url_for('main.ai_demo'))
@@ -6911,6 +7070,10 @@ def analytics_dashboard():
     if maybe is not None:
         return maybe
 
+    maybe_plan = _require_plan_feature('multi_site_reporting')
+    if maybe_plan is not None:
+        return maybe_plan
+
     org_id = _active_org_id()
     organization = db.session.get(Organization, int(org_id))
     if not organization:
@@ -6934,6 +7097,10 @@ def analytics_export_xlsx():
     if maybe is not None:
         return maybe
 
+    maybe_plan = _require_plan_feature('multi_site_reporting')
+    if maybe_plan is not None:
+        return maybe_plan
+
     org_id = _active_org_id()
     payload = analytics_service.build_dashboard_payload(organization_id=int(org_id))
     workbook = analytics_service.build_excel(payload)
@@ -6954,6 +7121,10 @@ def analytics_export_pdf():
     maybe = _require_org_permission('audits.export')
     if maybe is not None:
         return maybe
+
+    maybe_plan = _require_plan_feature('multi_site_reporting')
+    if maybe_plan is not None:
+        return maybe_plan
 
     org_id = _active_org_id()
     organization = db.session.get(Organization, int(org_id))

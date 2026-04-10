@@ -68,6 +68,17 @@ class Config:
     # CAPTCHA (Cloudflare Turnstile) - optional
     TURNSTILE_SITE_KEY = os.environ.get('TURNSTILE_SITE_KEY')
     TURNSTILE_SECRET_KEY = os.environ.get('TURNSTILE_SECRET_KEY')
+
+    # Billing (Stripe)
+    STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+    STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+    STRIPE_WEBHOOK_TOLERANCE_SECONDS = int(os.environ.get('STRIPE_WEBHOOK_TOLERANCE_SECONDS') or 300)
+    STRIPE_PRICE_ID_STARTER = os.environ.get('STRIPE_PRICE_ID_STARTER')
+    STRIPE_PRICE_ID_TEAM = os.environ.get('STRIPE_PRICE_ID_TEAM')
+    STRIPE_PRICE_ID_SCALE = os.environ.get('STRIPE_PRICE_ID_SCALE')
+    STRIPE_PRICE_ID_GROWTH = os.environ.get('STRIPE_PRICE_ID_GROWTH')
+    STRIPE_PRICE_ID_ENTERPRISE = os.environ.get('STRIPE_PRICE_ID_ENTERPRISE')
+    APP_BASE_URL = os.environ.get('APP_BASE_URL')
     
     # File Upload Configuration
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
