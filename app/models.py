@@ -110,6 +110,19 @@ class Organization(db.Model):
     logo_blob_name = db.Column(db.String(255))
     logo_content_type = db.Column(db.String(100))
     subscription_tier = db.Column(db.String(20), default='Starter')
+    billing_plan_code = db.Column(db.String(40), nullable=True)
+    billing_status = db.Column(db.String(40), nullable=True)
+    stripe_customer_id = db.Column(db.String(80), nullable=True)
+    stripe_subscription_id = db.Column(db.String(80), nullable=True)
+    billing_current_period_start = db.Column(db.DateTime, nullable=True)
+    billing_current_period_end = db.Column(db.DateTime, nullable=True)
+    billing_trial_ends_at = db.Column(db.DateTime, nullable=True)
+    billing_cancel_at_period_end = db.Column(db.Boolean, nullable=False, default=False)
+    billing_internal_override = db.Column(db.Boolean, nullable=False, default=False)
+    billing_override_reason = db.Column(db.String(255), nullable=True)
+    billing_demo_override_until = db.Column(db.DateTime, nullable=True)
+    billing_last_event_id = db.Column(db.String(80), nullable=True)
+    billing_last_event_at = db.Column(db.DateTime, nullable=True)
 
     # Compliance + privacy acknowledgements
     operates_in_australia = db.Column(db.Boolean, nullable=True)
@@ -674,6 +687,23 @@ class AdminNotification(db.Model):
         db.Index('ix_admin_notifications_org_created_at', 'organization_id', 'created_at'),
         db.Index('ix_admin_notifications_org_read_created_at', 'organization_id', 'is_read', 'created_at'),
         db.Index('ix_admin_notifications_event_type', 'event_type'),
+    )
+
+
+class StripeBillingWebhookEvent(db.Model):
+    __tablename__ = 'stripe_billing_webhook_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.String(80), nullable=False)
+    event_type = db.Column(db.String(80), nullable=False)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+    processed_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('event_id', name='uq_stripe_billing_webhook_event_id'),
+        db.Index('ix_stripe_billing_webhook_events_org_processed', 'organization_id', 'processed_at'),
     )
 
 

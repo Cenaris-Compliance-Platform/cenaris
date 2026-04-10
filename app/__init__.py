@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from config import config
 import os
+import sys
 import logging
 import threading
 import time
@@ -204,9 +205,14 @@ def create_app(config_name=None):
     # Initialize database extensions
     db.init_app(app)
     migrate.init_app(app, db)
+
+    argv = [str(a).strip().lower() for a in (sys.argv or [])]
+    is_flask_db_cli = ('db' in argv) and any('flask' in a for a in argv)
+    telemetry_disabled = (os.environ.get('DISABLE_APP_TELEMETRY') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
+    skip_telemetry_init = bool(app.config.get('TESTING') or is_flask_db_cli or telemetry_disabled)
     
     # Initialize telemetry only outside tests to avoid early DB engine binding.
-    if not app.config.get('TESTING'):
+    if not skip_telemetry_init:
         # Initialize logging system (Milestone 2)
         from app.services.logging_service import app_logger
         app_logger.init_app(app)
@@ -218,7 +224,7 @@ def create_app(config_name=None):
     # ---- Optional SQL performance instrumentation ----
     # This is extremely useful for diagnosing 2-3s page loads (DB vs template vs network).
     # It is lightweight, but we still keep it "quiet" unless PERF_SQL_LOG=1 or the request is slow.
-    if not app.config.get('TESTING'):
+    if not skip_telemetry_init:
         try:
             from sqlalchemy import event
 
@@ -472,6 +478,10 @@ def create_app(config_name=None):
     
     from app.main import bp as main_bp
     app.register_blueprint(main_bp)
+    with contextlib.suppress(Exception):
+        webhook_view = app.view_functions.get('main.billing_webhook')
+        if webhook_view is not None:
+            csrf.exempt(webhook_view)
     
     from app.upload import bp as upload_bp
     app.register_blueprint(upload_bp)
@@ -583,6 +593,8 @@ def create_app(config_name=None):
             admin_notifications_recent = []
             available_roles = []
             user_departments = []
+            active_plan_code = 'starter'
+            feature_access = {}
             
             if active_org_id:
                 try:
@@ -597,6 +609,18 @@ def create_app(config_name=None):
                     can_manage_org = current_user.has_permission('org.manage', org_id=int(active_org_id))
                     can_manage_roles = current_user.has_permission('roles.manage', org_id=int(active_org_id))
                     is_org_admin_active = bool(can_manage_team)
+
+                    try:
+                        from app.services.billing_service import billing_service
+
+                        active_org = db.session.get(Organization, int(active_org_id))
+                        if active_org is not None:
+                            billing_state = billing_service.resolve_entitlements(active_org)
+                            active_plan_code = str(billing_state.get('plan_code') or 'starter').strip().lower() or 'starter'
+                            feature_access = dict(billing_state.get('feature_access') or {})
+                    except Exception:
+                        active_plan_code = 'starter'
+                        feature_access = {}
 
                     if can_manage_team:
                         try:
@@ -674,6 +698,9 @@ def create_app(config_name=None):
                 'admin_notifications_recent': admin_notifications_recent,
                 'available_roles': [{'id': r.id, 'name': r.name} for r in (available_roles or [])],
                 'user_departments': [{'id': d.id, 'name': d.name} for d in (user_departments or [])],
+                'active_plan_code': active_plan_code,
+                'can_use_ai_review': bool(feature_access.get('ai_tagging', True)),
+                'can_use_analytics': bool(feature_access.get('multi_site_reporting', True)),
             }
 
             if cache_seconds > 0:
