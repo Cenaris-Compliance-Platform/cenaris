@@ -158,6 +158,61 @@ class OrganizationMonthlyReportForm(FlaskForm):
         return ok
 
 
+class OrganizationBillingAccessForm(FlaskForm):
+    form_name = HiddenField(default='billing_access')
+
+    billing_plan_code = SelectField(
+        'Plan',
+        choices=[
+            ('starter', 'Starter'),
+            ('team', 'Team'),
+            ('scale', 'Scale'),
+            ('enterprise', 'Enterprise'),
+        ],
+        validators=[DataRequired()],
+        render_kw={'class': 'form-select'},
+        default='starter',
+    )
+
+    billing_status = SelectField(
+        'Billing Status',
+        choices=[
+            ('inactive', 'Inactive'),
+            ('active', 'Active'),
+            ('trialing', 'Trialing'),
+            ('past_due', 'Past Due'),
+            ('canceled', 'Canceled'),
+        ],
+        validators=[DataRequired()],
+        render_kw={'class': 'form-select'},
+        default='active',
+    )
+
+    billing_internal_override = BooleanField(
+        'Internal override (org-wide)',
+        render_kw={'class': 'form-check-input'},
+    )
+
+    billing_demo_override_enabled = BooleanField(
+        'Demo override enabled (no auto-expiry)',
+        render_kw={'class': 'form-check-input'},
+    )
+
+    billing_override_reason = StringField(
+        'Override reason',
+        validators=[Optional(), Length(max=255)],
+        render_kw={
+            'class': 'form-control',
+            'placeholder': 'Reason for internal/demo override (optional)',
+        },
+    )
+
+    submit = SubmitField(
+        'Save Billing Access',
+        render_kw={'class': 'btn btn-warning'},
+    )
+
+
 class UserAvatarForm(FlaskForm):
     avatar = FileField(
         'Profile Photo',

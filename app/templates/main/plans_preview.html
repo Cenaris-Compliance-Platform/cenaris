@@ -1,359 +1,379 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="fade-in">
-  <style>
-    .plans-matrix {
-      border-collapse: separate;
-      border-spacing: 0;
-      font-size: 0.98rem;
-    }
+<style>
+  .pricing-page {
+    --p-bg: #ffffff;
+    --p-panel: #ffffff;
+    --p-border: #dbe2ef;
+    --p-text: #101828;
+    --p-muted: #56637f;
+    --p-accent: #5964f2;
+    --p-accent-2: #7b58f6;
+    --p-success: #0f9f6a;
+    --p-btn-muted: #e9eefb;
+    --p-btn-muted-text: #546386;
+    color: var(--p-text);
+  }
 
-    .plans-matrix th,
-    .plans-matrix td {
-      border: 1px solid var(--bs-border-color);
-      vertical-align: middle;
-      padding: 0.6rem 0.55rem;
-    }
+  [data-bs-theme="dark"] .pricing-page {
+    --p-bg: #171717;
+    --p-panel: #1d1d1d;
+    --p-border: #353535;
+    --p-text: #f6f7fb;
+    --p-muted: #b8bfd0;
+    --p-accent: #6f7bf7;
+    --p-accent-2: #8a5bff;
+    --p-success: #49d6a0;
+    --p-btn-muted: #262a35;
+    --p-btn-muted-text: #bec7e3;
+  }
 
-    .plans-matrix .cap-col {
-      min-width: 260px;
-      font-weight: 700;
-      background: var(--bs-body-bg);
-    }
+  .pricing-wrap {
+    background: var(--p-bg);
+    border: 1px solid var(--p-border);
+    border-radius: 1rem;
+    padding: 1.35rem;
+  }
 
-    .plans-matrix .tier-core {
-      background: #dce8f8;
-    }
+  .pricing-title {
+    font-size: clamp(1.9rem, 3vw, 2.6rem);
+    line-height: 1.05;
+    font-weight: 800;
+    margin-bottom: 0.55rem;
+  }
 
-    .plans-matrix .tier-team {
-      background: #d9efe0;
-    }
+  .pricing-subtitle {
+    color: var(--p-muted);
+    font-size: 1rem;
+    max-width: 720px;
+    margin-bottom: 0.7rem;
+  }
 
-    .plans-matrix .tier-scale {
-      background: #e4dcf8;
-    }
+  .pricing-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
 
-    .plans-matrix .tier-enterprise {
-      background: #f5dce3;
-    }
+  .pricing-badge {
+    border: 1px solid var(--p-border);
+    border-radius: 999px;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.75rem;
+    color: var(--p-muted);
+    background: var(--p-panel);
+  }
 
-    .plans-matrix .explain-col {
-      min-width: 120px;
-      background: var(--bs-body-bg);
-      text-align: center;
-    }
+  .billing-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid var(--p-border);
+    border-radius: 999px;
+    padding: 0.22rem;
+    background: var(--p-panel);
+  }
 
-    .plans-matrix .section-row th {
-      background: #f4f4f4;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      font-size: 0.8rem;
-      color: var(--bs-secondary-color);
-    }
+  .billing-toggle .js-price-mode {
+    border: 0;
+    border-radius: 999px;
+    min-width: 96px;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--p-muted);
+    background: transparent;
+  }
 
-    .plans-matrix .icon-cell {
-      text-align: center;
-      font-size: 1.05rem;
-      font-weight: 700;
-    }
+  .billing-toggle .js-price-mode.active {
+    color: #fff;
+    background: linear-gradient(120deg, var(--p-accent), var(--p-accent-2));
+  }
 
-    .plans-matrix .status-on {
-      color: #14753b;
-    }
+  .pricing-save {
+    border: 1px solid color-mix(in srgb, var(--p-success) 45%, var(--p-border) 55%);
+    color: var(--p-success);
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.74rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
 
-    .plans-matrix .status-off {
-      color: #a53a49;
-    }
-  </style>
+  .pricing-cards .col-12 {
+    display: flex;
+  }
 
-  <div class="row mb-4">
-    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <div>
-        <h1 class="h3 fw-bold mb-1">Plans & Features (Discussion Draft)</h1>
-        <p class="text-body-secondary mb-0">Table-only preview for client discussion. No plan enforcement is implemented from this page.</p>
+  .plan-card {
+    width: 100%;
+    border: 1px solid var(--p-border);
+    border-radius: 0.85rem;
+    background: var(--p-panel);
+    padding: 0.95rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .plan-card.plan-popular {
+    border-color: color-mix(in srgb, var(--p-accent) 52%, var(--p-border) 48%);
+  }
+
+  .plan-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .plan-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+
+  .plan-chip {
+    background: linear-gradient(120deg, var(--p-accent), var(--p-accent-2));
+    color: #fff;
+    border-radius: 999px;
+    padding: 0.14rem 0.5rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+  }
+
+  .plan-desc {
+    color: var(--p-muted);
+    font-size: 0.88rem;
+    min-height: 2.6rem;
+  }
+
+  .plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: 0.22rem;
+  }
+
+  .plan-price .currency {
+    font-size: 1.05rem;
+    color: var(--p-muted);
+    font-weight: 700;
+  }
+
+  .plan-price .amount {
+    font-size: 2.2rem;
+    line-height: 1;
+    font-weight: 800;
+  }
+
+  .plan-note {
+    margin-top: -0.2rem;
+    color: var(--p-muted);
+    font-size: 0.86rem;
+  }
+
+  .plan-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.3rem;
+    flex-grow: 1;
+  }
+
+  .plan-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    font-size: 0.86rem;
+    line-height: 1.35;
+  }
+
+  .plan-list i {
+    color: var(--p-success);
+    margin-top: 0.06rem;
+  }
+
+  .plan-action {
+    margin-top: 0.5rem;
+  }
+
+  .plan-action .btn-primary {
+    border: 0;
+    font-weight: 700;
+    background: linear-gradient(120deg, var(--p-accent), var(--p-accent-2));
+  }
+
+  .plan-action .btn-outline-secondary {
+    background: var(--p-btn-muted);
+    border-color: var(--p-border);
+    color: var(--p-btn-muted-text);
+  }
+
+  .admin-inline {
+    margin-top: 1rem;
+    border: 1px solid var(--p-border);
+    border-radius: 0.8rem;
+    padding: 0.85rem;
+    background: var(--p-panel);
+  }
+
+  .admin-inline .form-select {
+    min-width: 160px;
+  }
+
+  @media (max-width: 991px) {
+    .pricing-actions {
+      margin-top: 0.35rem;
+    }
+  }
+</style>
+
+<div class="pricing-page fade-in">
+  <section class="pricing-wrap">
+    <div class="row g-3 align-items-start">
+      <div class="col-lg-8">
+        <h1 class="pricing-title">Pricing</h1>
+        <p class="pricing-subtitle">Start here and upgrade as your team grows. Pick a plan, complete checkout, and feature access updates automatically.</p>
         {% if billing_state %}
-        <p class="mb-0 mt-2">
-          <span class="badge text-bg-primary">Current Plan: {{ billing_state.plan_label }}</span>
-          <span class="badge text-bg-light border">Source: {{ billing_state.source|replace('_', ' ') }}</span>
-          <span class="badge text-bg-light border">Status: {{ billing_state.billing_status|replace('_', ' ')|title }}</span>
-        </p>
+        <div class="pricing-meta">
+          <span class="pricing-badge">Current: {{ billing_state.plan_label }}</span>
+          <span class="pricing-badge">Source: {{ billing_state.source|replace('_', ' ') }}</span>
+          <span class="pricing-badge">Status: {{ billing_state.billing_status|replace('_', ' ')|title }}</span>
+        </div>
         {% endif %}
       </div>
-      <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
-      </a>
-    </div>
-  </div>
 
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body d-flex flex-wrap justify-content-between align-items-end gap-3">
-      <div>
-        <div class="fw-semibold mb-1">Test Plan Selector</div>
-        <div class="text-body-secondary small">Choose a plan and apply gating immediately for testing.</div>
+      <div class="col-lg-4 d-flex justify-content-lg-end pricing-actions">
+        <div class="d-flex flex-column align-items-start gap-2">
+          <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+          </a>
+
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="billing-toggle" role="group" aria-label="Pricing mode">
+              <button type="button" class="js-price-mode active" data-mode="monthly">Monthly</button>
+              <button type="button" class="js-price-mode" data-mode="annual">Annual</button>
+            </div>
+            <span class="pricing-save">Save up to 20% yearly</span>
+          </div>
+        </div>
       </div>
-      <form method="POST" action="{{ url_for('main.plans_preview_select_plan') }}" class="d-flex flex-wrap align-items-end gap-2">
+    </div>
+
+    <div class="row g-3 mt-2 pricing-cards">
+      {% for code, plan in billing_catalog.items() %}
+      <div class="col-12 col-md-6 col-xl-3">
+        <article class="plan-card {% if code == 'team' %}plan-popular{% endif %}">
+          <div class="plan-top">
+            <div class="plan-name">{{ plan.label }}</div>
+            {% if code == 'team' %}<span class="plan-chip">Most Popular</span>{% endif %}
+          </div>
+
+          <div class="plan-desc">{{ plan.description }}</div>
+
+          <div class="plan-price" data-monthly="{{ plan.price_monthly_aud }}" data-annual="{{ plan.price_annual_aud }}">
+            <span class="currency">A$</span>
+            <span class="amount">{{ plan.price_monthly_aud }}</span>
+          </div>
+          <div class="plan-note" data-monthly-note="per month" data-annual-note="per year (billed yearly)">per month</div>
+
+          <ul class="plan-list">
+            <li><i class="bi bi-check-circle-fill"></i><span>Clause Mapping + Evidence Repository</span></li>
+            <li><i class="bi bi-check-circle-fill"></i><span>Gap Analysis and core governance workflows</span></li>
+            {% if code in ['team', 'scale', 'enterprise'] %}
+            <li><i class="bi bi-check-circle-fill"></i><span>Task Workflow and Risk Register</span></li>
+            {% endif %}
+            {% if code in ['scale', 'enterprise'] %}
+            <li><i class="bi bi-check-circle-fill"></i><span>AI Tagging and Multi-site Reporting</span></li>
+            {% endif %}
+            {% if code == 'enterprise' %}
+            <li><i class="bi bi-check-circle-fill"></i><span>SSO or API and advanced enterprise controls</span></li>
+            {% endif %}
+          </ul>
+
+          <div class="plan-action">
+            {% if billing_state and billing_state.plan_code == code %}
+              <button type="button" class="btn btn-outline-secondary w-100" disabled>Current Plan</button>
+            {% elif billing_state and billing_state.stripe_enabled %}
+              <form method="POST" action="{{ url_for('main.billing_checkout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="hidden" name="plan_code" value="{{ code }}" />
+                <button type="submit" class="btn btn-primary w-100">Choose {{ plan.label }}</button>
+              </form>
+            {% else %}
+              <button type="button" class="btn btn-outline-secondary w-100" disabled>Stripe not configured</button>
+            {% endif %}
+          </div>
+        </article>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if is_super_admin %}
+    <div class="admin-inline">
+      <form method="POST" action="{{ url_for('main.plans_preview_select_plan') }}" class="d-flex flex-wrap align-items-end gap-2 justify-content-between">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div>
-          <label for="planSelect" class="form-label mb-1 small text-body-secondary">Plan</label>
-          <select id="planSelect" name="plan_code" class="form-select form-select-sm" required>
-            {% for code, plan in billing_catalog.items() %}
-            <option value="{{ code }}" {% if billing_state and billing_state.plan_code == code %}selected{% endif %}>{{ plan.label }}</option>
-            {% endfor %}
-          </select>
+          <div class="fw-semibold mb-1">Test Plan Selector</div>
+          <div class="small text-body-secondary">Super admin only</div>
         </div>
-        <button type="submit" class="btn btn-primary btn-sm">
-          Apply Plan
-        </button>
+        <div class="d-flex flex-wrap align-items-end gap-2">
+          <div>
+            <label for="planSelect" class="form-label mb-1 small">Plan</label>
+            <select id="planSelect" name="plan_code" class="form-select form-select-sm" required>
+              {% for code, plan in billing_catalog.items() %}
+              <option value="{{ code }}" {% if billing_state and billing_state.plan_code == code %}selected{% endif %}>{{ plan.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Apply Plan</button>
+        </div>
       </form>
     </div>
-  </div>
-
-  <div class="card border-0 shadow-sm">
-    <div class="card-body">
-      <div class="table-responsive">
-        <table class="table align-middle mb-0 plans-matrix">
-          <thead>
-            <tr>
-              <th scope="col" class="cap-col">Pricing</th>
-              <th scope="col" class="tier-core text-center">Tier 1: Core</th>
-              <th scope="col" class="tier-team text-center">Tier 2: Team</th>
-              <th scope="col" class="tier-scale text-center">Tier 3: Scale</th>
-              <th scope="col" class="tier-enterprise text-center">Tier 4: Enterprise</th>
-              <th scope="col" class="explain-col">Explain</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="section-row">
-              <th colspan="6">Pricing</th>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Monthly Subscription Price</th>
-              <td class="tier-core">TBA</td>
-              <td class="tier-team">TBA</td>
-              <td class="tier-scale">TBA</td>
-              <td class="tier-enterprise">Custom</td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="price_monthly">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Annual Subscription Price (20% discount)</th>
-              <td class="tier-core">TBA</td>
-              <td class="tier-team">TBA</td>
-              <td class="tier-scale">TBA</td>
-              <td class="tier-enterprise">Custom</td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="price_annual">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Additional Framework (Monthly)</th>
-              <td class="tier-core">TBA</td>
-              <td class="tier-team">TBA</td>
-              <td class="tier-scale">TBA</td>
-              <td class="tier-enterprise">Negotiated</td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="additional_framework">Explain</button>
-              </td>
-            </tr>
-
-            <tr class="section-row">
-              <th colspan="6">Inclusions</th>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Clause Mapping</th>
-              <td class="tier-core icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="clause_mapping">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Evidence Repository</th>
-              <td class="tier-core icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="evidence_repository">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Gap Analysis</th>
-              <td class="tier-core icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="gap_analysis">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Task Workflow</th>
-              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="task_workflow">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Risk Register</th>
-              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="risk_register">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Multi-site Reporting</th>
-              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="multi_site_reporting">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">AI Tagging</th>
-              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="ai_tagging">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">Regulatory Updates</th>
-              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="regulatory_updates">Explain</button>
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" class="cap-col">SSO / API</th>
-              <td class="tier-core icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-team icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-scale icon-cell"><i class="bi bi-x-lg status-off" aria-hidden="true"></i><span class="visually-hidden">Not included</span></td>
-              <td class="tier-enterprise icon-cell"><i class="bi bi-check-lg status-on" aria-hidden="true"></i><span class="visually-hidden">Included</span></td>
-              <td class="explain-col">
-                <button type="button" class="btn btn-sm btn-outline-primary plan-explain-btn" data-topic="sso_api">Explain</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="card border-0 shadow-sm mt-4" id="planExplainCard">
-    <div class="card-body">
-      <h5 class="card-title mb-2" id="planExplainTitle">Click any Explain button</h5>
-      <p class="text-body-secondary mb-0" id="planExplainText">
-        You will see a practical explanation here for that capability and what each plan level means.
-      </p>
-    </div>
-  </div>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
   (function () {
-    const details = {
-      clause_mapping: {
-        title: 'Clause Mapping',
-        text: 'Maps uploaded evidence and controls to framework clauses so teams can see what is covered and what still needs action. In all plans, this remains the baseline compliance view.'
-      },
-      evidence_repository: {
-        title: 'Evidence Repository',
-        text: 'Central place to store and organize files used for audits and internal reviews. Included across all plans so every customer has one source of truth for compliance artifacts.'
-      },
-      gap_analysis: {
-        title: 'Gap Analysis',
-        text: 'Highlights missing controls and weak evidence areas against selected requirements. Included in all plans because it is core to understanding current readiness.'
-      },
-      task_workflow: {
-        title: 'Task Workflow',
-        text: 'Adds assignable remediation tasks, owners, due dates, and completion tracking. Starts from Team plan because it supports collaboration and operational follow-through.'
-      },
-      risk_register: {
-        title: 'Risk Register',
-        text: 'Tracks identified compliance risks, severity, mitigation actions, and residual risk over time. Starts from Team plan to support governance and accountability.'
-      },
-      multi_site_reporting: {
-        title: 'Multi-site Reporting',
-        text: 'Consolidates reporting across multiple business units, locations, or entities. Starts from Scale plan where cross-site visibility and aggregation become critical.'
-      },
-      ai_tagging: {
-        title: 'AI Tagging',
-        text: 'Automatically labels and classifies evidence to speed mapping and review cycles. Included from Scale upward to align with higher-volume operations.'
-      },
-      regulatory_updates: {
-        title: 'Regulatory Updates',
-        text: 'Delivers update signals when standards, obligations, or interpretations change. Included from Scale upward for organizations that need proactive change management.'
-      },
-      sso_api: {
-        title: 'SSO / API',
-        text: 'Enterprise identity integration and API access for IT-managed workflows and system-to-system automation. Reserved for Enterprise where security and integration requirements are highest.'
-      },
-      price_monthly: {
-        title: 'Price (monthly)',
-        text: 'Shown as TBA while packaging is being finalized with clients. Enterprise remains custom because scope, seats, and integrations typically vary by contract.'
-      },
-      price_annual: {
-        title: 'Price (annual, 20% discount)',
-        text: 'Annual pricing is intended to reward longer commitments with a discount relative to monthly billing, while still following the same feature boundaries per plan.'
-      },
-      additional_framework: {
-        title: 'Additional Framework (monthly)',
-        text: 'Optional add-on when clients need coverage for more frameworks beyond the base package. Enterprise is negotiated due to complexity and volume differences.'
-      }
-    };
+    const modeButtons = Array.from(document.querySelectorAll('.js-price-mode'));
+    const cardPriceWrapEls = Array.from(document.querySelectorAll('.plan-price'));
+    const cardNoteEls = Array.from(document.querySelectorAll('.plan-note'));
 
-    const titleEl = document.getElementById('planExplainTitle');
-    const textEl = document.getElementById('planExplainText');
-    const buttons = Array.from(document.querySelectorAll('.plan-explain-btn'));
+    const setMode = (mode) => {
+      const normalized = mode === 'annual' ? 'annual' : 'monthly';
 
-    const setActive = (activeButton) => {
-      buttons.forEach((btn) => {
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-outline-primary');
+      modeButtons.forEach((btn) => {
+        const active = (btn.getAttribute('data-mode') || '') === normalized;
+        btn.classList.toggle('active', active);
       });
-      if (activeButton) {
-        activeButton.classList.remove('btn-outline-primary');
-        activeButton.classList.add('btn-primary');
-      }
+
+      cardPriceWrapEls.forEach((el) => {
+        const amountEl = el.querySelector('.amount');
+        if (!amountEl) return;
+        const value = el.getAttribute(normalized === 'annual' ? 'data-annual' : 'data-monthly');
+        if (value) {
+          amountEl.textContent = value;
+        }
+      });
+
+      cardNoteEls.forEach((el) => {
+        const note = el.getAttribute(normalized === 'annual' ? 'data-annual-note' : 'data-monthly-note');
+        if (note) {
+          el.textContent = note;
+        }
+      });
     };
 
-    buttons.forEach((btn) => {
+    modeButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
-        const topic = (btn.getAttribute('data-topic') || '').trim();
-        const item = details[topic];
-        if (!item) {
-          return;
-        }
-        if (titleEl) {
-          titleEl.textContent = item.title;
-        }
-        if (textEl) {
-          textEl.textContent = item.text;
-        }
-        setActive(btn);
+        setMode(btn.getAttribute('data-mode') || 'monthly');
       });
     });
+
+    setMode('monthly');
   })();
 </script>
 {% endblock %}

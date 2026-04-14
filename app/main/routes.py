@@ -345,6 +345,10 @@ def _plan_enforcement_enabled() -> bool:
     return True
 
 
+def _is_super_admin_user() -> bool:
+    return bool(billing_service.is_super_admin_email(getattr(current_user, 'email', None)))
+
+
 def _require_plan_feature(feature_key: str, *, fallback_endpoint: str = 'main.plans_preview'):
     if not _plan_enforcement_enabled():
         return None
@@ -361,7 +365,10 @@ def _require_plan_feature(feature_key: str, *, fallback_endpoint: str = 'main.pl
     if not organization:
         abort(404)
 
-    billing_state = billing_service.resolve_entitlements(organization)
+    billing_state = billing_service.resolve_entitlements(
+        organization,
+        actor_email=getattr(current_user, 'email', None),
+    )
     feature_access = dict(billing_state.get('feature_access') or {})
     allowed = bool(feature_access.get((feature_key or '').strip().lower()))
     if allowed:
@@ -2654,6 +2661,7 @@ def ai_evidence():
 def organization_settings():
     from flask import abort, flash, make_response, request
     from app.main.forms import (
+        OrganizationBillingAccessForm,
         OrganizationBillingForm,
         OrganizationMonthlyReportForm,
         OrganizationProfileSettingsForm,
@@ -2674,8 +2682,19 @@ def organization_settings():
     profile_form = OrganizationProfileSettingsForm(obj=organization)
     billing_form = OrganizationBillingForm(obj=organization)
     monthly_report_form = OrganizationMonthlyReportForm(obj=organization)
+    billing_access_form = OrganizationBillingAccessForm(
+        billing_plan_code=billing_service.normalize_plan_code(organization.billing_plan_code or organization.subscription_tier),
+        billing_status=((organization.billing_status or 'inactive').strip().lower() or 'inactive'),
+        billing_internal_override=bool(getattr(organization, 'billing_internal_override', False)),
+        billing_demo_override_enabled=bool(getattr(organization, 'billing_demo_override_until', None)),
+        billing_override_reason=(organization.billing_override_reason or ''),
+    )
+    is_super_admin = bool(_is_super_admin_user())
     is_org_admin = bool(current_user.has_permission('users.manage', org_id=int(organization.id)))
-    billing_state = billing_service.resolve_entitlements(organization)
+    billing_state = billing_service.resolve_entitlements(
+        organization,
+        actor_email=getattr(current_user, 'email', None),
+    )
     billing_catalog = billing_service.plan_catalog()
 
     billing_result = (request.args.get('billing') or '').strip().lower()
@@ -2706,7 +2725,9 @@ def organization_settings():
                             title='Organization Settings',
                             profile_form=profile_form,
                             billing_form=billing_form,
+                            billing_access_form=billing_access_form,
                             monthly_report_form=monthly_report_form,
+                            is_super_admin=is_super_admin,
                             is_org_admin=is_org_admin,
                             organization=organization,
                             billing_state=billing_state,
@@ -2733,6 +2754,29 @@ def organization_settings():
                 except Exception:
                     db.session.rollback()
                     flash('Failed to save billing details. Please try again.', 'error')
+        elif submitted == 'billing_access':
+            if not is_super_admin:
+                abort(403)
+
+            if billing_access_form.validate_on_submit():
+                organization.billing_plan_code = billing_service.normalize_plan_code(billing_access_form.billing_plan_code.data)
+                organization.subscription_tier = organization.billing_plan_code.capitalize()
+                organization.billing_status = ((billing_access_form.billing_status.data or 'inactive').strip().lower() or 'inactive')
+                organization.billing_internal_override = bool(billing_access_form.billing_internal_override.data)
+                if bool(billing_access_form.billing_demo_override_enabled.data):
+                    organization.billing_demo_override_until = datetime(2099, 12, 31, tzinfo=timezone.utc)
+                else:
+                    organization.billing_demo_override_until = None
+                organization.billing_override_reason = (billing_access_form.billing_override_reason.data or '').strip() or None
+
+                try:
+                    db.session.commit()
+                    invalidate_org_switcher_context_cache(int(current_user.id), int(organization.id))
+                    flash('Billing access controls updated.', 'success')
+                    return redirect(url_for('main.organization_settings'))
+                except Exception:
+                    db.session.rollback()
+                    flash('Failed to update billing access controls. Please try again.', 'error')
         elif submitted == 'monthly_reports':
             if not is_org_admin:
                 abort(403)
@@ -2786,7 +2830,9 @@ def organization_settings():
         title='Organization Profile',
         profile_form=profile_form,
         billing_form=billing_form,
+        billing_access_form=billing_access_form,
         monthly_report_form=monthly_report_form,
+        is_super_admin=is_super_admin,
         is_org_admin=is_org_admin,
         organization=organization,
         billing_state=billing_state,
@@ -5538,13 +5584,18 @@ def plans_preview():
     if maybe is not None:
         return maybe
     organization = db.session.get(Organization, int(_active_org_id()))
-    billing_state = billing_service.resolve_entitlements(organization) if organization else None
+    billing_state = billing_service.resolve_entitlements(
+        organization,
+        actor_email=getattr(current_user, 'email', None),
+    ) if organization else None
     billing_catalog = billing_service.plan_catalog()
+    is_super_admin = bool(_is_super_admin_user())
     return render_template(
         'main/plans_preview.html',
         title='Plans Preview',
         billing_state=billing_state,
         billing_catalog=billing_catalog,
+        is_super_admin=is_super_admin,
     )
 
 
@@ -5554,6 +5605,9 @@ def plans_preview_select_plan():
     maybe = _require_org_permission('org.manage')
     if maybe is not None:
         return maybe
+
+    if not _is_super_admin_user():
+        abort(403)
 
     org_id = _active_org_id()
     organization = db.session.get(Organization, int(org_id)) if org_id else None
@@ -5566,7 +5620,7 @@ def plans_preview_select_plan():
     # Test-mode selection should allow immediate in-app gating checks without live billing.
     organization.billing_status = 'active'
     organization.billing_internal_override = True
-    organization.billing_override_reason = 'Manual plan selection for testing'
+    organization.billing_override_reason = 'Manual plan selection for testing (super admin)'
     try:
         db.session.commit()
         invalidate_org_switcher_context_cache(int(current_user.id), int(org_id))

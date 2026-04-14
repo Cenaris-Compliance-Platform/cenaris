@@ -176,6 +176,48 @@
               Stripe is not configured yet. Add Stripe keys and price IDs to enable checkout.
             </small>
           {% endif %}
+
+          {% if is_super_admin %}
+          <hr class="my-4">
+          <h6 class="fw-semibold mb-3 text-warning-emphasis">
+            <i class="bi bi-shield-lock me-1"></i>Super Admin Billing Access Controls
+          </h6>
+          <form method="POST" class="border rounded p-3 bg-body-tertiary">
+            {{ billing_access_form.hidden_tag() }}
+            <div class="row g-3">
+              <div class="col-md-6">
+                {{ billing_access_form.billing_plan_code.label(class="form-label") }}
+                {{ billing_access_form.billing_plan_code() }}
+              </div>
+              <div class="col-md-6">
+                {{ billing_access_form.billing_status.label(class="form-label") }}
+                {{ billing_access_form.billing_status() }}
+              </div>
+              <div class="col-md-12">
+                {{ billing_access_form.billing_override_reason.label(class="form-label") }}
+                {{ billing_access_form.billing_override_reason() }}
+              </div>
+              <div class="col-md-6">
+                <div class="form-check form-switch mt-2">
+                  {{ billing_access_form.billing_internal_override() }}
+                  {{ billing_access_form.billing_internal_override.label(class="form-check-label") }}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check form-switch mt-2">
+                  {{ billing_access_form.billing_demo_override_enabled() }}
+                  {{ billing_access_form.billing_demo_override_enabled.label(class="form-check-label") }}
+                </div>
+              </div>
+            </div>
+            <div class="mt-3">
+              {{ billing_access_form.submit() }}
+            </div>
+            <small class="text-body-secondary d-block mt-2">
+              Demo override currently uses no auto-expiry for your requested workflow.
+            </small>
+          </form>
+          {% endif %}
         </div>
       </div>
 
