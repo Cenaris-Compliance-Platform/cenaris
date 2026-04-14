@@ -615,7 +615,10 @@ def create_app(config_name=None):
 
                         active_org = db.session.get(Organization, int(active_org_id))
                         if active_org is not None:
-                            billing_state = billing_service.resolve_entitlements(active_org)
+                            billing_state = billing_service.resolve_entitlements(
+                                active_org,
+                                actor_email=getattr(current_user, 'email', None),
+                            )
                             active_plan_code = str(billing_state.get('plan_code') or 'starter').strip().lower() or 'starter'
                             feature_access = dict(billing_state.get('feature_access') or {})
                     except Exception:
@@ -701,6 +704,8 @@ def create_app(config_name=None):
                 'active_plan_code': active_plan_code,
                 'can_use_ai_review': bool(feature_access.get('ai_tagging', True)),
                 'can_use_analytics': bool(feature_access.get('multi_site_reporting', True)),
+                'is_super_admin_user': bool(billing_service.is_super_admin_email(getattr(current_user, 'email', None))),
+                'is_internal_team_user': bool(billing_service.is_internal_team_email(getattr(current_user, 'email', None))),
             }
 
             if cache_seconds > 0:
