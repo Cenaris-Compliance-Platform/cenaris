@@ -34,6 +34,25 @@ class BillingService:
         'sso_api': 'enterprise',
     }
 
+    def _email_set(self, config_key: str, default_csv: str) -> set[str]:
+        raw = (current_app.config.get(config_key) or default_csv or '').strip()
+        values = [item.strip().lower() for item in raw.split(',') if item.strip()]
+        return set(values)
+
+    def is_super_admin_email(self, email: str | None) -> bool:
+        e = (email or '').strip().lower()
+        if not e:
+            return False
+        emails = self._email_set('SUPER_ADMIN_EMAILS', 'muhammadhaiderali2710@gmail.com')
+        return e in emails
+
+    def is_internal_team_email(self, email: str | None) -> bool:
+        e = (email or '').strip().lower()
+        if not e:
+            return False
+        emails = self._email_set('INTERNAL_TEAM_EMAILS', 'muhammadhaideraliroy2710@gmail.com')
+        return e in emails
+
     def normalize_plan_code(self, plan_code: str | None) -> str:
         raw = (plan_code or '').strip().lower()
         raw = self.PLAN_ALIASES.get(raw, raw)
@@ -106,29 +125,38 @@ class BillingService:
                 'label': 'Starter',
                 'description': 'Core compliance workflow for early teams.',
                 'stripe_price_id_config': 'STRIPE_PRICE_ID_STARTER',
+                'price_monthly_aud': 149,
+                'price_annual_aud': 1430,
             },
             'team': {
                 'label': 'Team',
                 'description': 'Collaboration and governance upgrades for scaling teams.',
                 'stripe_price_id_config': 'STRIPE_PRICE_ID_TEAM (or STRIPE_PRICE_ID_GROWTH)',
+                'price_monthly_aud': 349,
+                'price_annual_aud': 3350,
             },
             'scale': {
                 'label': 'Scale',
                 'description': 'Operational scale features including advanced reporting and AI tagging.',
                 'stripe_price_id_config': 'STRIPE_PRICE_ID_SCALE',
+                'price_monthly_aud': 699,
+                'price_annual_aud': 6710,
             },
             'enterprise': {
                 'label': 'Enterprise',
                 'description': 'Advanced controls and integrations for complex organizations.',
                 'stripe_price_id_config': 'STRIPE_PRICE_ID_ENTERPRISE',
+                'price_monthly_aud': 1499,
+                'price_annual_aud': 14390,
             },
         }
 
-    def resolve_entitlements(self, organization: Organization) -> dict[str, Any]:
+    def resolve_entitlements(self, organization: Organization, *, actor_email: str | None = None) -> dict[str, Any]:
         now = self._now_utc()
         internal_override = bool(getattr(organization, 'billing_internal_override', False))
         demo_until = getattr(organization, 'billing_demo_override_until', None)
         demo_override_active = bool(demo_until and demo_until >= now)
+        internal_team = self.is_internal_team_email(actor_email)
 
         billing_status = ((getattr(organization, 'billing_status', None) or '').strip().lower())
         subscription_ok = billing_status in {'active', 'trialing'}
@@ -136,7 +164,10 @@ class BillingService:
         source = 'subscription' if subscription_ok else 'none'
         has_access = subscription_ok
 
-        if internal_override:
+        if internal_team:
+            source = 'internal_team'
+            has_access = True
+        elif internal_override:
             source = 'internal_override'
             has_access = True
         elif demo_override_active:
@@ -148,6 +179,8 @@ class BillingService:
             or (getattr(organization, 'subscription_tier', None) or '').strip().lower()
         )
         plan_code = self.normalize_plan_code(plan_code_raw)
+        if internal_team and not (plan_code in {'team', 'scale', 'enterprise'}):
+            plan_code = 'enterprise'
 
         feature_access = {
             key: self.has_feature(plan_code, key)
@@ -162,6 +195,7 @@ class BillingService:
             'billing_status': billing_status or 'inactive',
             'stripe_enabled': self.stripe_enabled(),
             'internal_override': internal_override,
+            'internal_team': internal_team,
             'demo_override_active': demo_override_active,
             'demo_override_until': demo_until,
             'cancel_at_period_end': bool(getattr(organization, 'billing_cancel_at_period_end', False)),

@@ -79,6 +79,16 @@ class Config:
     STRIPE_PRICE_ID_GROWTH = os.environ.get('STRIPE_PRICE_ID_GROWTH')
     STRIPE_PRICE_ID_ENTERPRISE = os.environ.get('STRIPE_PRICE_ID_ENTERPRISE')
     APP_BASE_URL = os.environ.get('APP_BASE_URL')
+
+    # Billing access controls
+    SUPER_ADMIN_EMAILS = (
+        os.environ.get('SUPER_ADMIN_EMAILS')
+        or 'muhammadhaiderali2710@gmail.com'
+    )
+    INTERNAL_TEAM_EMAILS = (
+        os.environ.get('INTERNAL_TEAM_EMAILS')
+        or 'muhammadhaideraliroy2710@gmail.com'
+    )
     
     # File Upload Configuration
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
