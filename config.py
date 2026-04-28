@@ -132,7 +132,11 @@ class Config:
     AI_POLICY_LLM_ALLOW_IN_DEVELOPMENT = (os.environ.get('AI_POLICY_LLM_ALLOW_IN_DEVELOPMENT') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
     AI_RAG_RATE_LIMIT = os.environ.get('AI_RAG_RATE_LIMIT') or '20 per minute'
     AI_POLICY_RATE_LIMIT = os.environ.get('AI_POLICY_RATE_LIMIT') or '10 per minute'
-    AI_USAGE_RETENTION_DAYS = int(os.environ.get('AI_USAGE_RETENTION_DAYS') or 90)
+    MIN_AUDIT_LOG_RETENTION_DAYS = max(1, int(os.environ.get('MIN_AUDIT_LOG_RETENTION_DAYS') or 90))
+    AI_USAGE_RETENTION_DAYS = max(
+        MIN_AUDIT_LOG_RETENTION_DAYS,
+        int(os.environ.get('AI_USAGE_RETENTION_DAYS') or 90),
+    )
     ASSISTANT_CHAT_USE_LLM = (os.environ.get('ASSISTANT_CHAT_USE_LLM') or '1').strip().lower() in {'1', 'true', 'yes', 'on'}
     ASSISTANT_CHAT_MAX_OUTPUT_TOKENS = int(os.environ.get('ASSISTANT_CHAT_MAX_OUTPUT_TOKENS') or 550)
     ASSISTANT_CHAT_TEMPERATURE = float(os.environ.get('ASSISTANT_CHAT_TEMPERATURE') or 0.2)
@@ -167,7 +171,10 @@ class Config:
     
     # Logging Configuration
     LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'
-    LOG_RETENTION_DAYS = int(os.environ.get('LOG_RETENTION_DAYS') or 90)
+    LOG_RETENTION_DAYS = max(
+        MIN_AUDIT_LOG_RETENTION_DAYS,
+        int(os.environ.get('LOG_RETENTION_DAYS') or 90),
+    )
     
     # Security Event Logging
     LOG_SECURITY_EVENTS = True   # Always log security events

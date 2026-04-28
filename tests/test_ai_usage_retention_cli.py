@@ -75,7 +75,7 @@ def test_prune_ai_usage_events_dry_run(app):
         db.session.commit()
 
     runner = app.test_cli_runner()
-    result = runner.invoke(args=['prune-ai-usage-events', '--days', '30', '--dry-run'])
+    result = runner.invoke(args=['prune-ai-usage-events', '--days', '90', '--dry-run'])
 
     assert result.exit_code == 0
     assert 'Candidate rows: 1' in result.output
@@ -121,7 +121,7 @@ def test_prune_ai_usage_events_deletes_old_rows(app):
         new_event_id = int(new_event.id)
 
     runner = app.test_cli_runner()
-    result = runner.invoke(args=['prune-ai-usage-events', '--days', '30', '--yes'])
+    result = runner.invoke(args=['prune-ai-usage-events', '--days', '90', '--yes'])
 
     assert result.exit_code == 0
     assert 'Deleted AI usage rows: 1' in result.output
