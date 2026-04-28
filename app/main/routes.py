@@ -2866,9 +2866,14 @@ def organization_ai_retention_run():
         return redirect(url_for('main.organization_settings'))
 
     org_id = _active_org_id()
-    days = max(1, int(form.days.data or (current_app.config.get('AI_USAGE_RETENTION_DAYS') or 90)))
+    min_days = max(1, int(current_app.config.get('MIN_AUDIT_LOG_RETENTION_DAYS') or 90))
+    requested_days = int(form.days.data or (current_app.config.get('AI_USAGE_RETENTION_DAYS') or 90))
+    days = max(min_days, requested_days)
     dry_run = bool(form.dry_run.data)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    if requested_days < min_days:
+        flash(f'Minimum retention floor is {min_days} days. Using {min_days} days.', 'info')
 
     q = (
         AIUsageEvent.query

@@ -227,7 +227,7 @@ def test_org_ai_retention_run_dry_run_does_not_delete(client, app, seed_org_user
 
     response = client.post(
         '/organization/ai-controls/retention-run',
-        data={'days': '30', 'dry_run': 'y', 'submit': 'Run Retention'},
+        data={'days': '90', 'dry_run': 'y', 'submit': 'Run Retention'},
         follow_redirects=False,
     )
     assert response.status_code in {302, 303}
@@ -276,7 +276,7 @@ def test_org_ai_retention_run_deletes_old_rows(client, app, seed_org_user):
 
     response = client.post(
         '/organization/ai-controls/retention-run',
-        data={'days': '30', 'submit': 'Run Retention'},
+        data={'days': '90', 'submit': 'Run Retention'},
         follow_redirects=False,
     )
     assert response.status_code in {302, 303}
