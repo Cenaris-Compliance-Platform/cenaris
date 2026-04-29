@@ -2317,6 +2317,8 @@ def delete_document(doc_id):
 
 def _soft_delete_document(document: Document) -> tuple[bool, str | None]:
     from app.services.azure_storage import AzureBlobStorageService
+    from app.models import RequirementEvidenceLink
+    from app.services.compliance_scoring_service import compliance_scoring_service
 
     try:
         if getattr(document, 'blob_name', None):
@@ -2328,7 +2330,23 @@ def _soft_delete_document(document: Document) -> tuple[bool, str | None]:
             current_app.logger.warning('Document %s has no blob_name; skipping Azure deletion', document.id)
 
         document.is_active = False
+
+        # Remove evidence links
+        links = RequirementEvidenceLink.query.filter_by(document_id=document.id).all()
+        req_ids_to_recompute = {link.requirement_id for link in links}
+        for link in links:
+            db.session.delete(link)
+
         db.session.commit()
+
+        # Recompute scores for affected requirements
+        for req_id in req_ids_to_recompute:
+            compliance_scoring_service.recompute_requirement_assessment(
+                organization_id=int(document.organization_id),
+                requirement_id=int(req_id),
+                commit=True,
+            )
+
         return True, None
     except Exception as exc:
         db.session.rollback()
@@ -2438,6 +2456,48 @@ def document_details(doc_id):
                          document=document,
                          linked_requirements=linked_requirements,
                          summary_sections=summary_sections)
+
+
+@bp.route('/document/<int:doc_id>/download-ai-summary')
+@login_required
+def download_ai_summary(doc_id):
+    """Download the AI review summary as a text file."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    document = db.session.get(Document, int(doc_id))
+    if not document or document.organization_id != org_id:
+        abort(404)
+
+    if not document.ai_analysis_at:
+        flash('This document has not been analysed yet.', 'warning')
+        return redirect(url_for('main.document_details', doc_id=doc_id))
+
+    # Format the content
+    lines = [
+        f"AI Review Summary: {document.filename}",
+        f"Analysed on: {document.ai_analysis_at.strftime('%Y-%m-%d %H:%M:%S UTC')}",
+        "--------------------------------------------------",
+        f"Status: {document.ai_status or 'Unknown'}",
+        f"Confidence: {int(document.ai_confidence * 100) if document.ai_confidence else 0}%",
+        f"Focus Area: {document.ai_focus_area or 'General'}",
+        "--------------------------------------------------",
+        "REVIEW TEXT:",
+        (document.ai_summary or 'No summary available.').strip()
+    ]
+    
+    content = '\r\n'.join(lines)
+    mem = io.BytesIO()
+    mem.write(content.encode('utf-8'))
+    mem.seek(0)
+    
+    filename = f"AI_Review_{document.filename}.txt"
+    return send_file(mem, as_attachment=True, download_name=filename, mimetype='text/plain')
 
 
 def _split_document_ai_summary(summary_text: str | None) -> dict[str, str]:
@@ -3133,7 +3193,7 @@ def ai_evidence_detail(entry_id):
 @bp.route('/gap-analysis')
 @login_required
 def gap_analysis():
-    """Legacy compliance dashboard route; redirects to AI Review workspace."""
+    """Audit Readiness Centre — live compliance gap view for the active organisation."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -3141,8 +3201,46 @@ def gap_analysis():
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
-    flash('Gap Analysis has moved into AI Review workspaces.', 'info')
-    return redirect(url_for('main.ai_demo'))
+
+    from app.services.gap_analysis_service import gap_analysis_service
+
+    payload = gap_analysis_service.build_for_organization(org_id)
+
+    # Filters from query string
+    flag_filter = (request.args.get('flag') or '').strip()
+    module_filter = (request.args.get('module') or '').strip()
+    q_filter = (request.args.get('q') or '').strip().lower()
+
+    # Apply filters to the requirements list
+    requirements = payload.requirements
+    if flag_filter:
+        requirements = [r for r in requirements if (r.computed_flag or '') == flag_filter]
+    if module_filter:
+        requirements = [r for r in requirements if r.module_name == module_filter]
+    if q_filter:
+        requirements = [
+            r for r in requirements
+            if q_filter in r.requirement_id.lower()
+            or q_filter in r.module_name.lower()
+            or q_filter in r.standard_name.lower()
+        ]
+
+    # Distinct module names for the filter dropdown (from full list, not filtered)
+    module_names = sorted({r.module_name for r in payload.requirements if r.module_name})
+
+    can_export_audit = current_user.has_permission('documents.manage', org_id=int(org_id))
+
+    return render_template(
+        'main/gap_analysis.html',
+        title='Audit Readiness Centre',
+        payload=payload,
+        requirements=requirements,
+        module_names=module_names,
+        flag_filter=flag_filter,
+        module_filter=module_filter,
+        q_filter=q_filter,
+        can_export_audit=can_export_audit,
+    )
 
 
 @bp.route('/compliance-requirements')
