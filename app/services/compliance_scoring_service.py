@@ -139,17 +139,17 @@ class ComplianceScoringService:
 
     @staticmethod
     def _workforce_required(requirement: ComplianceRequirement) -> bool:
-        return bool(
-            requirement.requires_workforce_evidence
-            or (requirement.workforce_evidence_required or '').strip()
-        )
+        if requirement.requires_workforce_evidence:
+            return True
+        text = (requirement.workforce_evidence_required or '').strip().lower()
+        return bool(text) and not text.startswith('n/a')
 
     @staticmethod
     def _participant_required(requirement: ComplianceRequirement) -> bool:
-        return bool(
-            requirement.requires_participant_evidence
-            or (requirement.participant_evidence_required or '').strip()
-        )
+        if requirement.requires_participant_evidence:
+            return True
+        text = (requirement.participant_evidence_required or '').strip().lower()
+        return bool(text) and not text.startswith('n/a')
 
     def _compute_score_and_flag(
         self,
