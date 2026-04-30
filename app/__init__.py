@@ -1148,9 +1148,13 @@ def create_app(config_name=None):
         from datetime import datetime, timezone, timedelta
         from app.models import AIUsageEvent, Organization
 
-        retention_days = int(days if days is not None else (app.config.get('AI_USAGE_RETENTION_DAYS') or 90))
-        retention_days = max(1, retention_days)
+        min_days = max(1, int(app.config.get('MIN_AUDIT_LOG_RETENTION_DAYS') or 90))
+        requested_days = int(days if days is not None else (app.config.get('AI_USAGE_RETENTION_DAYS') or 90))
+        retention_days = max(min_days, requested_days)
         cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        if requested_days < min_days:
+            click.echo(f'Applying minimum retention floor: {min_days} days (requested {requested_days}).')
 
         q = AIUsageEvent.query.filter(AIUsageEvent.created_at < cutoff)
 
@@ -1162,6 +1166,7 @@ def create_app(config_name=None):
 
         to_delete = int(q.count())
         click.echo('AI usage retention prune summary:')
+        click.echo(f'- Minimum floor:  {min_days}')
         click.echo(f'- Retention days: {retention_days}')
         click.echo(f'- Cutoff (UTC):   {cutoff.isoformat()}')
         click.echo(f'- Candidate rows: {to_delete}')

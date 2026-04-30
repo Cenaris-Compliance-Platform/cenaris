@@ -1,8 +1,21 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
-from wtforms import BooleanField, HiddenField, IntegerField, SelectField, StringField, SubmitField
+from wtforms import BooleanField, HiddenField, IntegerField, SelectField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, Optional
+from wtforms import widgets
 
+
+class MultiCheckboxField(SelectMultipleField):
+    widget = widgets.ListWidget(prefix_label=False)
+    option_widget = widgets.CheckboxInput()
+
+class OrganizationModulesForm(FlaskForm):
+    form_name = HiddenField(default='modules')
+    enabled_modules = MultiCheckboxField(
+        'Registration Modules',
+        choices=[]
+    )
+    submit = SubmitField('Save Modules', render_kw={'class': 'btn btn-primary'})
 
 class OrganizationProfileSettingsForm(FlaskForm):
     form_name = HiddenField(default='profile')
