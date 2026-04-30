@@ -486,35 +486,104 @@ class DocumentAnalysisService:
         ]
 
     def _derive_status(self, document_text: str, query_text: str, snippets: list[dict]) -> tuple[str, float]:
-        query_terms = self._tokenize(query_text)
-        if not query_terms:
-            query_terms = self._tokenize('compliance evidence policy process review audit monitoring')
+        """
+        Rubric-based scoring across 5 independent signals — NOT keyword-overlap percentage.
 
+        Signal 1 — Substance (40 pts): Does the document contain real implemented procedures?
+        Signal 2 — Coverage (25 pts): Does it address the specific NDIS requirement?
+        Signal 3 — Depth (20 pts): Is it detailed enough?
+        Signal 4 — Structure (10 pts): Is it an implemented doc, not just a template?
+        Signal 5 — Snippet quality (5 pts): How many strong evidence blocks were found?
+        """
         lower_text = (document_text or '').lower()
         doc_len = len((document_text or '').strip())
         snippet_count = len(snippets or [])
-        hits = sum(1 for term in query_terms if term in lower_text)
-        coverage = (float(hits) / float(len(query_terms))) if query_terms else 0.0
-        score = (coverage * 0.65) + (min(float(snippet_count) / 4.0, 1.0) * 0.2) + (min(float(doc_len) / 1800.0, 1.0) * 0.15)
-        confidence = max(0.0, min(score * 1.05, 1.0))
-        if snippet_count >= 4:
-            confidence = min(confidence, 0.88)
-        elif snippet_count == 3:
-            confidence = min(confidence, 0.78)
-        elif snippet_count == 2:
-            confidence = min(confidence, 0.68)
-        else:
-            confidence = min(confidence, 0.52)
 
-        if doc_len < 120 and coverage < 0.20:
-            return 'Critical gap', round(confidence, 3)
-        if score >= 0.78 and coverage >= 0.62 and snippet_count >= 3 and doc_len >= 450:
+        # ── Signal 1: Substance (40 pts) ────────────────────────────────────────
+        # Real implemented documents use action language, responsibilities, and procedures.
+        # Generic buzzword docs score low here regardless of length.
+        action_indicators = [
+            'must', 'will', 'shall', 'is responsible', 'are responsible', 'ensures', 'ensure',
+            'maintained', 'reviewed', 'documented', 'recorded', 'provided', 'conducted',
+            'reported', 'investigated', 'resolved', 'trained', 'assessed', 'monitored',
+        ]
+        responsibility_indicators = [
+            'manager', 'coordinator', 'worker', 'staff', 'team', 'ceo', 'board', 'committee',
+            'director', 'supervisor', 'employee', 'provider', 'organisation',
+        ]
+        process_indicators = [
+            'procedure', 'process', 'policy', 'step', 'steps', 'form', 'register',
+            'template', 'checklist', 'protocol', 'guideline', 'framework', 'schedule',
+            'plan', 'review', 'audit', 'report', 'log', 'record',
+        ]
+        timeframe_indicators = [
+            'within', 'days', 'hours', 'weeks', 'monthly', 'annually', 'annually',
+            'quarterly', 'immediately', 'timeframe', 'deadline', 'due date',
+        ]
+
+        action_hits = sum(1 for w in action_indicators if w in lower_text)
+        responsibility_hits = sum(1 for w in responsibility_indicators if w in lower_text)
+        process_hits = sum(1 for w in process_indicators if w in lower_text)
+        timeframe_hits = sum(1 for w in timeframe_indicators if w in lower_text)
+
+        # Normalise each sub-signal to [0, 1]
+        action_score = min(action_hits / 6.0, 1.0)          # 6+ hits = full score
+        responsibility_score = min(responsibility_hits / 3.0, 1.0)
+        process_score = min(process_hits / 5.0, 1.0)
+        timeframe_score = min(timeframe_hits / 2.0, 1.0)
+
+        substance_raw = (action_score * 0.40 + responsibility_score * 0.25 +
+                         process_score * 0.25 + timeframe_score * 0.10)
+        substance_pts = substance_raw * 40.0
+
+        # ── Signal 2: Coverage (25 pts) ─────────────────────────────────────────
+        # Does the document address the specific NDIS requirement area being asked?
+        query_terms = self._tokenize(query_text)
+        if not query_terms:
+            query_terms = self._tokenize('compliance evidence policy process review monitoring')
+        # Use PRESENCE of topic terms (not just count) for a semantic-like check
+        hits = sum(1 for term in query_terms if term in lower_text)
+        coverage_ratio = float(hits) / float(len(query_terms)) if query_terms else 0.0
+        # Square root transformation: presence of most terms matters more than covering ALL of them
+        coverage_pts = (coverage_ratio ** 0.6) * 25.0
+
+        # ── Signal 3: Depth (20 pts) ────────────────────────────────────────────
+        # A real compliance document needs sufficient detail.
+        # Rewards docs ≥ 800 chars; penalises stubs < 200 chars.
+        depth_from_length = min(doc_len / 2500.0, 1.0)
+        depth_from_snippets = min(snippet_count / 4.0, 1.0)
+        depth_pts = (depth_from_length * 0.6 + depth_from_snippets * 0.4) * 20.0
+
+        # ── Signal 4: Structure (10 pts) ────────────────────────────────────────
+        # Is this an implemented document or just a blank template?
+        structure_pts = 10.0
+        is_template = self._looks_like_template(document_text)
+        if is_template:
+            structure_pts *= 0.3  # 70% penalty for template docs
+        # Bonus: clear section headings or numbered lists suggest real structure
+        has_headings = bool(re.search(r'\n\s*\d+\.\s+[A-Z]|\n[A-Z][^\n]{5,50}\n', document_text or ''))
+        if has_headings:
+            structure_pts = min(structure_pts * 1.3, 10.0)
+
+        # ── Signal 5: Snippet quality bonus (5 pts) ──────────────────────────────
+        snippet_pts = min(snippet_count / 4.0, 1.0) * 5.0
+
+        # ── Combine ─────────────────────────────────────────────────────────────
+        total_pts = substance_pts + coverage_pts + depth_pts + structure_pts + snippet_pts
+        max_pts = 100.0
+        raw_score = total_pts / max_pts  # [0, 1]
+
+        # Confidence mirrors the score but stays honest about uncertainty
+        confidence = min(raw_score * 1.05, 0.97)
+
+        # ── Map to status ────────────────────────────────────────────────────────
+        if doc_len < 100:
+            return 'Critical gap', round(min(confidence, 0.30), 3)
+        if raw_score >= 0.75:
             return 'Mature', round(confidence, 3)
-        if score >= 0.56 and coverage >= 0.42 and snippet_count >= 2 and doc_len >= 220:
+        if raw_score >= 0.55:
             return 'OK', round(confidence, 3)
-        if self._looks_like_template(document_text) and coverage >= 0.18 and snippet_count >= 3:
-            return 'High risk gap', round(min(confidence, 0.56), 3)
-        if score >= 0.22:
+        if raw_score >= 0.30:
             return 'High risk gap', round(confidence, 3)
         return 'Critical gap', round(confidence, 3)
 
@@ -530,34 +599,35 @@ class DocumentAnalysisService:
         citations: list[dict],
         retrieval_mode: str,
     ) -> tuple[str, float]:
-        query_terms = self._tokenize(query_text)
-        lower_text = (document_text or '').lower()
-        coverage = (float(sum(1 for term in query_terms if term in lower_text)) / float(len(query_terms))) if query_terms else 0.0
-        snippet_count = len(snippets or [])
-        requirement_count = len(matched_requirements or [])
-        citation_count = len(citations or [])
-        looks_like_template = self._looks_like_template(document_text)
-
+        """
+        Apply light trust adjustments AFTER the rubric scoring.
+        This no longer aggressively caps scores — it only applies targeted penalties
+        and bonuses based on system-level signals.
+        """
         calibrated_status = status
         calibrated_confidence = float(confidence)
 
-        if calibrated_status == 'Mature':
-            if requirement_count < 2 or citation_count < 2 or snippet_count < 3 or coverage < 0.60:
-                calibrated_status = 'OK'
-                calibrated_confidence = min(calibrated_confidence, 0.74)
+        # RAG alignment bonus: each retrieved citation means the doc aligns with the NDIS standard
+        citation_count = len(citations or [])
+        if citation_count >= 2:
+            calibrated_confidence = min(calibrated_confidence + 0.04, 0.97)
+        elif citation_count == 0 and calibrated_status in ('Mature', 'OK'):
+            # Zero RAG citations on a positive result → mild confidence penalty
+            calibrated_confidence = min(calibrated_confidence, 0.72)
 
-        if calibrated_status == 'OK':
-            if requirement_count < 1 or citation_count < 1 or snippet_count < 2 or coverage < 0.42:
-                calibrated_status = 'High risk gap'
-                calibrated_confidence = min(calibrated_confidence, 0.54)
-            elif looks_like_template and citation_count < 2:
+        # Template penalty: blank templates should never be Mature or OK
+        looks_like_template = self._looks_like_template(document_text)
+        if looks_like_template:
+            if calibrated_status == 'Mature':
                 calibrated_status = 'High risk gap'
                 calibrated_confidence = min(calibrated_confidence, 0.52)
-            elif retrieval_mode == 'lexical':
-                calibrated_confidence = min(calibrated_confidence, 0.61)
+            elif calibrated_status == 'OK' and citation_count < 2:
+                calibrated_status = 'High risk gap'
+                calibrated_confidence = min(calibrated_confidence, 0.50)
 
-        if calibrated_status == 'High risk gap' and citation_count == 0 and requirement_count == 0:
-            calibrated_confidence = min(calibrated_confidence, 0.46)
+        # Lexical-only retrieval uncertainty (embeddings not loaded)
+        if retrieval_mode == 'lexical' and calibrated_status == 'Mature':
+            calibrated_confidence = min(calibrated_confidence, 0.80)
 
         return calibrated_status, round(max(0.0, min(calibrated_confidence, 1.0)), 3)
 

@@ -28,7 +28,15 @@ class ComplianceScoringService:
         commit: bool = True,
     ) -> int:
         """Recompute assessments for all active requirements visible to an organization."""
-        requirements = (
+        from app.models import Organization
+        org = db.session.get(Organization, int(organization_id))
+        enabled_modules = []
+        filter_modules = False
+        if org and org.enabled_modules_list is not None:
+            filter_modules = True
+            enabled_modules = [m.strip() for m in org.enabled_modules_list.split(',') if m.strip()]
+
+        query = (
             db.session.query(ComplianceRequirement.id)
             .join(ComplianceFrameworkVersion, ComplianceFrameworkVersion.id == ComplianceRequirement.framework_version_id)
             .filter(
@@ -38,8 +46,22 @@ class ComplianceScoringService:
                     ComplianceFrameworkVersion.organization_id == int(organization_id),
                 ),
             )
-            .all()
         )
+        
+        if filter_modules:
+            if enabled_modules:
+                requirements = query.filter(ComplianceRequirement.module_name.in_(enabled_modules)).all()
+                disabled_reqs = query.filter(ComplianceRequirement.module_name.not_in(enabled_modules)).subquery()
+            else:
+                requirements = []
+                disabled_reqs = query.subquery()
+                
+            db.session.query(OrganizationRequirementAssessment).filter(
+                OrganizationRequirementAssessment.organization_id == int(organization_id),
+                OrganizationRequirementAssessment.requirement_id.in_(disabled_reqs)
+            ).delete(synchronize_session=False)
+        else:
+            requirements = query.all()
 
         total = 0
         for requirement_id, in requirements:

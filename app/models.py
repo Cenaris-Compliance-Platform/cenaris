@@ -102,6 +102,7 @@ class Organization(db.Model):
     contact_number = db.Column(db.String(40))
     address = db.Column(db.String(255))
     industry = db.Column(db.String(60))
+    enabled_modules_list = db.Column(db.Text, nullable=True)
     billing_email = db.Column(db.String(120))
     billing_address = db.Column(db.String(255))
     billing_details = db.Column(db.Text)
