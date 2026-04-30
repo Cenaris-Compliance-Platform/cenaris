@@ -25,7 +25,7 @@ class DocumentAnalysisService:
         'does', 'did', 'not', 'are', 'was', 'were', 'is', 'it', 'to', 'of', 'in', 'on', 'by', 'as',
     }
 
-    _SUPPORTED_SUFFIXES = ('.txt', '.pdf', '.docx')
+    _SUPPORTED_SUFFIXES = ('.txt', '.pdf', '.docx', '.doc')
 
     _TOPIC_RULES = [
         {
@@ -84,11 +84,32 @@ class DocumentAnalysisService:
                 doc = DocxDocument(io.BytesIO(raw_bytes))
                 paragraphs = [(p.text or '').strip() for p in doc.paragraphs]
                 return '\n\n'.join([paragraph for paragraph in paragraphs if paragraph]).strip(), None
+                
+            if filename_value.endswith('.doc'):
+                import string
+                chars = string.ascii_letters + string.digits + string.punctuation + ' \t\r\n'
+                result = []
+                current = []
+                for byte in raw_bytes:
+                    char = chr(byte)
+                    if char in chars:
+                        current.append(char)
+                    elif current:
+                        if len(current) >= 4:
+                            result.append(''.join(current))
+                        current = []
+                if len(current) >= 4:
+                    result.append(''.join(current))
+                # Additional cleanup for binary junk that resembles strings
+                extracted = ' '.join(result)
+                extracted = re.sub(r'[ \t]+', ' ', extracted)
+                extracted = re.sub(r'[\r\n]{3,}', '\n\n', extracted)
+                return extracted.strip(), None
         except Exception:
             logger.exception('Failed to extract text from uploaded document %s', filename)
-            return '', 'Unable to parse file. Use TXT, PDF, or DOCX for document analysis.'
+            return '', 'Unable to parse file. Use TXT, PDF, DOCX, or DOC for document analysis.'
 
-        return '', 'Unsupported file type. Use TXT, PDF, or DOCX.'
+        return '', 'Unsupported file type. Use TXT, PDF, DOCX, or DOC.'
 
     def analyze_document_bytes(self, *, filename: str, raw_bytes: bytes, organization_id: int | None = None) -> dict:
         text, extraction_error = self.extract_text_from_bytes(filename, raw_bytes)
@@ -431,11 +452,28 @@ class DocumentAnalysisService:
         return candidates
 
     def _looks_like_template(self, document_text: str) -> bool:
+        import re
         lower = (document_text or '').lower()
-        if 'template' in lower:
+        if 'template' in lower[:1000] or 'blank form' in lower[:1000]:
             return True
-        placeholder_count = len(re.findall(r'\[[^\]]{2,40}\]|<[^>]{2,40}>', document_text or ''))
-        return placeholder_count >= 3
+            
+        placeholders = re.findall(r'\[[^\]]{2,40}\]|<[^>]{2,40}>|\{([^\}]{2,40})\}', document_text or '')
+        blank_lines = re.findall(r'_{4,}|\.{4,}', document_text or '')
+        unfilled_fields = re.findall(r'(?i)(?:\bname:|\bdate:|\bsigned:|\bsignature:|\bstart:|\breview:)\s*(?:[_\.\s]*)(?=\n|$)|(?:\b[A-Z]=)', document_text or '')
+        
+        marker_count = len(placeholders) + len(blank_lines) + len(unfilled_fields)
+        words = [w for w in re.findall(r'\w{3,}', lower) if w not in {'the', 'and', 'for', 'with'}]
+        word_count = len(words)
+        
+        if marker_count >= 12:
+            return True
+        if marker_count > 0:
+            words_per_marker = word_count / marker_count
+            if words_per_marker < 40:
+                return True
+        if word_count < 300 and marker_count >= 4:
+            return True
+        return False
 
     def _rank_snippets(self, document_text: str, query_text: str, top_k: int = 4) -> list[dict]:
         blocks = self._candidate_blocks(document_text)
