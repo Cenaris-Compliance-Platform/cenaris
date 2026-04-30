@@ -35,6 +35,7 @@ from itsdangerous import URLSafeTimedSerializer
 from werkzeug.exceptions import NotFound
 
 import os
+import re
 import hashlib
 import json
 import csv
@@ -2725,6 +2726,7 @@ def organization_settings():
         OrganizationBillingForm,
         OrganizationMonthlyReportForm,
         OrganizationProfileSettingsForm,
+        OrganizationModulesForm,
     )
 
     maybe = _require_org_permission('org.manage')
@@ -2742,6 +2744,25 @@ def organization_settings():
     profile_form = OrganizationProfileSettingsForm(obj=organization)
     billing_form = OrganizationBillingForm(obj=organization)
     monthly_report_form = OrganizationMonthlyReportForm(obj=organization)
+
+    # NDIS Registration Modules Form
+    from app.models import ComplianceRequirement
+    all_modules = [
+        r[0] for r in db.session.query(ComplianceRequirement.module_name)
+        .filter(ComplianceRequirement.module_name != None)
+        .distinct()
+        .order_by(ComplianceRequirement.module_name)
+        .all()
+    ]
+    modules_form = OrganizationModulesForm()
+    modules_form.enabled_modules.choices = [(m, m) for m in all_modules]
+
+    if request.method == 'GET':
+        if organization.enabled_modules_list:
+            modules_form.enabled_modules.data = [m.strip() for m in organization.enabled_modules_list.split(',') if m.strip()]
+        else:
+            modules_form.enabled_modules.data = all_modules
+
     billing_access_form = OrganizationBillingAccessForm(
         billing_plan_code=billing_service.normalize_plan_code(organization.billing_plan_code or organization.subscription_tier),
         billing_status=((organization.billing_status or 'inactive').strip().lower() or 'inactive'),
@@ -2801,6 +2822,34 @@ def organization_settings():
                 except Exception:
                     db.session.rollback()
                     flash('Failed to save organization profile. Please try again.', 'error')
+
+        elif submitted == 'modules':
+            if modules_form.validate_on_submit():
+                selected_modules = modules_form.enabled_modules.data
+                organization.enabled_modules_list = ','.join(selected_modules)
+                try:
+                    db.session.commit()
+                    # Trigger recalculation in the background so the UI doesn't hang for 60 seconds
+                    from threading import Thread
+                    from flask import current_app
+                    
+                    app_obj = current_app._get_current_object()
+                    def bg_recompute(app, org_id):
+                        with app.app_context():
+                            from app.services.compliance_scoring_service import compliance_scoring_service
+                            try:
+                                compliance_scoring_service.recompute_for_organization(organization_id=org_id, commit=True)
+                            except Exception as e:
+                                app.logger.exception(f"Background recompute failed for org {org_id}: {e}")
+                                
+                    Thread(target=bg_recompute, args=(app_obj, organization.id)).start()
+
+                    flash('Registration modules updated.', 'success')
+                    return redirect(url_for('main.organization_settings'))
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.exception('Failed to save modules')
+                    flash('Failed to save modules. Please try again.', 'error')
 
         elif submitted == 'billing':
             if billing_form.validate_on_submit():
@@ -2892,6 +2941,7 @@ def organization_settings():
         billing_form=billing_form,
         billing_access_form=billing_access_form,
         monthly_report_form=monthly_report_form,
+        modules_form=modules_form,
         is_super_admin=is_super_admin,
         is_org_admin=is_org_admin,
         organization=organization,
@@ -4343,49 +4393,217 @@ def _rank_demo_snippets(document_text: str, query_text: str, top_k: int = 4) -> 
     ]
 
 
-def _derive_demo_status(document_text: str, query_text: str, snippets: list[dict], *, mode: str = 'balanced') -> tuple[str, float]:
-    query_terms = _tokenize_demo_text(query_text)
-    if not query_terms:
-        query_terms = _tokenize_demo_text('compliance evidence policy process review audit monitoring')
+def _derive_demo_status(document_text: str, query_text: str, snippets: list[dict], *, mode: str = 'balanced', doc_type: str = 'auto') -> tuple[str, float]:
+    """
+    Multi-rubric scorer — applies a different set of criteria depending on
+    what TYPE of document the user has told us they are uploading.
 
+    doc_type values:
+      'policy'    → Policy / Procedure          (default strict rubric)
+      'clinical'  → Clinical Reference / Tool   (credibility + relevance rubric)
+      'record'    → Implementation Record       (completion + recency rubric)
+      'agreement' → Service Agreement / Consent (completeness + rights rubric)
+      'training'  → Training Material           (coverage + currency rubric)
+      'auto'      → Auto-detect from content
+
+    Each rubric scores 0–100 pts and maps to the same status thresholds.
+    """
     lower_text = (document_text or '').lower()
     doc_len = len((document_text or '').strip())
     snippet_count = len(snippets or [])
-    hits = sum(1 for term in query_terms if term in lower_text)
-    coverage = (float(hits) / float(len(query_terms))) if query_terms else 0.0
-    score = (coverage * 0.65) + (min(float(snippet_count) / 4.0, 1.0) * 0.2) + (min(float(doc_len) / 1800.0, 1.0) * 0.15)
-    confidence = max(0.0, min(score, 1.0))
-
-    normalized_mode = (mode or 'balanced').strip().lower()
-    if normalized_mode not in {'strict', 'balanced'}:
-        normalized_mode = 'balanced'
     is_template_like = _looks_like_demo_template(document_text)
+    has_headings = bool(re.search(r'\n\s*\d+\.\s+[A-Z]|\n[A-Z][^\n]{5,50}\n', document_text or ''))
 
-    # Strict mode is intentionally conservative to avoid over-claiming readiness.
-    if normalized_mode == 'strict':
-        # In strict mode, we intentionally deflate confidence to reflect higher audit caution.
-        confidence = max(0.0, min(confidence * 0.90, 1.0))
-        if doc_len < 220 or coverage < 0.12:
-            return 'Critical gap', round(confidence, 3)
-        if score >= 0.90 and snippet_count >= 4 and doc_len >= 900:
-            return 'Mature', round(confidence, 3)
-        if score >= 0.58 and snippet_count >= 2:
-            return 'OK', round(confidence, 3)
-        if score >= 0.30:
-            return 'High risk gap', round(confidence, 3)
-        return 'Critical gap', round(confidence, 3)
+    # ── Auto-detect doc type from content if not specified ────────────────────
+    resolved_type = (doc_type or 'auto').strip().lower()
+    if resolved_type == 'auto':
+        if any(w in lower_text for w in ['milestone', 'developmental', 'clinical', 'adapted from', 'evidence-based', 'research', 'journal', 'american academy', 'who guidelines']):
+            resolved_type = 'clinical'
+        elif any(w in lower_text for w in ['incident register', 'training record', 'attendance log', 'completed by', 'date of incident', 'name of participant', 'signed by', 'date completed']):
+            resolved_type = 'record'
+        elif any(w in lower_text for w in ['service agreement', 'consent form', 'i consent', 'participant agrees', 'terms of service', 'participant signature', 'authorised representative']):
+            resolved_type = 'agreement'
+        elif any(w in lower_text for w in ['learning objective', 'module', 'quiz', 'facilitator guide', 'training material', 'course outline', 'competency', 'certificate of completion']):
+            resolved_type = 'training'
+        else:
+            resolved_type = 'policy'
 
-    # Balanced mode reduces false-critical outcomes for short but relevant policy docs.
-    confidence = max(0.0, min(confidence * 1.05, 1.0))
-    if doc_len < 120 and coverage < 0.20:
-        return 'Critical gap', round(confidence, 3)
-    if score >= 0.72 and snippet_count >= 3:
+    # ══════════════════════════════════════════════════════════════════════════
+    # RUBRIC A — Policy / Procedure
+    # Checks: action language, responsibilities, procedures, timeframes
+    # ══════════════════════════════════════════════════════════════════════════
+    if resolved_type == 'policy':
+        action_indicators = [
+            'must', 'will', 'shall', 'is responsible', 'are responsible', 'ensures', 'ensure',
+            'maintained', 'reviewed', 'documented', 'recorded', 'provided', 'conducted',
+            'reported', 'investigated', 'resolved', 'trained', 'assessed', 'monitored',
+        ]
+        responsibility_indicators = [
+            'manager', 'coordinator', 'worker', 'staff', 'team', 'ceo', 'board', 'committee',
+            'director', 'supervisor', 'employee', 'provider', 'organisation',
+        ]
+        process_indicators = [
+            'procedure', 'process', 'policy', 'step', 'steps', 'form', 'register',
+            'checklist', 'protocol', 'guideline', 'framework', 'schedule',
+            'plan', 'review', 'audit', 'report', 'log', 'record',
+        ]
+        timeframe_indicators = [
+            'within', 'days', 'hours', 'weeks', 'monthly', 'annually',
+            'quarterly', 'immediately', 'timeframe', 'deadline', 'due date',
+        ]
+        action_score = min(sum(1 for w in action_indicators if w in lower_text) / 6.0, 1.0)
+        responsibility_score = min(sum(1 for w in responsibility_indicators if w in lower_text) / 3.0, 1.0)
+        process_score = min(sum(1 for w in process_indicators if w in lower_text) / 5.0, 1.0)
+        timeframe_score = min(sum(1 for w in timeframe_indicators if w in lower_text) / 2.0, 1.0)
+        substance_pts = (action_score * 0.40 + responsibility_score * 0.25 + process_score * 0.25 + timeframe_score * 0.10) * 40.0
+        query_terms = _tokenize_demo_text(query_text) or _tokenize_demo_text('compliance evidence policy process review monitoring')
+        hits = sum(1 for t in query_terms if t in lower_text)
+        coverage_pts = ((hits / len(query_terms)) ** 0.6) * 25.0 if query_terms else 0.0
+        depth_pts = (min(doc_len / 2500.0, 1.0) * 0.6 + min(snippet_count / 4.0, 1.0) * 0.4) * 20.0
+        structure_pts = (10.0 * 0.3 if is_template_like else 10.0) * (1.3 if has_headings else 1.0)
+        structure_pts = min(structure_pts, 10.0)
+        snippet_pts = min(snippet_count / 4.0, 1.0) * 5.0
+        raw_score = (substance_pts + coverage_pts + depth_pts + structure_pts + snippet_pts) / 100.0
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # RUBRIC B — Clinical Reference / Tool
+    # Checks: credible source, currency, relevance to NDIS service area,
+    #         whether it's been contextualised for the organisation's use
+    # ══════════════════════════════════════════════════════════════════════════
+    elif resolved_type == 'clinical':
+        # Source credibility (30 pts): is it from a named authority?
+        credible_sources = [
+            'adapted', 'reproduced with permission', 'developed by', 'published by',
+            'endorsed by', 'australian government', 'department of health', 'nhmrc',
+            'world health organization', 'who', 'american academy', 'journal', 'research',
+            'evidence-based', 'clinical practice guideline', 'best practice',
+        ]
+        credibility_hits = sum(1 for s in credible_sources if s in lower_text)
+        credibility_pts = min(credibility_hits / 3.0, 1.0) * 30.0
+
+        # Currency (20 pts): does it have a date or version?
+        currency_indicators = [
+            '2020', '2021', '2022', '2023', '2024', '2025', 'version', 'updated', 'revised', 'edition',
+        ]
+        currency_pts = min(sum(1 for c in currency_indicators if c in lower_text) / 2.0, 1.0) * 20.0
+
+        # NDIS/Disability service relevance (30 pts)
+        relevance_indicators = [
+            'ndis', 'participant', 'disability', 'child', 'support', 'development', 'therapy',
+            'allied health', 'occupational', 'speech', 'physiotherapy', 'early childhood',
+            'behaviour', 'cognition', 'communication', 'sensory', 'motor',
+        ]
+        relevance_hits = sum(1 for r in relevance_indicators if r in lower_text)
+        relevance_pts = min(relevance_hits / 5.0, 1.0) * 30.0
+
+        # Depth / content richness (20 pts)
+        depth_pts = min(doc_len / 1500.0, 1.0) * 20.0
+
+        raw_score = (credibility_pts + currency_pts + relevance_pts + depth_pts) / 100.0
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # RUBRIC C — Implementation Record (Log / Register / Completed Form)
+    # Checks: actual data entries, participant or staff identifiers, dates
+    # ══════════════════════════════════════════════════════════════════════════
+    elif resolved_type == 'record':
+        # Evidence of actual entries (40 pts)
+        entry_indicators = [
+            'date', 'name', 'signed', 'completed by', 'outcome', 'action taken',
+            'resolved', 'follow up', 'reviewed by', 'witness', 'description',
+        ]
+        entry_pts = min(sum(1 for e in entry_indicators if e in lower_text) / 5.0, 1.0) * 40.0
+
+        # Identifiers showing real use (30 pts)
+        id_indicators = [
+            'participant', 'worker', 'staff', 'client', 'id', 'reference', 'case',
+            'incident number', 'complaint number', 'ndis number',
+        ]
+        id_pts = min(sum(1 for i in id_indicators if i in lower_text) / 3.0, 1.0) * 30.0
+
+        # Structured format (20 pts): tables, rows, numbered entries
+        structured = bool(re.search(r'\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}|\brow\b|\btable\b|\bcolumn\b', lower_text))
+        structure_pts = 20.0 if structured else (10.0 if snippet_count >= 2 else 5.0)
+
+        # Depth (10 pts)
+        depth_pts = min(doc_len / 800.0, 1.0) * 10.0
+
+        raw_score = (entry_pts + id_pts + structure_pts + depth_pts) / 100.0
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # RUBRIC D — Service Agreement / Consent Form
+    # Checks: participant rights, signatures, service scope, review provisions
+    # ══════════════════════════════════════════════════════════════════════════
+    elif resolved_type == 'agreement':
+        # Rights & consent language (35 pts)
+        rights_indicators = [
+            'right', 'rights', 'consent', 'agree', 'agree to', 'authorise', 'authorize',
+            'privacy', 'confidential', 'choice', 'control', 'withdraw', 'dignity',
+        ]
+        rights_pts = min(sum(1 for r in rights_indicators if r in lower_text) / 5.0, 1.0) * 35.0
+
+        # Service scope clarity (30 pts)
+        scope_indicators = [
+            'services', 'supports', 'hours', 'frequency', 'cost', 'fees', 'funding',
+            'ndis', 'plan', 'goals', 'outcomes', 'responsible',
+        ]
+        scope_pts = min(sum(1 for s in scope_indicators if s in lower_text) / 5.0, 1.0) * 30.0
+
+        # Signature / execution elements (20 pts)
+        sig_indicators = ['signature', 'signed', 'date', 'witness', 'representative', 'guardian', 'print name']
+        sig_pts = min(sum(1 for s in sig_indicators if s in lower_text) / 3.0, 1.0) * 20.0
+
+        # Depth (15 pts)
+        depth_pts = min(doc_len / 1000.0, 1.0) * 15.0
+
+        raw_score = (rights_pts + scope_pts + sig_pts + depth_pts) / 100.0
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # RUBRIC E — Training Material
+    # Checks: learning objectives, NDIS topic coverage, currency, staff focus
+    # ══════════════════════════════════════════════════════════════════════════
+    elif resolved_type == 'training':
+        # Learning objectives and structure (35 pts)
+        learning_indicators = [
+            'objective', 'learning outcome', 'by the end', 'participants will', 'will be able',
+            'module', 'section', 'unit', 'quiz', 'assessment', 'activity', 'scenario',
+        ]
+        learning_pts = min(sum(1 for l in learning_indicators if l in lower_text) / 4.0, 1.0) * 35.0
+
+        # NDIS / disability topic coverage (35 pts)
+        topic_indicators = [
+            'ndis', 'participant', 'rights', 'dignity', 'safeguarding', 'abuse', 'neglect',
+            'incident', 'restrictive practice', 'behaviour support', 'person-centred',
+            'disclosure', 'mandatory', 'reporting', 'consent', 'confidentiality',
+        ]
+        topic_pts = min(sum(1 for t in topic_indicators if t in lower_text) / 5.0, 1.0) * 35.0
+
+        # Currency (15 pts)
+        currency_indicators = ['2022', '2023', '2024', '2025', 'version', 'updated', 'revised']
+        currency_pts = min(sum(1 for c in currency_indicators if c in lower_text) / 2.0, 1.0) * 15.0
+
+        # Depth (15 pts)
+        depth_pts = min(doc_len / 2000.0, 1.0) * 15.0
+
+        raw_score = (learning_pts + topic_pts + currency_pts + depth_pts) / 100.0
+
+    else:
+        # Fallback to policy rubric
+        raw_score = 0.3
+
+    # ── Apply confidence and mode haircut ─────────────────────────────────────
+    raw_score = max(0.0, min(raw_score, 1.0))
+    confidence = min(raw_score * 1.05, 0.97)
+    if (mode or '').strip().lower() == 'strict':
+        confidence = max(0.0, confidence * 0.95)
+
+    # ── Map to status ─────────────────────────────────────────────────────────
+    if doc_len < 100:
+        return 'Critical gap', round(min(confidence, 0.30), 3)
+    if raw_score >= 0.75:
         return 'Mature', round(confidence, 3)
-    if score >= 0.48 and snippet_count >= 2:
+    if raw_score >= 0.55:
         return 'OK', round(confidence, 3)
-    if is_template_like and coverage >= 0.16 and snippet_count >= 2:
-        return 'OK', round(min(confidence, 0.58), 3)
-    if score >= 0.22:
+    if raw_score >= 0.30:
         return 'High risk gap', round(confidence, 3)
     return 'Critical gap', round(confidence, 3)
 
@@ -4547,7 +4765,7 @@ def _coerce_demo_summary_text(text: str | None) -> str | None:
     return _normalize_demo_summary_text(coerced)
 
 
-def _azure_openai_demo_summary(*, status: str, question: str, snippets: list[dict], citations: list[dict]) -> tuple[str | None, str | None, str | None]:
+def _azure_openai_demo_summary(*, status: str, question: str, snippets: list[dict], citations: list[dict], doc_text: str = '') -> tuple[str | None, str | None, str | None]:
     endpoint = (current_app.config.get('AZURE_OPENAI_ENDPOINT') or '').strip().rstrip('/')
     api_key = (current_app.config.get('AZURE_OPENAI_API_KEY') or '').strip()
     api_version = (current_app.config.get('AZURE_OPENAI_API_VERSION') or '2024-10-21').strip()
@@ -4563,15 +4781,21 @@ def _azure_openai_demo_summary(*, status: str, question: str, snippets: list[dic
     if not endpoint or not api_key or not deployment:
         return None, 'Azure OpenAI is not fully configured. Using deterministic explanation.', None
 
-    evidence_points = '\n'.join([f"- {item.get('text', '')}" for item in snippets[:4]]) or '- No strong document snippets found.'
+    # Use actual document text for richer LLM reasoning
+    doc_excerpt = (doc_text or '').strip()[:1500] or 'No document text available.'
+    snippet_texts = '\n'.join([f"- {item.get('text', '')}" for item in snippets[:4]]) or '- No strong document snippets found.'
+    evidence_points = f"Document excerpt:\n{doc_excerpt}\n\nTop matching passages:\n{snippet_texts}"
     citation_points = '\n'.join([
         f"- {c.get('source_id', 'ndis')} p.{c.get('page_number') or '?'}: {c.get('text', '')}"
         for c in citations[:3]
     ]) or '- No NDIS citations retrieved.'
 
     prompt = (
-        'You are an NDIS compliance demo assistant. '
-        'Given the proposed status, document evidence snippets, and NDIS citations, produce a concise explanation. '
+        'You are an NDIS compliance evidence reviewer. '
+        'Your job is to explain WHY the proposed status was assigned based on the document content. '
+        'The score is determined by a rubric that checks: (1) action language & procedures, '
+        '(2) topic coverage relevant to the NDIS question, (3) document depth & detail, '
+        '(4) structure (not a blank template), (5) alignment with NDIS Practice Standards.\n\n'
         'Return plain text only (no markdown, no bullet symbols, no code fences). '
         'Use this exact structure with all sections present:\n'
         '1) Why this status\n'
@@ -4579,9 +4803,9 @@ def _azure_openai_demo_summary(*, status: str, question: str, snippets: list[dic
         '3) Recommended next action\n'
         'End with the line END_SUMMARY\n\n'
         f'Proposed status: {status}\n'
-        f'Question: {question}\n\n'
-        f'Document evidence snippets:\n{evidence_points}\n\n'
-        f'NDIS citations:\n{citation_points}'
+        f'Assessment question: {question}\n\n'
+        f'Document content (first 1500 chars):\n{evidence_points}\n\n'
+        f'NDIS Practice Standards citations retrieved:\n{citation_points}'
     )
 
     try:
@@ -4737,7 +4961,7 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
         return None, f'OpenRouter request failed ({reason}). Using deterministic explanation.', None
 
 
-def _llm_demo_summary(*, status: str, question: str, snippets: list[dict], citations: list[dict]) -> tuple[str | None, str | None, str | None, str]:
+def _llm_demo_summary(*, status: str, question: str, snippets: list[dict], citations: list[dict], doc_text: str = '') -> tuple[str | None, str | None, str | None, str]:
     azure_enabled = bool(
         (current_app.config.get('AZURE_OPENAI_ENDPOINT') or '').strip()
         and (current_app.config.get('AZURE_OPENAI_API_KEY') or '').strip()
@@ -4749,6 +4973,7 @@ def _llm_demo_summary(*, status: str, question: str, snippets: list[dict], citat
             question=question,
             snippets=snippets,
             citations=citations,
+            doc_text=doc_text,
         )
         return summary, warning, model, 'azure-openai'
 
@@ -5818,6 +6043,11 @@ def ai_demo_analyze_api():
     question = _limit_text((request.form.get('question') or '').strip(), max_chars=700)
     # Demo mode is intentionally fixed to balanced for consistent client-facing behavior.
     analysis_mode = 'balanced'
+    # Document type selected by user — determines which scoring rubric is applied
+    _VALID_DOC_TYPES = {'policy', 'clinical', 'record', 'agreement', 'training', 'auto'}
+    doc_type = (request.form.get('doc_type') or 'auto').strip().lower()
+    if doc_type not in _VALID_DOC_TYPES:
+        doc_type = 'auto'
     # Checkbox semantics: explicit truthy value means reuse previous analysis.
     # Unchecked checkboxes are omitted from form payload and must resolve to False.
     reuse_last_raw = str(request.form.get('reuse_last') or '').strip().lower()
@@ -5899,7 +6129,7 @@ def ai_demo_analyze_api():
         return jsonify({'success': False, 'error': extraction_error}), 400
 
     snippets = _rank_demo_snippets(doc_text, question, top_k=4)
-    status, confidence = _derive_demo_status(doc_text, question, snippets, mode=analysis_mode)
+    status, confidence = _derive_demo_status(doc_text, question, snippets, mode=analysis_mode, doc_type=doc_type)
 
     rag_citations = []
     rag_warning = None
@@ -5935,6 +6165,7 @@ def ai_demo_analyze_api():
         question=question,
         snippets=snippets,
         citations=rag_citations,
+        doc_text=doc_text,
     )
     if llm_warning:
         warning_items.append({'source': 'llm', 'message': llm_warning})
@@ -6021,7 +6252,7 @@ def ai_demo_analyze_api():
                 'provider': provider_label,
                 'model': model_label,
                 'analysis_mode': analysis_mode,
-                'scoring_version': 'demo-v3',
+                'scoring_version': 'demo-v4',
                 'retrieval_mode': _demo_retrieval_mode,
                 'document_chars': len(doc_text or ''),
                 'temporary_processing_only': False,
@@ -6031,6 +6262,15 @@ def ai_demo_analyze_api():
                 'cached_result': False,
                 'question': question,
                 'analysis_at': analyzed_at.isoformat(),
+                'doc_type': doc_type,
+                'rubric_label': {
+                    'policy': 'Policy/Procedure rubric',
+                    'clinical': 'Clinical Reference rubric',
+                    'record': 'Implementation Record rubric',
+                    'agreement': 'Service Agreement rubric',
+                    'training': 'Training Material rubric',
+                    'auto': 'Auto-detected rubric',
+                }.get(doc_type, 'Policy/Procedure rubric'),
             },
         }
     )

@@ -199,6 +199,13 @@ class GapAnalysisService:
         that is ComplianceScoringService's job.
         """
         org_id = int(organization_id)
+        from app.models import Organization
+        organization = db.session.get(Organization, org_id)
+        enabled_modules = []
+        filter_modules = False
+        if organization and organization.enabled_modules_list is not None:
+            filter_modules = True
+            enabled_modules = [m.strip() for m in organization.enabled_modules_list.split(',') if m.strip()]
 
         rows = (
             db.session.query(ComplianceRequirement, OrganizationRequirementAssessment)
@@ -258,6 +265,12 @@ class GapAnalysisService:
         requirement_rows: list[RequirementRow] = []
 
         for req, assessment in rows:
+            module_key = (req.module_name or 'Uncategorised').strip()
+            
+            # Filter by enabled modules (if they have explicitly saved their settings)
+            if filter_modules and module_key not in enabled_modules:
+                continue
+
             flag = (assessment.computed_flag if assessment else None)
             score = (assessment.computed_score if assessment else None)
 
@@ -345,10 +358,13 @@ class GapAnalysisService:
                 last_assessed_at=assessment.last_assessed_at if assessment else None,
             ))
 
-        # Sort modules: worst first (lowest average readiness)
+        # Sort modules: Core first, then worst readiness
         module_breakdown = sorted(
             module_map.values(),
-            key=lambda m: m.readiness_pct,
+            key=lambda m: (
+                0 if m.module_name.lower().startswith('core') else 1,
+                m.readiness_pct
+            ),
         )
 
         # Sort requirements: most severe first

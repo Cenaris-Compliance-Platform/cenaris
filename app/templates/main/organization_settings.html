@@ -88,6 +88,33 @@
       <div class="card border-0 shadow-sm mt-4">
         <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
+            <i class="bi bi-ui-checks-grid me-2 text-primary"></i>NDIS Registration Modules
+          </h5>
+        </div>
+        <div class="card-body p-4">
+          <p class="text-body-secondary mb-4">
+            Select the NDIS modules your organisation is registered for. Unselected modules will be hidden from the Audit Readiness Centre.
+          </p>
+          <form method="POST" novalidate>
+            {{ modules_form.hidden_tag() }}
+            <div class="mb-4" style="max-height: 400px; overflow-y: auto;">
+              {% for subfield in modules_form.enabled_modules %}
+                <div class="form-check mb-2">
+                  {{ subfield(class="form-check-input") }}
+                  {{ subfield.label(class="form-check-label") }}
+                </div>
+              {% endfor %}
+            </div>
+            <div class="d-grid d-md-flex gap-2">
+              {{ modules_form.submit() }}
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0">
             <i class="bi bi-receipt me-2 text-primary"></i>Billing
           </h5>
         </div>

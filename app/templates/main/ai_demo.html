@@ -136,10 +136,22 @@
                 </div>
               </div>
               <div class="col-md-4">
-                <div class="small text-body-secondary mb-2">Mode: <strong>Balanced</strong></div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" value="1" id="reuseLastResult" name="reuse_last" checked>
-                  <label class="form-check-label small" for="reuseLastResult">Reuse previous result</label>
+                <label for="docTypeSelect" class="form-label small mb-1">Document type <span class="text-body-secondary">(for scoring)</span></label>
+                <select id="docTypeSelect" name="doc_type" class="form-select form-select-sm">
+                  <option value="auto" selected>🔍 Auto-detect</option>
+                  <option value="policy">📋 Policy / Procedure</option>
+                  <option value="clinical">🩺 Clinical Reference / Tool</option>
+                  <option value="record">📝 Implementation Record</option>
+                  <option value="agreement">🤝 Service Agreement / Consent</option>
+                  <option value="training">🎓 Training Material</option>
+                </select>
+                <div class="form-text mt-1">Picks the right scoring rubric for your document.</div>
+                <div class="mt-2">
+                  <div class="small text-body-secondary mb-1">Mode: <strong>Balanced</strong></div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="1" id="reuseLastResult" name="reuse_last" checked>
+                    <label class="form-check-label small" for="reuseLastResult">Reuse previous result</label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -601,7 +613,8 @@
       const cachedResult = Boolean((payload.meta || {}).cached_result);
       const usedQuestion = ((payload.meta || {}).question || '').trim();
       const analyzedAtText = formatAnalysisTime((payload.meta || {}).analysis_at);
-      resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
+      const rubricLabel = ((payload.meta || {}).rubric_label || '').trim();
+      resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${rubricLabel ? ` | Rubric: ${rubricLabel}` : ''}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
       if (resultSourceMetaEl) {
         resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}${usedQuestion ? ` | Question: ${usedQuestion}` : ''}`;
       }
