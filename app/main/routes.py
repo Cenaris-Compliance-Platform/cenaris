@@ -1828,7 +1828,7 @@ def dashboard():
             Document.ai_analysis_at.isnot(None),
         )
         .order_by(Document.ai_analysis_at.desc())
-        .limit(5)
+        .limit(2)
         .all()
     )
     # Avoid full table scan for count; use an approximate or limit scope.
@@ -1905,6 +1905,9 @@ def evidence_repository():
     file_type = (request.args.get('file_type') or '').strip().lower()
     date_from = (request.args.get('date_from') or '').strip()
     date_to = (request.args.get('date_to') or '').strip()
+    sort_by = (request.args.get('sort') or 'newest').strip().lower()
+    if sort_by not in {'newest', 'oldest', 'name_asc', 'name_desc', 'recent_review'}:
+        sort_by = 'newest'
 
     # Pagination to avoid loading thousands of documents at once.
     page = request.args.get('page', 1, type=int)
@@ -1970,7 +1973,17 @@ def evidence_repository():
 
     query = query.distinct()
 
-    pagination = query.order_by(Document.uploaded_at.desc()).paginate(
+    order_expression = Document.uploaded_at.desc()
+    if sort_by == 'oldest':
+        order_expression = Document.uploaded_at.asc()
+    elif sort_by == 'name_asc':
+        order_expression = Document.filename.asc()
+    elif sort_by == 'name_desc':
+        order_expression = Document.filename.desc()
+    elif sort_by == 'recent_review':
+        order_expression = Document.ai_analysis_at.desc().nullslast()
+
+    pagination = query.order_by(order_expression).paginate(
         page=page, per_page=per_page, error_out=False
     )
     documents = pagination.items
@@ -1991,7 +2004,8 @@ def evidence_repository():
                          selected_tag=selected_tag,
                          file_type=file_type,
                          date_from=date_from,
-                         date_to=date_to)
+                         date_to=date_to,
+                         sort_by=sort_by)
 
 def _authorized_org_document_or_404(doc_id: int) -> Document:
     if not getattr(current_user, 'is_authenticated', False):
@@ -2316,6 +2330,29 @@ def delete_document(doc_id):
     return redirect(url_for('main.evidence_repository'))
 
 
+@bp.route('/document/<int:doc_id>/delete-json', methods=['POST'])
+@login_required
+def delete_document_json(doc_id):
+    """Delete one document and return JSON for one-by-one bulk delete progress."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization.'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.delete', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden.'}), 403
+
+    document = db.session.get(Document, int(doc_id))
+    if not document or int(document.organization_id) != int(org_id):
+        return jsonify({'success': False, 'error': 'Document not found.'}), 404
+
+    success, error_message = _soft_delete_document(document)
+    if not success:
+        return jsonify({'success': False, 'error': error_message or 'Delete failed.'}), 500
+
+    return jsonify({'success': True, 'document_id': int(doc_id), 'filename': document.filename or ''})
+
+
 def _soft_delete_document(document: Document) -> tuple[bool, str | None]:
     from app.services.azure_storage import AzureBlobStorageService
     from app.models import RequirementEvidenceLink
@@ -2499,6 +2536,53 @@ def download_ai_summary(doc_id):
     
     filename = f"AI_Review_{document.filename}.txt"
     return send_file(mem, as_attachment=True, download_name=filename, mimetype='text/plain')
+
+
+@bp.route('/document/<int:doc_id>/download-ai-summary-docx')
+@login_required
+def download_ai_summary_docx(doc_id):
+    """Download the AI review summary as a DOCX file."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    document = db.session.get(Document, int(doc_id))
+    if not document or int(document.organization_id) != int(org_id):
+        abort(404)
+
+    if not document.ai_analysis_at:
+        flash('This document has not been analysed yet.', 'warning')
+        return redirect(url_for('main.document_details', doc_id=doc_id))
+
+    from docx import Document as DocxDocument
+
+    docx_file = DocxDocument()
+    docx_file.add_heading('AI Review Summary', level=1)
+    docx_file.add_paragraph(f'Document: {document.filename}')
+    docx_file.add_paragraph(f'Analysed on: {document.ai_analysis_at.strftime("%Y-%m-%d %H:%M:%S UTC")}')
+    docx_file.add_paragraph(f'Status: {document.ai_status or "Unknown"}')
+    confidence_pct = int((document.ai_confidence or 0) * 100)
+    docx_file.add_paragraph(f'Confidence: {confidence_pct}%')
+    docx_file.add_paragraph(f'Focus area: {document.ai_focus_area or "General"}')
+
+    docx_file.add_heading('Review Summary', level=2)
+    docx_file.add_paragraph((document.ai_summary or 'No summary available.').strip())
+
+    mem = io.BytesIO()
+    docx_file.save(mem)
+    mem.seek(0)
+
+    filename = f"AI_Review_{document.filename}.docx"
+    return send_file(
+        mem,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
 
 
 def _split_document_ai_summary(summary_text: str | None) -> dict[str, str]:
@@ -2779,6 +2863,7 @@ def organization_settings():
     billing_catalog = billing_service.plan_catalog()
 
     billing_result = (request.args.get('billing') or '').strip().lower()
+    billing_checkout_success = billing_result == 'success'
     if billing_result == 'success':
         flash('Checkout completed. Billing status may take a few moments to update.', 'success')
     elif billing_result == 'cancelled':
@@ -2808,11 +2893,13 @@ def organization_settings():
                             billing_form=billing_form,
                             billing_access_form=billing_access_form,
                             monthly_report_form=monthly_report_form,
+                            modules_form=modules_form,
                             is_super_admin=is_super_admin,
                             is_org_admin=is_org_admin,
                             organization=organization,
                             billing_state=billing_state,
                             billing_catalog=billing_catalog,
+                            billing_checkout_success=billing_checkout_success,
                         )
 
                 try:
@@ -2947,6 +3034,35 @@ def organization_settings():
         organization=organization,
         billing_state=billing_state,
         billing_catalog=billing_catalog,
+        billing_checkout_success=billing_checkout_success,
+    )
+
+
+@bp.route('/api/billing/state', methods=['GET'])
+@login_required
+def billing_state_api():
+    """Return current billing state for auto-refresh after checkout redirect."""
+    maybe = _require_org_permission('org.manage')
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    org_id = _active_org_id()
+    organization = db.session.get(Organization, int(org_id)) if org_id else None
+    if not organization:
+        return jsonify({'success': False, 'error': 'Organization not found'}), 404
+
+    billing_state = billing_service.resolve_entitlements(
+        organization,
+        actor_email=getattr(current_user, 'email', None),
+    )
+    return jsonify(
+        {
+            'success': True,
+            'plan_code': (billing_state.get('plan_code') or ''),
+            'plan_label': (billing_state.get('plan_label') or ''),
+            'billing_status': (billing_state.get('billing_status') or ''),
+            'source': (billing_state.get('source') or ''),
+        }
     )
 
 

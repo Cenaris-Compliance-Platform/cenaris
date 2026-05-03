@@ -20,6 +20,108 @@ def _build_document_search_text(document: Document, extracted_text: str | None =
     base = [document.filename or '', document.content_type or '', (extracted_text or '')[:50000]]
     return ' '.join([item.strip() for item in base if (item or '').strip()])
 
+
+def _upload_single_file_to_org(*, file, org_id: int, storage_service: AzureBlobStorageService) -> dict:
+    """Upload one validated file and persist a Document row."""
+    try:
+        raw_bytes = file.stream.read()
+        file.stream.seek(0)
+    except Exception:
+        raw_bytes = b''
+
+    validation_result = FileValidationService.validate_file(io.BytesIO(raw_bytes), file.filename)
+    if not validation_result['success']:
+        return {
+            'success': False,
+            'filename': (file.filename or '').strip() or 'Unknown file',
+            'error': validation_result['error'],
+        }
+
+    versioned_filename = get_versioned_filename(validation_result['original_filename'], int(org_id))
+    file_path = storage_service.generate_blob_name(
+        validation_result['original_filename'],
+        current_user.id,
+        organization_id=int(org_id),
+    )
+
+    metadata = {
+        'uploaded_by': str(current_user.id),
+        'uploaded_by_email': current_user.email,
+        'original_filename': versioned_filename,
+        'upload_timestamp': str(int(datetime.now(timezone.utc).timestamp())),
+    }
+
+    upload_result = storage_service.upload_file(
+        file_stream=io.BytesIO(raw_bytes),
+        file_path=file_path,
+        content_type=validation_result['content_type'],
+        metadata=metadata,
+    )
+
+    if not upload_result['success']:
+        logger.error(f"Azure upload failed for user {current_user.id}: {upload_result['error']}")
+        return {
+            'success': False,
+            'filename': versioned_filename,
+            'error': upload_result['error'],
+        }
+
+    try:
+        db_content_type = (validation_result.get('content_type') or '').strip() or None
+        if db_content_type and len(db_content_type) > 50:
+            db_content_type = db_content_type[:50]
+
+        document = Document(
+            filename=versioned_filename,
+            blob_name=file_path,
+            file_size=validation_result['file_size'],
+            content_type=db_content_type,
+            search_text='',
+            uploaded_by=current_user.id,
+            organization_id=int(org_id),
+        )
+        db.session.add(document)
+        db.session.commit()
+
+        document.search_text = _build_document_search_text(document, None)
+        db.session.commit()
+
+        try:
+            notification_service.create_admin_notification(
+                organization_id=int(org_id),
+                actor_user_id=int(current_user.id),
+                event_type='document_uploaded',
+                title='Document uploaded',
+                message=f'{current_user.display_name()} uploaded "{versioned_filename}".',
+                severity='info',
+                link_url=url_for('main.evidence_repository'),
+                payload={
+                    'document_id': int(document.id),
+                    'filename': versioned_filename,
+                    'file_size': int(validation_result.get('file_size') or 0),
+                },
+                send_email=False,
+            )
+            invalidate_org_switcher_context_cache(int(current_user.id), int(org_id))
+        except Exception:
+            logger.exception('Failed to create upload notification for org %s', org_id)
+
+        return {
+            'success': True,
+            'filename': versioned_filename,
+            'document_id': int(document.id),
+            'file_size': int(validation_result['file_size']),
+        }
+    except Exception as e:
+        db.session.rollback()
+        storage_service.delete_file(file_path)
+        logger.error(f"Database error during file upload: {e}")
+        return {
+            'success': False,
+            'filename': versioned_filename,
+            'error': 'Could not save uploaded file metadata.',
+        }
+
 def get_versioned_filename(original_filename, organization_id):
     """
     Check if filename exists in the organization and return a versioned name if needed.
@@ -121,92 +223,12 @@ def upload_file():
         failed_count = 0
 
         for file in incoming_files:
-            try:
-                raw_bytes = file.stream.read()
-                file.stream.seek(0)
-            except Exception:
-                raw_bytes = b''
-
-            validation_result = FileValidationService.validate_file(io.BytesIO(raw_bytes), file.filename)
-            if not validation_result['success']:
-                failed_count += 1
-                flash(f"{file.filename}: {validation_result['error']}", 'error')
-                continue
-
-            versioned_filename = get_versioned_filename(validation_result['original_filename'], int(org_id))
-
-            file_path = storage_service.generate_blob_name(
-                validation_result['original_filename'],
-                current_user.id,
-                organization_id=int(org_id),
-            )
-
-            metadata = {
-                'uploaded_by': str(current_user.id),
-                'uploaded_by_email': current_user.email,
-                'original_filename': versioned_filename,
-                'upload_timestamp': str(int(datetime.now(timezone.utc).timestamp())),
-            }
-
-            upload_result = storage_service.upload_file(
-                file_stream=io.BytesIO(raw_bytes),
-                file_path=file_path,
-                content_type=validation_result['content_type'],
-                metadata=metadata,
-            )
-
-            if not upload_result['success']:
-                failed_count += 1
-                flash(f"{file.filename}: {upload_result['error']}", 'error')
-                logger.error(f"Azure upload failed for user {current_user.id}: {upload_result['error']}")
-                continue
-
-            try:
-                db_content_type = (validation_result.get('content_type') or '').strip() or None
-                if db_content_type and len(db_content_type) > 50:
-                    db_content_type = db_content_type[:50]
-
-                document = Document(
-                    filename=versioned_filename,
-                    blob_name=file_path,
-                    file_size=validation_result['file_size'],
-                    content_type=db_content_type,
-                    search_text='',
-                    uploaded_by=current_user.id,
-                    organization_id=int(org_id),
-                )
-                db.session.add(document)
-                db.session.commit()
+            result = _upload_single_file_to_org(file=file, org_id=int(org_id), storage_service=storage_service)
+            if result.get('success'):
                 success_count += 1
-
-                document.search_text = _build_document_search_text(document, None)
-                db.session.commit()
-
-                try:
-                    notification_service.create_admin_notification(
-                        organization_id=int(org_id),
-                        actor_user_id=int(current_user.id),
-                        event_type='document_uploaded',
-                        title='Document uploaded',
-                        message=f'{current_user.display_name()} uploaded "{versioned_filename}".',
-                        severity='info',
-                        link_url=url_for('main.evidence_repository'),
-                        payload={
-                            'document_id': int(document.id),
-                            'filename': versioned_filename,
-                            'file_size': int(validation_result.get('file_size') or 0),
-                        },
-                        send_email=False,
-                    )
-                    invalidate_org_switcher_context_cache(int(current_user.id), int(org_id))
-                except Exception:
-                    logger.exception('Failed to create upload notification for org %s', org_id)
-
-            except Exception as e:
-                db.session.rollback()
-                storage_service.delete_file(file_path)
+            else:
                 failed_count += 1
-                logger.error(f"Database error during file upload: {e}")
+                flash(f"{result.get('filename')}: {result.get('error')}", 'error')
 
         if success_count > 0:
             flash(f'Uploaded {success_count} file(s) successfully.', 'success')
@@ -268,6 +290,45 @@ def validate_file_ajax():
             'error': 'Validation error occurred',
             'error_code': 'VALIDATION_ERROR'
         })
+
+
+@bp.route('/upload/single', methods=['POST'])
+@login_required
+def upload_single_file_ajax():
+    """Upload a single file and return JSON for one-by-one bulk UI progress."""
+    try:
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            return jsonify({'success': False, 'error': 'No active organization selected.'}), 400
+        if not current_user.has_permission('documents.upload', org_id=int(org_id)):
+            return jsonify({'success': False, 'error': 'Not authorized'}), 403
+
+        membership = (
+            OrganizationMembership.query
+            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+            .first()
+        )
+        if not membership:
+            return jsonify({'success': False, 'error': 'Organization access denied.'}), 403
+
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided.'}), 400
+
+        file = request.files['file']
+        if not file or not (file.filename or '').strip():
+            return jsonify({'success': False, 'error': 'No file selected.'}), 400
+
+        storage_service = AzureBlobStorageService()
+        if not storage_service.is_configured():
+            return jsonify({'success': False, 'error': 'Azure Storage is not configured.'}), 503
+
+        result = _upload_single_file_to_org(file=file, org_id=int(org_id), storage_service=storage_service)
+        if not result.get('success'):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Unexpected error in single file upload: {e}")
+        return jsonify({'success': False, 'error': 'Upload failed unexpectedly.'}), 500
 
 @bp.route('/upload/progress/<upload_id>')
 @login_required

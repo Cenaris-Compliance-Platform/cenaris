@@ -331,3 +331,70 @@
   </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+{% if billing_checkout_success %}
+<script>
+  (function () {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('billing')) {
+        url.searchParams.delete('billing');
+        window.history.replaceState({}, document.title, url.toString());
+      }
+    } catch (_e) {
+      // Ignore URL normalization errors.
+    }
+
+    const pollIntervalMs = 4000;
+    const maxAttempts = 12;
+    const initialStatus = "{{ (billing_state.billing_status if billing_state else '')|lower }}";
+    const initialPlan = "{{ (billing_state.plan_code if billing_state else '')|lower }}";
+    let attempts = 0;
+
+    const shouldRefresh = (payload) => {
+      const status = String((payload && payload.billing_status) || '').toLowerCase();
+      const plan = String((payload && payload.plan_code) || '').toLowerCase();
+      if (!status && !plan) {
+        return false;
+      }
+      if (status && status !== initialStatus) {
+        return true;
+      }
+      if (plan && plan !== initialPlan) {
+        return true;
+      }
+      if (['active', 'trialing'].includes(status)) {
+        return true;
+      }
+      return false;
+    };
+
+    const tick = async () => {
+      attempts += 1;
+      try {
+        const response = await fetch("{{ url_for('main.billing_state_api') }}", {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'fetch',
+          },
+        });
+        const payload = await response.json();
+        if (response.ok && payload && payload.success && shouldRefresh(payload)) {
+          window.location.reload();
+          return;
+        }
+      } catch (_e) {
+        // Ignore transient poll errors.
+      }
+
+      if (attempts < maxAttempts) {
+        window.setTimeout(tick, pollIntervalMs);
+      }
+    };
+
+    window.setTimeout(tick, 1500);
+  })();
+</script>
+{% endif %}
+{% endblock %}

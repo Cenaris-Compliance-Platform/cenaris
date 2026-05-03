@@ -182,7 +182,12 @@
   <div id="demoResultCard" class="card border-0 shadow-sm d-none">
     <div class="card-body">
       <div class="mb-3">
-        <h5 class="card-title mb-2">Analysis Result</h5>
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+          <h5 class="card-title mb-0">Analysis Result</h5>
+          <a id="downloadDocxBtn" class="btn btn-sm btn-outline-primary d-none" href="#">
+            <i class="bi bi-file-earmark-word me-1"></i>Download DOCX
+          </a>
+        </div>
         <div class="small text-body-secondary mb-3" id="resultSourceMeta"></div>
         <div class="row g-2 align-items-stretch">
           <div class="col-md-6">
@@ -305,6 +310,7 @@
     const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
     const resultSourceMetaEl = document.getElementById('resultSourceMeta');
     const resultSummaryEl = document.getElementById('resultSummaryText');
+    const downloadDocxBtn = document.getElementById('downloadDocxBtn');
     const improvementGuideWrap = document.getElementById('improvementGuideWrap');
     const showImprovementGuideBtn = document.getElementById('showImprovementGuideBtn');
     const improvementGuidePanel = document.getElementById('improvementGuidePanel');
@@ -407,6 +413,10 @@
       }
       if (resultSourceMetaEl) {
         resultSourceMetaEl.textContent = '';
+      }
+      if (downloadDocxBtn) {
+        downloadDocxBtn.classList.add('d-none');
+        downloadDocxBtn.setAttribute('href', '#');
       }
       if (improvementGuideWrap) {
         improvementGuideWrap.classList.add('d-none');
@@ -617,6 +627,11 @@
       resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${rubricLabel ? ` | Rubric: ${rubricLabel}` : ''}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
       if (resultSourceMetaEl) {
         resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}${usedQuestion ? ` | Question: ${usedQuestion}` : ''}`;
+      }
+      if (downloadDocxBtn && storedDocSelect && (storedDocSelect.value || '').trim()) {
+        const href = `{{ url_for('main.download_ai_summary_docx', doc_id=0) }}`.replace('/0/download-ai-summary-docx', `/${storedDocSelect.value}/download-ai-summary-docx`);
+        downloadDocxBtn.setAttribute('href', href);
+        downloadDocxBtn.classList.remove('d-none');
       }
       if (resultSummaryEl) {
         const summaryText = String(payload.summary || '').trim();
