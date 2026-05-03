@@ -86,7 +86,10 @@
                         <a href="{{ url_for('main.download_ai_summary', doc_id=document.id) }}" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-download me-1"></i>Download Review
                         </a>
-                        <small class="text-body-secondary">Last analysed {{ document.ai_analysis_at | datetime_format('%b %d, %Y at %I:%M %p') }}</small>
+                        <a href="{{ url_for('main.download_ai_summary_docx', doc_id=document.id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-file-earmark-word me-1"></i>Download DOCX
+                        </a>
+                        <small class="text-body-secondary">Last analysed <span class="js-local-datetime" data-utc-datetime="{{ document.ai_analysis_at.strftime('%Y-%m-%dT%H:%M:%SZ') if document.ai_analysis_at else '' }}">{{ document.ai_analysis_at | datetime_format('%b %d, %Y at %I:%M %p') }}</span></small>
                         {% endif %}
                     </div>
                 </div>
@@ -191,8 +194,7 @@
                                     <i class="bi bi-calendar-plus me-2"></i>Upload Date
                                 </td>
                                 <td>
-                                    {{ document.uploaded_at | datetime_format('%B %d, %Y at %I:%M %p') }}
-                                    <small class="text-body-secondary">({{ document.uploaded_at | datetime_format('%Z') }})</small>
+                                    <span class="js-local-datetime" data-utc-datetime="{{ document.uploaded_at.strftime('%Y-%m-%dT%H:%M:%SZ') if document.uploaded_at else '' }}">{{ document.uploaded_at | datetime_format('%B %d, %Y at %I:%M %p') }}</span>
                                 </td>
                             </tr>
                             <tr>
@@ -329,6 +331,27 @@
 
 {% block extra_js %}
 <script>
+    (function localizeUtcDateTimes() {
+        const nodes = Array.from(document.querySelectorAll('.js-local-datetime'));
+        nodes.forEach((node) => {
+            const raw = (node.getAttribute('data-utc-datetime') || '').trim();
+            if (!raw) {
+                return;
+            }
+            const dt = new Date(raw);
+            if (Number.isNaN(dt.getTime())) {
+                return;
+            }
+            node.textContent = dt.toLocaleString([], {
+                year: 'numeric',
+                month: 'short',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        });
+    })();
+
     function confirmDelete(docId, filename) {
         const csrfToken = "{{ csrf_token() }}";
         const deleteAction = "{{ url_for('main.delete_document', doc_id=0) }}".replace('/0/', `/${docId}/`);
