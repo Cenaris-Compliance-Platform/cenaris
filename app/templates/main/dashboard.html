@@ -335,8 +335,7 @@
                     {% endif %}
                   </div>
                   <small class="text-body-secondary">
-                    {{ document.uploaded_at | datetime_format('%b %d, %Y at
-                    %I:%M %p') }} • {{ document.uploader.display_name() if document.uploader else 'Unknown' }}
+                    <span class="js-local-datetime" data-utc-datetime="{{ document.uploaded_at.strftime('%Y-%m-%dT%H:%M:%SZ') if document.uploaded_at else '' }}">{{ document.uploaded_at | datetime_format('%b %d, %Y at %I:%M %p') }}</span> • {{ document.uploader.display_name() if document.uploader else 'Unknown' }}
                   </small>
                 </div>
               </div>
@@ -386,7 +385,7 @@
                   </div>
                 </div>
                 <div class="small text-body-secondary mb-2">
-                  Reviewed {{ document.ai_analysis_at | datetime_format('%b %d, %Y at %I:%M %p') if document.ai_analysis_at else 'recently' }}
+                  Reviewed <span class="js-local-datetime" data-utc-datetime="{{ document.ai_analysis_at.strftime('%Y-%m-%dT%H:%M:%SZ') if document.ai_analysis_at else '' }}">{{ document.ai_analysis_at | datetime_format('%b %d, %Y at %I:%M %p') if document.ai_analysis_at else 'recently' }}</span>
                 </div>
                 <div class="small" style="white-space: pre-wrap;">{{ (document.ai_summary or 'Analysis summary not available yet.')[:420] }}{% if document.ai_summary and document.ai_summary|length > 420 %}...{% endif %}</div>
               </div>
@@ -425,6 +424,27 @@
   const fileListDisplay = document.getElementById("fileListDisplay");
   const uploadBtn = document.getElementById("uploadBtn");
   const uploadCount = document.getElementById("uploadCount");
+
+  (function localizeUtcDateTimes() {
+    const nodes = Array.from(document.querySelectorAll('.js-local-datetime'));
+    nodes.forEach((node) => {
+      const raw = (node.getAttribute('data-utc-datetime') || '').trim();
+      if (!raw) {
+        return;
+      }
+      const dt = new Date(raw);
+      if (Number.isNaN(dt.getTime())) {
+        return;
+      }
+      node.textContent = dt.toLocaleString([], {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    });
+  })();
 
   // If the user arrives from an "Upload New" link, guide them to open the picker.
   (function promptUploadPicker() {
