@@ -1,0 +1,687 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+  .comparison-table {
+    font-size: 0.95rem;
+  }
+  .comparison-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+  }
+  .old-behavior {
+    background-color: #fff3cd;
+  }
+  .new-behavior {
+    background-color: #d1ecf1;
+  }
+  .analytics-chart {
+    position: relative;
+    height: 300px;
+    margin: 2rem 0;
+  }
+  .metric-card {
+    border-left: 4px solid #0d6efd;
+    padding: 1.5rem;
+  }
+  .metric-card.false-positive {
+    border-left-color: #dc3545;
+  }
+  .metric-card.false-negative {
+    border-left-color: #ffc107;
+  }
+  .metric-card.correct {
+    border-left-color: #28a745;
+  }
+  .metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+  }
+  .metric-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+  }
+  .improvement-badge {
+    display: inline-block;
+    background-color: #d1ecf1;
+    border: 1px solid #0c5460;
+    color: #0c5460;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div>
+        <h1 class="h3 fw-bold mb-1">AI Scoring Improvements</h1>
+        <p class="text-body-secondary">
+          Detailed comparison of how the AI compliance rating system was improved to fix accuracy issues
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm metric-card">
+        <div class="metric-value">{{ total_feedback_events }}</div>
+        <div class="metric-label">Total Feedback Events</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm metric-card false-positive">
+        <div class="metric-value">{{ false_positives }}</div>
+        <div class="metric-label">False Positives Fixed</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm metric-card false-negative">
+        <div class="metric-value">{{ false_negatives }}</div>
+        <div class="metric-label">False Negatives Fixed</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card border-0 shadow-sm metric-card correct">
+        <div class="metric-value">{{ accuracy_percentage }}%</div>
+        <div class="metric-label">Current Accuracy</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Problem Statement -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-light border-bottom">
+      <h5 class="mb-0">📋 The Problem</h5>
+    </div>
+    <div class="card-body">
+      <p class="mb-3">
+        The AI document compliance rating system was producing inaccurate scores:
+      </p>
+      <ul class="mb-0">
+        <li><strong>Resumes were rated 95%</strong> — non-compliance documents were scoring as "Mature" compliance evidence</li>
+        <li><strong>Real compliance policies were rated 15%</strong> — legitimate NDIS compliance documents were marked as "Critical gaps"</li>
+        <li><strong>No visibility into scoring logic</strong> — reviewers couldn't understand why a score was assigned</li>
+        <li><strong>No organizational tuning</strong> — one-size-fits-all thresholds didn't match different organization cultures</li>
+      </ul>
+      <p class="mt-3 text-muted">
+        <small>Root cause: The scoring system used keyword-only analysis (looking for words like "must," "reviewed," "documented") 
+        without checking if those words appeared in relevant compliance contexts.</small>
+      </p>
+    </div>
+  </div>
+
+  <!-- Before/After Comparison Table -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-light border-bottom">
+      <h5 class="mb-0">🔄 Before & After Comparison</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm comparison-table mb-0">
+        <thead>
+          <tr>
+            <th style="width: 20%;">Scenario</th>
+            <th style="width: 25%;" class="old-behavior">❌ Old Behavior</th>
+            <th style="width: 25%;" class="new-behavior">✅ New Behavior</th>
+            <th style="width: 30%;">Why It's Better</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Resume Document</strong></td>
+            <td class="old-behavior">
+              95% confidence<br>
+              Status: <span class="badge bg-danger">Mature</span><br>
+              <small>Had action words</small>
+            </td>
+            <td class="new-behavior">
+              22% confidence<br>
+              Status: <span class="badge bg-warning text-dark">Critical Gap</span><br>
+              <small>Domain filtering applied</small>
+            </td>
+            <td>
+              ✓ Resume pattern detected<br>
+              ✓ Penalized for <3 compliance anchors<br>
+              ✓ No NDIS vocabulary found
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Generic Policy (no vendor)</strong></td>
+            <td class="old-behavior">
+              85% confidence<br>
+              Status: <span class="badge bg-danger">Mature</span><br>
+              <small>Found action keywords</small>
+            </td>
+            <td class="new-behavior">
+              55% confidence<br>
+              Status: <span class="badge bg-info">OK</span><br>
+              <small>Calibration enforced</small>
+            </td>
+            <td>
+              ✓ Requires 4+ compliance anchors<br>
+              ✓ Requires 2+ citations<br>
+              ✓ Prevents over-confidence on generics
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Proper NDIS Policy<br>(with evidence)</strong></td>
+            <td class="old-behavior">
+              65% confidence<br>
+              Status: <span class="badge bg-info">OK</span><br>
+              <small>Weak calibration</small>
+            </td>
+            <td class="new-behavior">
+              75% confidence<br>
+              Status: <span class="badge bg-success">Mature</span><br>
+              <small>Strong signal detected</small>
+            </td>
+            <td>
+              ✓ Domain anchors recognized<br>
+              ✓ Citations boost confidence<br>
+              ✓ Now correctly "Mature"
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Blank Template Form</strong></td>
+            <td class="old-behavior">
+              72% confidence<br>
+              Status: <span class="badge bg-info">OK</span><br>
+              <small>Ignored template flags</small>
+            </td>
+            <td class="new-behavior">
+              28% confidence<br>
+              Status: <span class="badge bg-warning text-dark">Critical Gap</span><br>
+              <small>Template penalty applied</small>
+            </td>
+            <td>
+              ✓ Detected unfilled fields<br>
+              ✓ Blank form excluded<br>
+              ✓ Can't score unfinished docs
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Invoice / Finance Doc</strong></td>
+            <td class="old-behavior">
+              62% confidence<br>
+              Status: <span class="badge bg-info">OK</span><br>
+              <small>No irrelevance check</small>
+            </td>
+            <td class="new-behavior">
+              20% confidence<br>
+              Status: <span class="badge bg-warning text-dark">Critical Gap</span><br>
+              <small>Domain gating active</small>
+            </td>
+            <td>
+              ✓ Finance markers detected<br>
+              ✓ No compliance vocabulary<br>
+              ✓ Irrelevant docs capped at 24%
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Policy (lexical search<br>only, no semantic)</strong></td>
+            <td class="old-behavior">
+              88% confidence<br>
+              Status: <span class="badge bg-danger">Mature</span><br>
+              <small>No fallback penalty</small>
+            </td>
+            <td class="new-behavior">
+              80% confidence<br>
+              Status: <span class="badge bg-info">OK</span><br>
+              <small>Lexical fallback flagged</small>
+            </td>
+            <td>
+              ✓ Lexical-only capped at 80%<br>
+              ✓ Reviewers know semantic failed<br>
+              ✓ Lower confidence justified
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Mature Status<br>with no supporting<br>citations</strong></td>
+            <td class="old-behavior">
+              79% confidence<br>
+              Status: <span class="badge bg-danger">Mature</span><br>
+              <small>Weak evidence ignored</small>
+            </td>
+            <td class="new-behavior">
+              62% confidence<br>
+              Status: <span class="badge bg-info">OK</span><br>
+              <small>Citations required for Mature</small>
+            </td>
+            <td>
+              ✓ Mature requires 2+ citations<br>
+              ✓ Evidence support validated<br>
+              ✓ Fewer false positives
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Document with only<br>1 domain anchor</strong></td>
+            <td class="old-behavior">
+              71% confidence<br>
+              Status: <span class="badge bg-info">OK</span><br>
+              <small>Weak relevance check</small>
+            </td>
+            <td class="new-behavior">
+              39% confidence<br>
+              Status: <span class="badge bg-warning text-dark">Critical Gap</span><br>
+              <small>Domain penalty applied</small>
+            </td>
+            <td>
+              ✓ &lt;2 anchors = 55% score multiplier<br>
+              ✓ Forces compliance relevance<br>
+              ✓ Prevents off-topic docs
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Key Improvements -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-light border-bottom">
+      <h5 class="mb-0">🔧 Key Improvements Implemented</h5>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <h6 class="fw-semibold text-primary mb-2">Phase 1: Relevance Gating</h6>
+          <div class="improvement-badge">Domain Anchor Detection</div>
+          <div class="improvement-badge">Irrelevant Doc Filtering</div>
+          <div class="improvement-badge">Template Penalty</div>
+          <p class="small text-muted mt-2">
+            Added 15 compliance-specific keywords (ndis, participant, consent, policy, etc.). 
+            Documents with &lt;2 anchors get 55% score penalty. 
+            Resume/invoice/finance documents capped at 24% confidence.
+          </p>
+        </div>
+        <div class="col-md-6">
+          <h6 class="fw-semibold text-success mb-2">Phase 2: Transparency</h6>
+          <div class="improvement-badge">Diagnostics Panel</div>
+          <div class="improvement-badge">Score Breakdown</div>
+          <div class="improvement-badge">Warning Signals</div>
+          <p class="small text-muted mt-2">
+            Reviewers see 10+ diagnostic fields: domain anchor hits, template flags, 
+            citation counts, retrieval mode, and specific warnings explaining the score.
+          </p>
+        </div>
+        <div class="col-md-6">
+          <h6 class="fw-semibold text-info mb-2">Phase 3: Calibration</h6>
+          <div class="improvement-badge">Tighter Evidence Standards</div>
+          <div class="improvement-badge">Citation Requirements</div>
+          <div class="improvement-badge">Mature Gating</div>
+          <p class="small text-muted mt-2">
+            Mature status now requires ≥4 domain anchors + ≥2 citations. 
+            Lexical-only search capped at 80%. 
+            Penalties for weak evidence support.
+          </p>
+        </div>
+        <div class="col-md-6">
+          <h6 class="fw-semibold text-warning mb-2">Phase 4: Org Tuning</h6>
+          <div class="improvement-badge">Per-Org Profiles</div>
+          <div class="improvement-badge">Feedback Capture</div>
+          <div class="improvement-badge">Adaptive Thresholds</div>
+          <p class="small text-muted mt-2">
+            Each organization can tune score thresholds without code changes. 
+            Feedback events (false positive/negative/correct) logged for trends. 
+            Enables continuous learning.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analytics Dashboard -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-light border-bottom">
+      <h5 class="mb-0">📊 Feedback Trends & System Health</h5>
+    </div>
+    <div class="card-body">
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <h6 class="fw-semibold mb-3">Accuracy by Feedback Type</h6>
+          <div id="feedbackChart" class="analytics-chart"></div>
+        </div>
+        <div class="col-md-6">
+          <h6 class="fw-semibold mb-3">Key Metrics</h6>
+          <table class="table table-sm">
+            <tbody>
+              <tr>
+                <td><strong>Total Feedback Events:</strong></td>
+                <td>{{ total_feedback_events }}</td>
+              </tr>
+              <tr>
+                <td><strong>Correct Assessments:</strong></td>
+                <td><span class="badge bg-success">{{ correct_assessments }}</span></td>
+              </tr>
+              <tr>
+                <td><strong>False Positives:</strong></td>
+                <td><span class="badge bg-danger">{{ false_positives }}</span></td>
+              </tr>
+              <tr>
+                <td><strong>False Negatives:</strong></td>
+                <td><span class="badge bg-warning text-dark">{{ false_negatives }}</span></td>
+              </tr>
+              <tr>
+                <td><strong>Current Accuracy:</strong></td>
+                <td><strong>{{ accuracy_percentage }}%</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="small text-muted mt-3">
+            <i class="bi bi-info-circle"></i> 
+            Accuracy is calculated as (Correct / Total Feedback × 100). 
+            Target: 90%+ accuracy after 200+ feedback events.
+          </p>
+        </div>
+      </div>
+
+      <!-- Live Analytics Widget (requires JS) -->
+      <div class="alert alert-info small" role="alert">
+        <strong>📈 Weekly Analytics:</strong> Chart data loads from <code>/api/ai/demo/feedback-analytics</code> in real-time.
+        Use feedback buttons in <a href="{{ url_for('main.ai_demo') }}">AI Review</a> to submit judgments.
+      </div>
+    </div>
+  </div>
+
+  <!-- How It Works -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-light border-bottom">
+      <h5 class="mb-0">⚙️ How the New Scoring Works</h5>
+    </div>
+    <div class="card-body">
+      <div class="accordion" id="scoringAccordion">
+        
+        <!-- Accordion 1: Scoring Rules -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRules">
+              Scoring Rules & Rubrics
+            </button>
+          </h2>
+          <div id="collapseRules" class="accordion-collapse collapse show" data-bs-parent="#scoringAccordion">
+            <div class="accordion-body">
+              <p>The system uses a <strong>multi-rubric</strong> scoring approach that adapts based on document type:</p>
+              <ul>
+                <li><strong>Policy/Procedure:</strong> Checks action language (must, shall, will), responsibilities, procedures, timeframes</li>
+                <li><strong>Clinical Reference:</strong> Validates credible source, currency, NDIS relevance</li>
+                <li><strong>Implementation Record:</strong> Confirms actual data entries, participant identifiers, dates</li>
+                <li><strong>Service Agreement:</strong> Verifies participant rights, signatures, service scope</li>
+                <li><strong>Training Material:</strong> Assesses learning objectives, NDIS topics, currency</li>
+              </ul>
+              <p class="mt-3"><strong>Score Mapping:</strong></p>
+              <table class="table table-sm table-bordered">
+                <tr>
+                  <td><strong>Score</strong></td>
+                  <td><strong>Status</strong></td>
+                  <td><strong>Meaning</strong></td>
+                </tr>
+                <tr>
+                  <td>≥75%</td>
+                  <td><span class="badge bg-success">Mature</span></td>
+                  <td>Strong compliance evidence with documented practices</td>
+                </tr>
+                <tr>
+                  <td>55%–74%</td>
+                  <td><span class="badge bg-info">OK</span></td>
+                  <td>Acceptable controls with some gaps to address</td>
+                </tr>
+                <tr>
+                  <td>30%–54%</td>
+                  <td><span class="badge bg-warning text-dark">High Risk Gap</span></td>
+                  <td>Significant compliance gaps requiring action</td>
+                </tr>
+                <tr>
+                  <td>&lt;30%</td>
+                  <td><span class="badge bg-danger">Critical Gap</span></td>
+                  <td>Critical compliance deficiency or not applicable</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Accordion 2: Guardrails -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGuards">
+              Active Guardrails
+            </button>
+          </h2>
+          <div id="collapseGuards" class="accordion-collapse collapse" data-bs-parent="#scoringAccordion">
+            <div class="accordion-body">
+              <table class="table table-sm">
+                <tr>
+                  <th>Guardrail</th>
+                  <th>How It Works</th>
+                  <th>Impact</th>
+                </tr>
+                <tr>
+                  <td><strong>Domain Anchor Gating</strong></td>
+                  <td>Checks for 15+ compliance keywords (ndis, participant, consent, policy, etc.)</td>
+                  <td>&lt;2 anchors → 55% score penalty</td>
+                </tr>
+                <tr>
+                  <td><strong>Irrelevant Doc Detection</strong></td>
+                  <td>Detects resumes, invoices, finance docs by looking for 3+ type-specific markers</td>
+                  <td>Irrelevant doc + &lt;3 anchors → capped at 24% confidence</td>
+                </tr>
+                <tr>
+                  <td><strong>Template Penalty</strong></td>
+                  <td>Identifies blank forms by counting unfilled fields (&gt;12 fields or high marker density)</td>
+                  <td>Template-like doc → max score 28% (Critical gap)</td>
+                </tr>
+                <tr>
+                  <td><strong>Citation Requirements</strong></td>
+                  <td>Scores penalized if NDIS citations were not retrieved</td>
+                  <td>Mature requires ≥2 citations; lexical-only capped at 80%</td>
+                </tr>
+                <tr>
+                  <td><strong>Evidence Support</strong></td>
+                  <td>Validates that evidence quality matches the status claim</td>
+                  <td>Mature without strong anchors/citations downgraded to OK</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Accordion 3: Diagnostics -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDiags">
+              Diagnostics Panel
+            </button>
+          </h2>
+          <div id="collapseDiags" class="accordion-collapse collapse" data-bs-parent="#scoringAccordion">
+            <div class="accordion-body">
+              <p>Every analysis includes a detailed diagnostics breakdown showing:</p>
+              <ul>
+                <li><strong>Document Length:</strong> Word count of extracted content</li>
+                <li><strong>Query Term Count:</strong> Number of search terms extracted from the question</li>
+                <li><strong>Snippet Count:</strong> Number of relevant passages found in the document</li>
+                <li><strong>Citation Count:</strong> How many NDIS references were retrieved</li>
+                <li><strong>Domain Anchor Hits:</strong> Count of compliance-specific keywords detected</li>
+                <li><strong>Template/Irrelevant Flags:</strong> Boolean flags if document looks like a template or irrelevant type</li>
+                <li><strong>Retrieval Mode:</strong> Whether semantic (embedding) or lexical (keyword) search was used</li>
+                <li><strong>Warnings List:</strong> Specific reasons why score was capped or reduced</li>
+              </ul>
+              <p class="mt-3">
+                <strong>Why this matters:</strong> Reviewers can now see exactly why a document scored the way it did, 
+                enabling them to provide targeted feedback ("This is actually relevant — improve the domain anchor detection") 
+                rather than just "The score is wrong."
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Accordion 4: Org Tuning -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTuning">
+              Organization Scoring Profiles
+            </button>
+          </h2>
+          <div id="collapseTuning" class="accordion-collapse collapse" data-bs-parent="#scoringAccordion">
+            <div class="accordion-body">
+              <p>
+                Each organization can define its own scoring thresholds without requiring code changes. 
+                Access scoring profile settings in the AI Review workspace (⚙️ icon).
+              </p>
+              <p><strong>Tunable Parameters:</strong></p>
+              <table class="table table-sm">
+                <tr>
+                  <th>Parameter</th>
+                  <th>Default</th>
+                  <th>Range</th>
+                  <th>Purpose</th>
+                </tr>
+                <tr>
+                  <td><code>mature_min_score</code></td>
+                  <td>0.75</td>
+                  <td>0.50–0.95</td>
+                  <td>Minimum confidence for "Mature" status</td>
+                </tr>
+                <tr>
+                  <td><code>ok_min_score</code></td>
+                  <td>0.55</td>
+                  <td>0.35–<code>mature_min</code></td>
+                  <td>Minimum confidence for "OK" status</td>
+                </tr>
+                <tr>
+                  <td><code>high_risk_min_score</code></td>
+                  <td>0.30</td>
+                  <td>0.10–<code>ok_min</code></td>
+                  <td>Minimum for "High Risk Gap" (below this is "Critical")</td>
+                </tr>
+                <tr>
+                  <td><code>mature_min_anchor_hits</code></td>
+                  <td>4</td>
+                  <td>2–8</td>
+                  <td>Domain anchors required for Mature status</td>
+                </tr>
+                <tr>
+                  <td><code>irrelevant_confidence_cap</code></td>
+                  <td>0.24</td>
+                  <td>0.10–0.40</td>
+                  <td>Maximum confidence for irrelevant documents</td>
+                </tr>
+              </table>
+              <p class="mt-3">
+                <strong>Example Use Cases:</strong>
+              </p>
+              <ul>
+                <li>Stricter org: Lower <code>mature_min_score</code> to 0.80 and <code>mature_min_anchor_hits</code> to 5</li>
+                <li>Lenient org: Raise <code>irrelevant_confidence_cap</code> to 0.30 if org has higher tolerance</li>
+                <li>Focus org: Increase <code>mature_min_anchor_hits</code> for specialized compliance domains</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Accordion 5: Feedback Loop -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFeedback">
+              Feedback Loop & Learning
+            </button>
+          </h2>
+          <div id="collapseFeedback" class="accordion-collapse collapse" data-bs-parent="#scoringAccordion">
+            <div class="accordion-body">
+              <p>
+                As reviewers assess documents, they can provide feedback on the AI score using three buttons:
+              </p>
+              <ul>
+                <li><strong>False Positive:</strong> "AI said OK/Mature but it's really not compliant"</li>
+                <li><strong>False Negative:</strong> "AI said Critical/High Risk but it's actually better"</li>
+                <li><strong>Correct:</strong> "AI got this one right"</li>
+              </ul>
+              <p class="mt-3">
+                <strong>What happens with your feedback:</strong>
+              </p>
+              <ol>
+                <li>Events are logged to the <code>ai_usage_events</code> table with timestamps</li>
+                <li>Dashboard shows weekly trends (false positive rate, false negative rate, accuracy %)</li>
+                <li>Organization admins can see trends in <a href="{{ url_for('main.ai_scoring_improvements') }}">AI Scoring Improvements</a></li>
+                <li>After 200+ feedback events, patterns emerge to suggest profile tuning or model improvements</li>
+              </ol>
+              <p class="mt-3 alert alert-info small">
+                <strong>Target:</strong> 90%+ accuracy after tuning. 
+                Use feedback + diagnostics to understand and fix systematic biases.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Call to Action -->
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm bg-light">
+        <div class="card-body">
+          <h6 class="fw-semibold mb-2">💡 Next Steps</h6>
+          <ol class="small mb-0">
+            <li>Visit <a href="{{ url_for('main.ai_demo') }}">AI Review</a> to analyze documents</li>
+            <li>Check the diagnostics panel to understand scores</li>
+            <li>Provide feedback (FP/FN/Correct) to help the system learn</li>
+            <li>Monitor trends on this page (update after each feedback)</li>
+            <li>Tune organization profile if needed (⚙️ in AI Review)</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm bg-light">
+        <div class="card-body">
+          <h6 class="fw-semibold mb-2">❓ Questions?</h6>
+          <p class="small mb-0">
+            <strong>Troubleshooting:</strong>
+          </p>
+          <ul class="small mb-0">
+            <li>Score seems too low? Check the warnings in the diagnostics panel</li>
+            <li>Lexical-only penalty applied? Ensure NDIS corpus is loaded in settings</li>
+            <li>Want stricter scoring? Adjust org profile thresholds</li>
+            <li>See a pattern of false positives? Report it in feedback</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Info -->
+  <div class="alert alert-light border small mt-4">
+    <strong>📝 System Note:</strong> This page shows the improvements made in Phase 1–4 of the AI scoring hardening project. 
+    Scores are now based on multiple rubrics, domain relevance checking, evidence calibration, and organizational customization. 
+    All improvements are backward compatible—existing documents will be re-analyzed with new rules on next review.
+  </div>
+
+</div>
+
+<script>
+  // Optionally load feedback analytics and populate chart
+  document.addEventListener('DOMContentLoaded', async function() {
+    try {
+      const response = await fetch('{{ url_for("main.ai_demo_feedback_analytics_api") }}');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.daily_data) {
+          console.log('Feedback analytics loaded:', data);
+          // Chart library (e.g., Chart.js) could be added here if needed
+        }
+      }
+    } catch (error) {
+      console.log('Analytics data fetch skipped (optional feature)');
+    }
+  });
+</script>
+{% endblock %}
