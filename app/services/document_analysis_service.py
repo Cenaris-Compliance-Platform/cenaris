@@ -60,6 +60,24 @@ class DocumentAnalysisService:
         },
     ]
 
+    _DOMAIN_ANCHOR_TERMS = {
+        'ndis', 'participant', 'consent', 'privacy', 'dignity', 'confidentiality',
+        'complaint', 'complaints', 'incident', 'risk', 'governance', 'safeguard',
+        'service agreement', 'support plan', 'care plan', 'restrictive practice',
+        'audit', 'review', 'evidence', 'compliance', 'policy', 'procedure',
+    }
+
+    _IRRELEVANT_RESUME_MARKERS = {
+        'curriculum vitae', 'resume', 'professional summary', 'work experience',
+        'employment history', 'skills', 'references available', 'linkedin.com/in',
+        'career objective', 'career summary', 'education', 'hobbies',
+    }
+
+    _IRRELEVANT_FINANCE_MARKERS = {
+        'tax invoice', 'invoice number', 'purchase order', 'unit price', 'subtotal',
+        'amount due', 'payment terms', 'bank statement', 'statement period',
+    }
+
     def extract_text_from_bytes(self, filename: str, raw_bytes: bytes) -> tuple[str, str | None]:
         filename_value = (filename or '').strip().lower()
         if not filename_value:
@@ -173,6 +191,19 @@ class DocumentAnalysisService:
             retrieval_mode=retrieval_mode,
         )
 
+        scoring_diagnostics = self._build_scoring_diagnostics(
+            document_text=text,
+            query_text=snippet_query or question,
+            snippets=snippets,
+            matched_requirements=matched_requirements,
+            citations=citations,
+            retrieval_mode=retrieval_mode,
+            status=status,
+            confidence=confidence,
+        )
+        for message in scoring_diagnostics.get('warnings', []):
+            warning_items.append({'source': 'scoring', 'message': message})
+
         summary, llm_warning, used_model = self._openrouter_summary(
             status=status,
             question=question,
@@ -207,6 +238,7 @@ class DocumentAnalysisService:
             'retrieval_mode': retrieval_mode,
             'extracted_text': text,
             'warning_items': warning_items,
+            'scoring_diagnostics': scoring_diagnostics,
         }
 
     def _build_requirement_question(self, matched_requirements: list[dict]) -> str:
@@ -551,7 +583,7 @@ class DocumentAnalysisService:
         ]
         process_indicators = [
             'procedure', 'process', 'policy', 'step', 'steps', 'form', 'register',
-            'template', 'checklist', 'protocol', 'guideline', 'framework', 'schedule',
+            'checklist', 'protocol', 'guideline', 'framework', 'schedule',
             'plan', 'review', 'audit', 'report', 'log', 'record',
         ]
         timeframe_indicators = [
@@ -585,6 +617,9 @@ class DocumentAnalysisService:
         # Square root transformation: presence of most terms matters more than covering ALL of them
         coverage_pts = (coverage_ratio ** 0.6) * 25.0
 
+        domain_anchor_hits = self._domain_anchor_hit_count(lower_text)
+        is_likely_irrelevant = self._looks_like_irrelevant_document(lower_text)
+
         # ── Signal 3: Depth (20 pts) ────────────────────────────────────────────
         # A real compliance document needs sufficient detail.
         # Rewards docs ≥ 800 chars; penalises stubs < 200 chars.
@@ -611,13 +646,26 @@ class DocumentAnalysisService:
         max_pts = 100.0
         raw_score = total_pts / max_pts  # [0, 1]
 
+        # Guardrail: non-domain docs can match generic policy language by accident.
+        relevance_gate = 1.0
+        if domain_anchor_hits <= 1:
+            relevance_gate *= 0.55
+        elif domain_anchor_hits <= 3:
+            relevance_gate *= 0.78
+        if coverage_ratio < 0.20:
+            relevance_gate *= 0.80
+        raw_score *= relevance_gate
+
+        if is_likely_irrelevant:
+            raw_score = min(raw_score, 0.22)
+
         # Confidence mirrors the score but stays honest about uncertainty
         confidence = min(raw_score * 1.05, 0.97)
 
         # ── Map to status ────────────────────────────────────────────────────────
         if doc_len < 100:
             return 'Critical gap', round(min(confidence, 0.30), 3)
-        if raw_score >= 0.75:
+        if raw_score >= 0.75 and domain_anchor_hits >= 4 and snippet_count >= 2 and not is_likely_irrelevant:
             return 'Mature', round(confidence, 3)
         if raw_score >= 0.55:
             return 'OK', round(confidence, 3)
@@ -653,6 +701,16 @@ class DocumentAnalysisService:
             # Zero RAG citations on a positive result → mild confidence penalty
             calibrated_confidence = min(calibrated_confidence, 0.72)
 
+        # Positive status without requirement mapping and citations is usually overconfident.
+        if citation_count == 0 and not matched_requirements and calibrated_status in ('Mature', 'OK'):
+            calibrated_status = self._downgrade_status(calibrated_status)
+            calibrated_confidence = min(calibrated_confidence, 0.54)
+
+        # Mature requires stronger support than a single weak citation.
+        if calibrated_status == 'Mature' and citation_count < 2:
+            calibrated_status = 'OK'
+            calibrated_confidence = min(calibrated_confidence, 0.74)
+
         # Template penalty: blank templates should never be Mature or OK
         looks_like_template = self._looks_like_template(document_text)
         if looks_like_template:
@@ -667,7 +725,83 @@ class DocumentAnalysisService:
         if retrieval_mode == 'lexical' and calibrated_status == 'Mature':
             calibrated_confidence = min(calibrated_confidence, 0.80)
 
+        if retrieval_mode == 'lexical' and citation_count == 0 and calibrated_status in ('Mature', 'OK'):
+            calibrated_status = self._downgrade_status(calibrated_status)
+            calibrated_confidence = min(calibrated_confidence, 0.52)
+
+        if self._looks_like_irrelevant_document(document_text):
+            calibrated_status = 'Critical gap'
+            calibrated_confidence = min(calibrated_confidence, 0.24)
+
         return calibrated_status, round(max(0.0, min(calibrated_confidence, 1.0)), 3)
+
+    @staticmethod
+    def _downgrade_status(status: str) -> str:
+        if status == 'Mature':
+            return 'OK'
+        if status == 'OK':
+            return 'High risk gap'
+        if status == 'High risk gap':
+            return 'Critical gap'
+        return status
+
+    def _domain_anchor_hit_count(self, lower_text: str) -> int:
+        return sum(1 for term in self._DOMAIN_ANCHOR_TERMS if term in (lower_text or ''))
+
+    def _looks_like_irrelevant_document(self, document_text: str) -> bool:
+        lower = (document_text or '').lower()
+        if not lower:
+            return False
+
+        resume_hits = sum(1 for marker in self._IRRELEVANT_RESUME_MARKERS if marker in lower)
+        finance_hits = sum(1 for marker in self._IRRELEVANT_FINANCE_MARKERS if marker in lower)
+        domain_hits = self._domain_anchor_hit_count(lower)
+
+        if resume_hits >= 3 and domain_hits <= 2:
+            return True
+        if finance_hits >= 3 and domain_hits <= 2:
+            return True
+        return False
+
+    def _build_scoring_diagnostics(
+        self,
+        *,
+        document_text: str,
+        query_text: str,
+        snippets: list[dict],
+        matched_requirements: list[dict],
+        citations: list[dict],
+        retrieval_mode: str,
+        status: str,
+        confidence: float,
+    ) -> dict:
+        lower_text = (document_text or '').lower()
+        warnings: list[str] = []
+        domain_anchor_hits = self._domain_anchor_hit_count(lower_text)
+        is_irrelevant = self._looks_like_irrelevant_document(lower_text)
+        if is_irrelevant:
+            warnings.append('Document appears non-compliance (for example resume/invoice style), so confidence and status were capped.')
+        if not matched_requirements:
+            warnings.append('No requirement mapping found; positive statuses are down-weighted.')
+        if not citations:
+            warnings.append('No NDIS citations retrieved; confidence was reduced.')
+        if retrieval_mode == 'lexical':
+            warnings.append('Lexical retrieval mode active; semantic similarity evidence is unavailable for this run.')
+
+        return {
+            'document_length': len((document_text or '').strip()),
+            'query_term_count': len(self._tokenize(query_text)),
+            'snippet_count': len(snippets or []),
+            'matched_requirement_count': len(matched_requirements or []),
+            'citation_count': len(citations or []),
+            'domain_anchor_hits': domain_anchor_hits,
+            'looks_like_template': self._looks_like_template(document_text),
+            'looks_like_irrelevant': is_irrelevant,
+            'retrieval_mode': retrieval_mode,
+            'final_status': status,
+            'final_confidence': float(confidence),
+            'warnings': warnings,
+        }
 
     def _build_rag_query(self, question_text: str, document_text: str, matched_requirements: list[dict] | None = None) -> str:
         lower = f'{question_text or ""} {(document_text or "")[:2500]}'.lower()

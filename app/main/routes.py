@@ -148,6 +148,71 @@ def _effective_ai_setting(org_id: int | None, key: str, default):
     return default if value is None else value
 
 
+def _default_ai_scoring_profile() -> dict:
+    return {
+        'mature_min_score': 0.75,
+        'ok_min_score': 0.55,
+        'high_risk_min_score': 0.30,
+        'mature_min_anchor_hits': 4,
+        'irrelevant_confidence_cap': 0.24,
+    }
+
+
+def _ai_scoring_profiles_path() -> str:
+    instance_path = current_app.instance_path or os.path.join(current_app.root_path, '..', 'instance')
+    os.makedirs(instance_path, exist_ok=True)
+    return os.path.join(instance_path, 'ai_scoring_profiles.json')
+
+
+def _load_ai_scoring_profiles() -> dict:
+    path = _ai_scoring_profiles_path()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            raw = json.load(fh)
+        return raw if isinstance(raw, dict) else {}
+    except Exception:
+        current_app.logger.exception('Failed reading AI scoring profiles file')
+        return {}
+
+
+def _save_ai_scoring_profiles(profiles: dict) -> None:
+    path = _ai_scoring_profiles_path()
+    tmp_path = path + '.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as fh:
+        json.dump(profiles, fh, ensure_ascii=True, indent=2, sort_keys=True)
+    os.replace(tmp_path, path)
+
+
+def _sanitize_ai_scoring_profile(payload: dict | None) -> dict:
+    payload = payload or {}
+    defaults = _default_ai_scoring_profile()
+    mature_min_score = max(0.50, min(0.95, float(payload.get('mature_min_score', defaults['mature_min_score']))))
+    ok_min_score = max(0.35, min(mature_min_score - 0.05, float(payload.get('ok_min_score', defaults['ok_min_score']))))
+    high_risk_min_score = max(0.10, min(ok_min_score - 0.05, float(payload.get('high_risk_min_score', defaults['high_risk_min_score']))))
+    mature_min_anchor_hits = max(2, min(8, int(payload.get('mature_min_anchor_hits', defaults['mature_min_anchor_hits']))))
+    irrelevant_confidence_cap = max(0.10, min(0.40, float(payload.get('irrelevant_confidence_cap', defaults['irrelevant_confidence_cap']))))
+    return {
+        'mature_min_score': round(mature_min_score, 3),
+        'ok_min_score': round(ok_min_score, 3),
+        'high_risk_min_score': round(high_risk_min_score, 3),
+        'mature_min_anchor_hits': int(mature_min_anchor_hits),
+        'irrelevant_confidence_cap': round(irrelevant_confidence_cap, 3),
+    }
+
+
+def _org_ai_scoring_profile(org_id: int) -> dict:
+    defaults = _default_ai_scoring_profile()
+    profiles = _load_ai_scoring_profiles()
+    raw = profiles.get(str(int(org_id)))
+    if not isinstance(raw, dict):
+        return defaults
+    merged = dict(defaults)
+    merged.update(_sanitize_ai_scoring_profile(raw))
+    return merged
+
+
 def _rag_rate_limit_value() -> str:
     org_id = _active_org_id()
     default = current_app.config.get('AI_RAG_RATE_LIMIT') or '20 per minute'
@@ -4555,7 +4620,50 @@ def _rank_demo_snippets(document_text: str, query_text: str, top_k: int = 4) -> 
     ]
 
 
-def _derive_demo_status(document_text: str, query_text: str, snippets: list[dict], *, mode: str = 'balanced', doc_type: str = 'auto') -> tuple[str, float]:
+def _demo_domain_anchor_hits(lower_text: str) -> int:
+    anchors = {
+        'ndis', 'participant', 'consent', 'privacy', 'dignity', 'confidentiality',
+        'complaint', 'complaints', 'incident', 'risk', 'governance', 'safeguard',
+        'service agreement', 'support plan', 'care plan', 'restrictive practice',
+        'audit', 'evidence', 'compliance', 'policy', 'procedure',
+    }
+    return sum(1 for term in anchors if term in (lower_text or ''))
+
+
+def _looks_like_demo_irrelevant(document_text: str) -> bool:
+    lower = (document_text or '').lower()
+    if not lower:
+        return False
+
+    resume_markers = {
+        'curriculum vitae', 'resume', 'professional summary', 'work experience',
+        'employment history', 'skills', 'references available', 'linkedin.com/in',
+        'career objective', 'career summary', 'education', 'hobbies',
+    }
+    finance_markers = {
+        'tax invoice', 'invoice number', 'purchase order', 'unit price', 'subtotal',
+        'amount due', 'payment terms', 'bank statement', 'statement period',
+    }
+    resume_hits = sum(1 for marker in resume_markers if marker in lower)
+    finance_hits = sum(1 for marker in finance_markers if marker in lower)
+    domain_hits = _demo_domain_anchor_hits(lower)
+
+    if resume_hits >= 3 and domain_hits <= 2:
+        return True
+    if finance_hits >= 3 and domain_hits <= 2:
+        return True
+    return False
+
+
+def _derive_demo_status(
+    document_text: str,
+    query_text: str,
+    snippets: list[dict],
+    *,
+    mode: str = 'balanced',
+    doc_type: str = 'auto',
+    thresholds: dict | None = None,
+) -> tuple[str, float]:
     """
     Multi-rubric scorer — applies a different set of criteria depending on
     what TYPE of document the user has told us they are uploading.
@@ -4574,7 +4682,10 @@ def _derive_demo_status(document_text: str, query_text: str, snippets: list[dict
     doc_len = len((document_text or '').strip())
     snippet_count = len(snippets or [])
     is_template_like = _looks_like_demo_template(document_text)
+    is_irrelevant = _looks_like_demo_irrelevant(document_text)
+    anchor_hits = _demo_domain_anchor_hits(lower_text)
     has_headings = bool(re.search(r'\n\s*\d+\.\s+[A-Z]|\n[A-Z][^\n]{5,50}\n', document_text or ''))
+    scoring_thresholds = _sanitize_ai_scoring_profile(thresholds)
 
     # ── Auto-detect doc type from content if not specified ────────────────────
     resolved_type = (doc_type or 'auto').strip().lower()
@@ -4757,22 +4868,63 @@ def _derive_demo_status(document_text: str, query_text: str, snippets: list[dict
     if is_template_like:
         raw_score = min(raw_score, 0.28)
 
+    if anchor_hits <= 1:
+        raw_score *= 0.55
+    elif anchor_hits <= 3:
+        raw_score *= 0.78
+
+    if is_irrelevant:
+        raw_score = min(raw_score, 0.22)
+
     # ── Apply confidence and mode haircut ─────────────────────────────────────
     raw_score = max(0.0, min(raw_score, 1.0))
     confidence = min(raw_score * 1.05, 0.97)
     if (mode or '').strip().lower() == 'strict':
         confidence = max(0.0, confidence * 0.95)
+    if is_irrelevant:
+        confidence = min(confidence, float(scoring_thresholds['irrelevant_confidence_cap']))
 
     # ── Map to status ─────────────────────────────────────────────────────────
     if doc_len < 100:
         return 'Critical gap', round(min(confidence, 0.30), 3)
-    if raw_score >= 0.75:
+    if raw_score >= float(scoring_thresholds['mature_min_score']) and anchor_hits >= int(scoring_thresholds['mature_min_anchor_hits']) and not is_irrelevant:
         return 'Mature', round(confidence, 3)
-    if raw_score >= 0.55:
+    if raw_score >= float(scoring_thresholds['ok_min_score']):
         return 'OK', round(confidence, 3)
-    if raw_score >= 0.30:
+    if raw_score >= float(scoring_thresholds['high_risk_min_score']):
         return 'High risk gap', round(confidence, 3)
     return 'Critical gap', round(confidence, 3)
+
+
+def _build_demo_scoring_diagnostics(*, document_text: str, query_text: str, snippets: list[dict], citations: list[dict], retrieval_mode: str, profile: dict, status: str, confidence: float) -> dict:
+    lower_text = (document_text or '').lower()
+    warnings: list[str] = []
+    anchor_hits = _demo_domain_anchor_hits(lower_text)
+    is_template_like = _looks_like_demo_template(document_text)
+    is_irrelevant = _looks_like_demo_irrelevant(document_text)
+    if is_irrelevant:
+        warnings.append('Detected non-compliance style content (for example resume/invoice), so score was capped.')
+    if is_template_like:
+        warnings.append('Document looks template-like; positive status is constrained.')
+    if not citations:
+        warnings.append('No NDIS citations retrieved; confidence was reduced.')
+    if retrieval_mode == 'lexical':
+        warnings.append('Lexical retrieval mode active; semantic evidence is currently unavailable.')
+
+    return {
+        'document_length': len((document_text or '').strip()),
+        'query_term_count': len(_tokenize_demo_text(query_text)),
+        'snippet_count': len(snippets or []),
+        'citation_count': len(citations or []),
+        'domain_anchor_hits': int(anchor_hits),
+        'looks_like_template': bool(is_template_like),
+        'looks_like_irrelevant': bool(is_irrelevant),
+        'retrieval_mode': retrieval_mode,
+        'profile': profile,
+        'final_status': status,
+        'final_confidence': float(confidence),
+        'warnings': warnings,
+    }
 
 
 def _build_demo_rag_query(question_text: str, document_text: str) -> str:
@@ -5876,6 +6028,42 @@ def assistant_chat_api():
     )
 
 
+@bp.route('/ai-scoring-improvements')
+@login_required
+def ai_scoring_improvements():
+    """AI Scoring Improvements — before/after comparison and analytics dashboard."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return maybe
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        abort(403)
+
+    # Fetch feedback analytics
+    feedback_events = AIUsageEvent.query.filter(
+        AIUsageEvent.organization_id == int(org_id),
+        AIUsageEvent.event.like('ai_review_feedback_%'),
+    ).order_by(AIUsageEvent.created_at.desc()).limit(100).all()
+
+    # Summary statistics
+    total_feedback = len(feedback_events)
+    fp_count = sum(1 for e in feedback_events if 'false_positive' in (e.event or ''))
+    fn_count = sum(1 for e in feedback_events if 'false_negative' in (e.event or ''))
+    correct_count = sum(1 for e in feedback_events if 'correct' in (e.event or ''))
+    accuracy = int(round((correct_count / total_feedback * 100))) if total_feedback > 0 else 0
+
+    return render_template(
+        'main/ai_scoring_improvements.html',
+        title='AI Scoring Improvements',
+        total_feedback_events=total_feedback,
+        false_positives=fp_count,
+        false_negatives=fn_count,
+        correct_assessments=correct_count,
+        accuracy_percentage=accuracy,
+    )
+
+
 @bp.route('/ai-demo')
 @login_required
 def ai_demo():
@@ -5979,6 +6167,8 @@ def ai_demo():
                 break
     except Exception:
         recent_analyses = []
+    can_manage_ai = bool(current_user.has_permission('org.manage', org_id=int(org_id)) or current_user.has_permission('users.manage', org_id=int(org_id)))
+
     return render_template(
         'main/ai_demo.html',
         title='AI Review Workspace',
@@ -5989,6 +6179,7 @@ def ai_demo():
         selected_document_ids=selected_document_ids,
         active_doc_id=active_doc_id,
         autostart=autostart,
+        can_manage_ai=can_manage_ai,
     )
 
 
@@ -6295,8 +6486,16 @@ def ai_demo_analyze_api():
     if extraction_error:
         return jsonify({'success': False, 'error': extraction_error}), 400
 
+    scoring_profile = _org_ai_scoring_profile(int(org_id))
     snippets = _rank_demo_snippets(doc_text, question, top_k=4)
-    status, confidence = _derive_demo_status(doc_text, question, snippets, mode=analysis_mode, doc_type=doc_type)
+    status, confidence = _derive_demo_status(
+        doc_text,
+        question,
+        snippets,
+        mode=analysis_mode,
+        doc_type=doc_type,
+        thresholds=scoring_profile,
+    )
 
     rag_citations = []
     rag_warning = None
@@ -6326,6 +6525,19 @@ def ai_demo_analyze_api():
     except Exception:
         rag_warning = 'Could not retrieve NDIS citations; showing document-only analysis.'
         warning_items.append({'source': 'rag', 'message': rag_warning})
+
+    scoring_diagnostics = _build_demo_scoring_diagnostics(
+        document_text=doc_text,
+        query_text=question,
+        snippets=snippets,
+        citations=rag_citations,
+        retrieval_mode=_demo_retrieval_mode,
+        profile=scoring_profile,
+        status=status,
+        confidence=confidence,
+    )
+    for msg in scoring_diagnostics.get('warnings', []):
+        warning_items.append({'source': 'scoring', 'message': msg})
 
     ai_summary, llm_warning, used_model, llm_provider = _llm_demo_summary(
         status=status,
@@ -6413,6 +6625,7 @@ def ai_demo_analyze_api():
             'checklist': checklist,
             'snippets': snippets,
             'citations': rag_citations,
+            'scoring_diagnostics': scoring_diagnostics,
             'warnings': warnings,
             'warning_items': warning_items,
             'meta': {
@@ -6430,6 +6643,7 @@ def ai_demo_analyze_api():
                 'question': question,
                 'analysis_at': analyzed_at.isoformat(),
                 'doc_type': doc_type,
+                'scoring_profile': scoring_profile,
                 'rubric_label': {
                     'policy': 'Policy/Procedure rubric',
                     'clinical': 'Clinical Reference rubric',
@@ -6441,6 +6655,177 @@ def ai_demo_analyze_api():
             },
         }
     )
+
+
+@bp.route('/api/ai/demo/scoring-profile', methods=['GET', 'POST'])
+@login_required
+def ai_demo_scoring_profile_api():
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    if request.method == 'GET':
+        return jsonify({
+            'success': True,
+            'profile': _org_ai_scoring_profile(int(org_id)),
+            'defaults': _default_ai_scoring_profile(),
+            'can_manage': bool(current_user.has_permission('org.manage', org_id=int(org_id)) or current_user.has_permission('users.manage', org_id=int(org_id))),
+        })
+
+    if not (current_user.has_permission('org.manage', org_id=int(org_id)) or current_user.has_permission('users.manage', org_id=int(org_id))):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    profile = _sanitize_ai_scoring_profile(payload)
+    profiles = _load_ai_scoring_profiles()
+    profiles[str(int(org_id))] = profile
+    try:
+        _save_ai_scoring_profiles(profiles)
+        _log_ai_call(
+            'ai_review_profile_update',
+            org_id=int(org_id),
+            mode='config',
+            provider='local',
+            model='heuristic-rules',
+            usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+            latency_ms=0,
+        )
+    except Exception:
+        current_app.logger.exception('Failed saving AI scoring profile')
+        return jsonify({'success': False, 'error': 'Could not save scoring profile.'}), 500
+
+    return jsonify({'success': True, 'profile': profile})
+
+
+@bp.route('/api/ai/demo/feedback', methods=['POST'])
+@login_required
+@limiter.limit('20 per minute', key_func=_ai_rate_limit_key)
+def ai_demo_feedback_api():
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    feedback = (payload.get('feedback') or '').strip().lower()
+    if feedback not in {'false_positive', 'false_negative', 'correct'}:
+        return jsonify({'success': False, 'error': 'Invalid feedback value.'}), 400
+
+    reason = _limit_text(str(payload.get('reason') or '').strip(), max_chars=400)
+    status = _limit_text(str(payload.get('status') or '').strip(), max_chars=80)
+    confidence = float(payload.get('confidence') or 0)
+    stored_doc_id = payload.get('stored_doc_id')
+
+    event_name = {
+        'false_positive': 'ai_review_feedback_false_positive',
+        'false_negative': 'ai_review_feedback_false_negative',
+        'correct': 'ai_review_feedback_correct',
+    }.get(feedback, 'ai_review_feedback')
+
+    _log_ai_call(
+        event_name,
+        org_id=int(org_id),
+        mode='feedback',
+        provider='local',
+        model='heuristic-rules',
+        usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
+        latency_ms=0,
+    )
+    current_app.logger.info(
+        'AI review feedback org=%s user=%s doc=%s feedback=%s status=%s confidence=%.3f reason=%s',
+        int(org_id),
+        int(current_user.id),
+        stored_doc_id,
+        feedback,
+        status,
+        confidence,
+        reason,
+    )
+
+    return jsonify({'success': True})
+
+
+@bp.route('/api/ai/demo/feedback-analytics', methods=['GET'])
+@login_required
+@limiter.limit('30 per minute', key_func=_ai_rate_limit_key)
+def ai_demo_feedback_analytics_api():
+    """Get feedback trends for last 7/30 days and summary statistics."""
+    maybe = _require_active_org()
+    if maybe is not None:
+        return jsonify({'success': False, 'error': 'No active organization'}), 400
+
+    org_id = _active_org_id()
+    if not current_user.has_permission('documents.view', org_id=int(org_id)):
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+    # Get feedback events for last 30 days
+    from datetime import datetime, timezone, timedelta
+    
+    now = datetime.now(timezone.utc)
+    lookback_30d = now - timedelta(days=30)
+    
+    events = AIUsageEvent.query.filter(
+        AIUsageEvent.organization_id == int(org_id),
+        AIUsageEvent.event.like('ai_review_feedback_%'),
+        AIUsageEvent.created_at >= lookback_30d,
+    ).order_by(AIUsageEvent.created_at.asc()).all()
+    
+    # Group by date and type
+    daily_stats: dict[str, dict[str, int]] = {}
+    feedback_type_counts = {'false_positive': 0, 'false_negative': 0, 'correct': 0}
+    
+    for event in events:
+        date_key = event.created_at.strftime('%Y-%m-%d') if event.created_at else now.strftime('%Y-%m-%d')
+        if date_key not in daily_stats:
+            daily_stats[date_key] = {'false_positive': 0, 'false_negative': 0, 'correct': 0, 'total': 0}
+        
+        # Map event name to feedback type
+        if 'false_positive' in (event.event or ''):
+            daily_stats[date_key]['false_positive'] += 1
+            feedback_type_counts['false_positive'] += 1
+        elif 'false_negative' in (event.event or ''):
+            daily_stats[date_key]['false_negative'] += 1
+            feedback_type_counts['false_negative'] += 1
+        elif 'correct' in (event.event or ''):
+            daily_stats[date_key]['correct'] += 1
+            feedback_type_counts['correct'] += 1
+        
+        daily_stats[date_key]['total'] += 1
+    
+    # Calculate accuracy
+    total_feedback = sum(feedback_type_counts.values())
+    accuracy = 0
+    if total_feedback > 0:
+        accuracy = int(round((feedback_type_counts['correct'] / total_feedback) * 100))
+    
+    return jsonify({
+        'success': True,
+        'period': '30 days',
+        'daily_data': [
+            {
+                'date': date,
+                'false_positive': daily_stats[date]['false_positive'],
+                'false_negative': daily_stats[date]['false_negative'],
+                'correct': daily_stats[date]['correct'],
+                'total': daily_stats[date]['total'],
+            }
+            for date in sorted(daily_stats.keys())
+        ],
+        'summary': {
+            'total_feedback_events': int(total_feedback),
+            'false_positives': int(feedback_type_counts['false_positive']),
+            'false_negatives': int(feedback_type_counts['false_negative']),
+            'correct_assessments': int(feedback_type_counts['correct']),
+            'accuracy_percentage': int(accuracy),
+        },
+    })
 
 
 def _checklist_status_from_score(score: float | None) -> str:
@@ -6584,128 +6969,6 @@ def ai_summary_test():
 
     flash('AI Summary Test has been merged into AI Review.', 'info')
     return redirect(url_for('main.ai_demo'))
-
-
-@bp.route('/api/ai/summary-checklist', methods=['POST'])
-@login_required
-@limiter.limit('8 per minute', key_func=_ai_rate_limit_key)
-def ai_summary_checklist_api():
-    """Analyze a stored repository document and return a checklist summary."""
-    maybe = _require_active_org()
-    if maybe is not None:
-        return jsonify({'success': False, 'error': 'No active organization'}), 400
-
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        return jsonify({'success': False, 'error': 'Forbidden'}), 403
-
-    stored_doc_id = (request.form.get('stored_doc_id') or '').strip()
-    if not stored_doc_id or not stored_doc_id.isdigit():
-        return jsonify({'success': False, 'error': 'Choose a repository document first.'}), 400
-
-    from app.services.azure_storage import AzureBlobStorageService
-
-    document = _authorized_org_document_or_404(int(stored_doc_id))
-    storage_service = AzureBlobStorageService()
-    result = storage_service.download_file(document.blob_name)
-    if not result.get('success') or not result.get('data'):
-        return jsonify({'success': False, 'error': 'Could not load stored document for AI review.'}), 400
-
-    source_filename = (document.filename or '').strip()
-    doc_text, extraction_error = document_analysis_service.extract_text_from_bytes(source_filename, result.get('data') or b'')
-    if extraction_error:
-        return jsonify({'success': False, 'error': extraction_error}), 400
-
-    question = 'Assess this document against NDIS-style compliance evidence expectations.'
-    snippets = _rank_demo_snippets(doc_text, question, top_k=4)
-    status, confidence = _derive_demo_status(doc_text, question, snippets, mode='balanced')
-
-    rag_citations = []
-    warning_items: list[dict] = []
-    _demo_retrieval_mode = 'lexical'
-    rag_query_text = _build_demo_rag_query(question, doc_text)
-    corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
-    corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
-    try:
-        rag_result = rag_query_service.query(corpus_path=corpus_abs, query_text=rag_query_text, requirement_id='', top_k=3)
-        _demo_retrieval_mode = getattr(rag_result, 'retrieval_mode', 'lexical')
-        rag_citations = [
-            {
-                'chunk_id': c.chunk_id,
-                'source_id': c.source_id,
-                'page_number': c.page_number,
-                'score': c.score,
-                'text': c.text,
-            }
-            for c in rag_result.citations
-        ]
-        if _demo_retrieval_mode == 'lexical' and rag_citations:
-            warning_items.append({'source': 'rag', 'message': 'Semantic embeddings computing on first run — using keyword matching now. Reload to use hybrid mode.'})
-    except FileNotFoundError:
-        warning_items.append({'source': 'rag', 'message': 'NDIS corpus is not built yet; showing document-only analysis.'})
-    except Exception:
-        warning_items.append({'source': 'rag', 'message': 'Could not retrieve NDIS citations; showing document-only analysis.'})
-
-    ai_summary, llm_warning, used_model, llm_provider = _llm_demo_summary(
-        status=status,
-        question=question,
-        snippets=snippets,
-        citations=rag_citations,
-    )
-    if llm_warning:
-        warning_items.append({'source': 'llm', 'message': llm_warning})
-
-    ai_summary = _ensure_demo_summary_text(
-        ai_summary,
-        status=status,
-        analysis_mode='balanced',
-        snippets=snippets,
-        citations=rag_citations,
-    )
-
-    provider_label = llm_provider if not llm_warning else 'deterministic'
-    if llm_provider == 'azure-openai':
-        model_label = used_model or (current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_MINI') or current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT') or current_app.config.get('AZURE_OPENAI_CHAT_DEPLOYMENT_WRITER') or 'azure-openai')
-    else:
-        model_label = used_model or current_app.config.get('OPENROUTER_MODEL') or 'mistralai/mistral-7b-instruct:free'
-
-    matched_requirements = document_analysis_service._match_requirements(
-        text=doc_text,
-        filename=source_filename,
-        organization_id=int(org_id),
-    )
-    checklist = _build_checklist_from_analysis(
-        {
-            'matched_requirements': matched_requirements,
-            'status': status,
-            'summary': ai_summary,
-            'focus_area': 'General compliance coverage',
-        }
-    )
-    warnings = [w.get('message', '') for w in warning_items if (w.get('message') or '').strip()]
-
-    return jsonify(
-        {
-            'success': True,
-            'status': status,
-            'confidence': confidence,
-            'summary': ai_summary,
-            'checklist': checklist,
-            'snippets': snippets,
-            'citations': rag_citations,
-            'warnings': warnings,
-            'warning_items': warning_items,
-            'meta': {
-                'provider': provider_label,
-                'model': model_label,
-                'retrieval_mode': _demo_retrieval_mode,
-                'document_chars': len(doc_text or ''),
-                'filename': source_filename,
-                'source': 'repository',
-                'stored_doc_id': int(stored_doc_id),
-            },
-        }
-    )
 
 
 def _openrouter_demo_followup(*, document_name: str, initial_question: str, initial_summary: str, followup_question: str, citations: list[dict]) -> tuple[str | None, str | None]:

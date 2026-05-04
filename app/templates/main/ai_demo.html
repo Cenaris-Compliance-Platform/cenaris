@@ -24,21 +24,28 @@
 <div class="fade-in">
   <div class="row mb-4">
     <div class="col-12">
-      <div>
-        <div class="ai-review-title-wrap mb-1">
-          <h1 class="h3 fw-bold mb-0">AI Review</h1>
-          <button
-            class="btn btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center ai-review-help-btn"
-            type="button"
-            id="aiReviewHelpBtn"
-            aria-expanded="false"
-            aria-controls="aiReviewHelpPanel"
-            title="AI Review help"
-          >
-            <i class="bi bi-info-lg"></i>
-          </button>
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <div class="ai-review-title-wrap mb-1">
+            <h1 class="h3 fw-bold mb-0">AI Review</h1>
+            <button
+              class="btn btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center ai-review-help-btn"
+              type="button"
+              id="aiReviewHelpBtn"
+              aria-expanded="false"
+              aria-controls="aiReviewHelpPanel"
+              title="AI Review help"
+            >
+              <i class="bi bi-info-lg"></i>
+            </button>
+          </div>
+          <p class="text-body-secondary mb-0">Review repository documents in one dedicated AI experience.</p>
         </div>
-        <p class="text-body-secondary mb-0">Review repository documents in one dedicated AI experience.</p>
+        <div>
+          <a href="{{ url_for('main.ai_scoring_improvements') }}" class="btn btn-sm btn-outline-info" title="Learn about scoring improvements">
+            <i class="bi bi-graph-up"></i> Scoring Improvements
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -153,6 +160,31 @@
                     <label class="form-check-label small" for="reuseLastResult">Reuse previous result</label>
                   </div>
                 </div>
+                {% if can_manage_ai %}
+                <div class="mt-3 border rounded p-2 bg-white">
+                  <div class="small fw-semibold mb-2">Scoring profile (org)</div>
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label form-label-sm mb-1" for="profileMature">Mature min</label>
+                      <input type="number" step="0.01" min="0.5" max="0.95" class="form-control form-control-sm" id="profileMature" value="0.75">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm mb-1" for="profileOk">OK min</label>
+                      <input type="number" step="0.01" min="0.35" max="0.9" class="form-control form-control-sm" id="profileOk" value="0.55">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm mb-1" for="profileRisk">Risk min</label>
+                      <input type="number" step="0.01" min="0.10" max="0.7" class="form-control form-control-sm" id="profileRisk" value="0.30">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm mb-1" for="profileAnchors">Anchor hits</label>
+                      <input type="number" step="1" min="2" max="8" class="form-control form-control-sm" id="profileAnchors" value="4">
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="saveScoringProfileBtn">Save profile</button>
+                  <div class="small text-body-secondary mt-1" id="scoringProfileStatus"></div>
+                </div>
+                {% endif %}
               </div>
             </div>
           </div>
@@ -205,7 +237,17 @@
         </div>
       </div>
 
-      <div class="small text-body-secondary mb-3" id="resultDiagnostics"></div>
+      <div class="small text-body-secondary mb-2" id="resultDiagnostics"></div>
+      <div class="border rounded p-2 bg-body-tertiary small mb-3" id="scoreWhyPanel">
+        <div class="fw-semibold mb-1">Why this score</div>
+        <ul class="mb-0" id="scoreWhyList"></ul>
+      </div>
+
+      <div class="d-flex gap-2 mb-3">
+        <button type="button" class="btn btn-outline-danger btn-sm" id="feedbackFalsePositiveBtn">Mark False Positive</button>
+        <button type="button" class="btn btn-outline-warning btn-sm" id="feedbackFalseNegativeBtn">Mark False Negative</button>
+        <button type="button" class="btn btn-outline-success btn-sm" id="feedbackCorrectBtn">Mark Correct</button>
+      </div>
 
       <div class="mb-3">
         <h6 class="fw-semibold mb-2">Analysis Summary</h6>
@@ -308,6 +350,7 @@
     const checklistPartial = document.getElementById('demoChecklistPartial');
     const checklistGap = document.getElementById('demoChecklistGap');
     const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
+    const scoreWhyList = document.getElementById('scoreWhyList');
     const resultSourceMetaEl = document.getElementById('resultSourceMeta');
     const resultSummaryEl = document.getElementById('resultSummaryText');
     const downloadDocxBtn = document.getElementById('downloadDocxBtn');
@@ -322,6 +365,15 @@
     const storedAnalysisHint = document.getElementById('storedAnalysisHint');
     const storedAnalysisHintText = document.getElementById('storedAnalysisHintText');
     const showStoredAnalysisBtn = document.getElementById('showStoredAnalysisBtn');
+    const profileMature = document.getElementById('profileMature');
+    const profileOk = document.getElementById('profileOk');
+    const profileRisk = document.getElementById('profileRisk');
+    const profileAnchors = document.getElementById('profileAnchors');
+    const saveScoringProfileBtn = document.getElementById('saveScoringProfileBtn');
+    const scoringProfileStatus = document.getElementById('scoringProfileStatus');
+    const feedbackFalsePositiveBtn = document.getElementById('feedbackFalsePositiveBtn');
+    const feedbackFalseNegativeBtn = document.getElementById('feedbackFalseNegativeBtn');
+    const feedbackCorrectBtn = document.getElementById('feedbackCorrectBtn');
     const analysisByDoc = {{ selected_document_meta|tojson }};
     const AUTO_START = {{ 'true' if autostart else 'false' }};
     const ACTIVE_DOC_ID = {{ active_doc_id if active_doc_id else 'null' }};
@@ -329,6 +381,7 @@
     let progressValue = 0;
     let requestInFlight = false;
     let requestWatchdogTimer = null;
+    let lastResultMeta = null;
 
     if (!form) {
       return;
@@ -410,6 +463,9 @@
       }
       if (resultDiagnosticsEl) {
         resultDiagnosticsEl.textContent = '';
+      }
+      if (scoreWhyList) {
+        scoreWhyList.innerHTML = '';
       }
       if (resultSourceMetaEl) {
         resultSourceMetaEl.textContent = '';
@@ -614,6 +670,11 @@
     };
 
     const renderPayload = (payload) => {
+      lastResultMeta = {
+        stored_doc_id: Number(((payload.meta || {}).stored_doc_id) || (storedDocSelect && storedDocSelect.value) || 0),
+        status: String(payload.status || ''),
+        confidence: Number(payload.confidence || 0),
+      };
       renderBadge(payload.status);
       confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
       const provider = ((payload.meta || {}).provider) || 'deterministic';
@@ -625,6 +686,37 @@
       const analyzedAtText = formatAnalysisTime((payload.meta || {}).analysis_at);
       const rubricLabel = ((payload.meta || {}).rubric_label || '').trim();
       resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${rubricLabel ? ` | Rubric: ${rubricLabel}` : ''}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
+      const diagnostics = payload.scoring_diagnostics || {};
+      const whyLines = [];
+      if (typeof diagnostics.domain_anchor_hits !== 'undefined') {
+        whyLines.push(`Domain anchors matched: ${Number(diagnostics.domain_anchor_hits || 0)}`);
+      }
+      if (typeof diagnostics.snippet_count !== 'undefined') {
+        whyLines.push(`Evidence snippets found: ${Number(diagnostics.snippet_count || 0)}`);
+      }
+      if (typeof diagnostics.citation_count !== 'undefined') {
+        whyLines.push(`NDIS citations found: ${Number(diagnostics.citation_count || 0)}`);
+      }
+      if (diagnostics.looks_like_template) {
+        whyLines.push('Template-like structure detected, so score was constrained.');
+      }
+      if (diagnostics.looks_like_irrelevant) {
+        whyLines.push('Content looks irrelevant (resume/invoice style), so score was capped.');
+      }
+      const diagWarnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
+      diagWarnings.forEach(function (line) {
+        if (line && !whyLines.includes(line)) {
+          whyLines.push(line);
+        }
+      });
+      if (scoreWhyList) {
+        scoreWhyList.innerHTML = '';
+        (whyLines.length ? whyLines : ['No extra diagnostics available for this run.']).forEach(function (line) {
+          const li = document.createElement('li');
+          li.textContent = line;
+          scoreWhyList.appendChild(li);
+        });
+      }
       if (resultSourceMetaEl) {
         resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}${usedQuestion ? ` | Question: ${usedQuestion}` : ''}`;
       }
@@ -894,6 +986,105 @@
     }
 
     onDocumentSelectionChanged({ showStored: true });
+
+    const applyProfileToInputs = (profile) => {
+      if (!profile) {
+        return;
+      }
+      if (profileMature) profileMature.value = Number(profile.mature_min_score || 0.75).toFixed(2);
+      if (profileOk) profileOk.value = Number(profile.ok_min_score || 0.55).toFixed(2);
+      if (profileRisk) profileRisk.value = Number(profile.high_risk_min_score || 0.30).toFixed(2);
+      if (profileAnchors) profileAnchors.value = String(parseInt(profile.mature_min_anchor_hits || 4, 10));
+    };
+
+    const loadScoringProfile = async () => {
+      if (!profileMature && !profileOk && !profileRisk && !profileAnchors) {
+        return;
+      }
+      try {
+        const res = await fetch("{{ url_for('main.ai_demo_scoring_profile_api') }}");
+        const payload = await res.json();
+        if (!res.ok || !payload || !payload.success) {
+          return;
+        }
+        applyProfileToInputs(payload.profile || payload.defaults || null);
+      } catch (_e) {
+      }
+    };
+
+    if (saveScoringProfileBtn) {
+      saveScoringProfileBtn.addEventListener('click', async function () {
+        const body = {
+          mature_min_score: Number(profileMature ? profileMature.value : 0.75),
+          ok_min_score: Number(profileOk ? profileOk.value : 0.55),
+          high_risk_min_score: Number(profileRisk ? profileRisk.value : 0.30),
+          mature_min_anchor_hits: Number(profileAnchors ? profileAnchors.value : 4),
+        };
+        scoringProfileStatus.textContent = 'Saving...';
+        try {
+          const res = await fetch("{{ url_for('main.ai_demo_scoring_profile_api') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const payload = await res.json();
+          if (!res.ok || !payload || !payload.success) {
+            throw new Error((payload && payload.error) || 'Save failed');
+          }
+          applyProfileToInputs(payload.profile || null);
+          scoringProfileStatus.textContent = 'Scoring profile saved.';
+        } catch (e) {
+          scoringProfileStatus.textContent = (e && e.message) ? e.message : 'Save failed.';
+        }
+      });
+    }
+
+    const sendFeedback = async (feedback) => {
+      if (!lastResultMeta || !lastResultMeta.stored_doc_id) {
+        statusText.classList.remove('d-none');
+        statusText.textContent = 'Run analysis first, then send feedback.';
+        return;
+      }
+      statusText.classList.remove('d-none');
+      statusText.textContent = 'Saving feedback...';
+      try {
+        const res = await fetch("{{ url_for('main.ai_demo_feedback_api') }}", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            feedback: feedback,
+            stored_doc_id: lastResultMeta.stored_doc_id,
+            status: lastResultMeta.status,
+            confidence: lastResultMeta.confidence,
+          }),
+        });
+        const payload = await res.json();
+        if (!res.ok || !payload || !payload.success) {
+          throw new Error((payload && payload.error) || 'Feedback failed');
+        }
+        statusText.textContent = 'Feedback saved. Thanks.';
+      } catch (e) {
+        statusText.textContent = (e && e.message) ? e.message : 'Feedback failed.';
+      }
+    };
+
+    if (feedbackFalsePositiveBtn) {
+      feedbackFalsePositiveBtn.addEventListener('click', function () {
+        sendFeedback('false_positive');
+      });
+    }
+    if (feedbackFalseNegativeBtn) {
+      feedbackFalseNegativeBtn.addEventListener('click', function () {
+        sendFeedback('false_negative');
+      });
+    }
+    if (feedbackCorrectBtn) {
+      feedbackCorrectBtn.addEventListener('click', function () {
+        sendFeedback('correct');
+      });
+    }
+
+    loadScoringProfile();
 
     window.addEventListener('pagehide', function () {
       forceResetUi();
