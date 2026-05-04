@@ -241,3 +241,69 @@ def test_ai_review_followup_api_returns_answer_for_workspace_document(client, ap
     assert payload['success'] is True
     assert 'missing implementation records' in payload['answer']
     assert payload['meta']['stored_doc_id'] == doc_id
+
+
+def test_ai_review_scoring_profile_api_allows_get_and_update(client, app, seed_org_user):
+    from tests.conftest import login
+
+    _org_id, _user_id, _membership_id = seed_org_user
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    get_resp = client.get('/api/ai/demo/scoring-profile')
+    assert get_resp.status_code == 200
+    get_payload = get_resp.get_json()
+    assert get_payload['success'] is True
+    assert 'profile' in get_payload
+
+    update_resp = client.post(
+        '/api/ai/demo/scoring-profile',
+        json={
+            'mature_min_score': 0.82,
+            'ok_min_score': 0.60,
+            'high_risk_min_score': 0.35,
+            'mature_min_anchor_hits': 5,
+        },
+    )
+    assert update_resp.status_code == 200
+    update_payload = update_resp.get_json()
+    assert update_payload['success'] is True
+    assert update_payload['profile']['mature_min_anchor_hits'] == 5
+
+
+def test_ai_review_feedback_api_persists_usage_event(client, app, db_session, seed_org_user):
+    from app.models import AIUsageEvent
+    from tests.conftest import login
+
+    org_id, user_id, _membership_id = seed_org_user
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    feedback_resp = client.post(
+        '/api/ai/demo/feedback',
+        json={
+            'feedback': 'false_positive',
+            'stored_doc_id': 123,
+            'status': 'Mature',
+            'confidence': 0.88,
+            'reason': 'Marked high despite irrelevant content.',
+        },
+    )
+    assert feedback_resp.status_code == 200
+    payload = feedback_resp.get_json()
+    assert payload['success'] is True
+
+    with app.app_context():
+        event = (
+            AIUsageEvent.query
+            .filter_by(
+                organization_id=int(org_id),
+                user_id=int(user_id),
+                event='ai_review_feedback_false_positive',
+            )
+            .order_by(AIUsageEvent.id.desc())
+            .first()
+        )
+        assert event is not None

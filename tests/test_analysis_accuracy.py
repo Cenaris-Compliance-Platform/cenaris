@@ -139,6 +139,64 @@ def test_calibrate_status_downgrades_mature_when_support_is_too_thin():
     assert confidence <= 0.74
 
 
+def test_derive_status_penalizes_resume_like_documents():
+    from app.services.document_analysis_service import DocumentAnalysisService
+
+    service = DocumentAnalysisService()
+    resume_like_text = (
+        'Curriculum Vitae\n'
+        'Professional Summary\n'
+        'Work Experience: Team lead responsible for process improvements and review cadence.\n'
+        'Skills: communication, documentation, reporting, stakeholder management.\n'
+        'Education: Bachelor degree.\n'
+        'References available upon request.\n'
+    )
+
+    status, confidence = service._derive_status(
+        resume_like_text,
+        'Does this provide NDIS compliance evidence for privacy and complaints management?',
+        snippets=[{'score': 3, 'text': 'work experience and reporting'}, {'score': 2, 'text': 'team management and documentation'}],
+    )
+
+    assert status == 'Critical gap'
+    assert confidence <= 0.24
+
+
+def test_analysis_includes_scoring_diagnostics(app, monkeypatch):
+    from app.services.rag_query_service import RagQueryResult
+    import app.services.document_analysis_service as analysis_module
+
+    service = analysis_module.DocumentAnalysisService()
+
+    monkeypatch.setattr(
+        service,
+        '_openrouter_summary',
+        lambda **kwargs: (
+            '1) Why this status\nEvidence is weak.\n\n2) Missing evidence\nNeed mapped evidence.\n\n3) Recommended next action\nLink requirement evidence.',
+            None,
+            'test-model',
+        ),
+    )
+    monkeypatch.setattr(
+        analysis_module.rag_query_service,
+        'query',
+        lambda **kwargs: RagQueryResult(answer='none', citations=[], retrieval_mode='lexical'),
+    )
+
+    text = (
+        'Curriculum Vitae\nProfessional Summary\nWork Experience\n'
+        'Skills and Education\nReferences available upon request.'
+    )
+
+    with app.app_context():
+        result = service.analyze_document_bytes(filename='resume.txt', raw_bytes=text.encode('utf-8'), organization_id=1)
+
+    assert result['success'] is True
+    assert 'scoring_diagnostics' in result
+    assert result['scoring_diagnostics']['looks_like_irrelevant'] is True
+    assert result['scoring_diagnostics']['warnings']
+
+
 def test_document_details_uses_simplified_review_language(client, app, db_session, seed_org_user):
     from app.models import Document
     from tests.conftest import login
