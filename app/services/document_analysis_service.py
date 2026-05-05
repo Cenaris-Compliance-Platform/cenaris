@@ -90,11 +90,10 @@ class DocumentAnalysisService:
                 return raw_bytes.decode('utf-8', errors='ignore').strip(), None
 
             if filename_value.endswith('.pdf'):
-                from pypdf import PdfReader
-
-                reader = PdfReader(io.BytesIO(raw_bytes))
-                pages = [(page.extract_text() or '').strip() for page in reader.pages]
-                return '\n\n'.join([page for page in pages if page]).strip(), None
+                extracted = self._extract_pdf_text(raw_bytes)
+                if extracted:
+                    return extracted, None
+                return '', 'Unable to parse readable text from this PDF. It may be image-only or corrupted.'
 
             if filename_value.endswith('.docx'):
                 from docx import Document as DocxDocument
@@ -129,6 +128,97 @@ class DocumentAnalysisService:
 
         return '', 'Unsupported file type. Use TXT, PDF, DOCX, or DOC.'
 
+    def _extract_pdf_text(self, raw_bytes: bytes) -> str:
+        candidates: list[str] = []
+
+        # Strategy 1: pypdf (fast, native text PDFs)
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(io.BytesIO(raw_bytes))
+            pages = [(page.extract_text() or '').strip() for page in reader.pages]
+            text = self._normalize_extracted_text('\n\n'.join([page for page in pages if page]).strip())
+            if text:
+                candidates.append(text)
+        except Exception:
+            logger.debug('pypdf extraction failed', exc_info=True)
+
+        # Strategy 2: PyMuPDF/fitz fallback (better with some complex layouts)
+        try:
+            import fitz
+
+            with fitz.open(stream=raw_bytes, filetype='pdf') as doc:
+                chunks = []
+                for page in doc:
+                    chunks.append((page.get_text('text') or '').strip())
+                text = self._normalize_extracted_text('\n\n'.join([chunk for chunk in chunks if chunk]).strip())
+                if text:
+                    candidates.append(text)
+        except Exception:
+            logger.debug('fitz extraction failed', exc_info=True)
+
+        # Strategy 3: pdfplumber fallback (can recover tabular text better)
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
+                chunks = []
+                for page in pdf.pages:
+                    chunks.append((page.extract_text() or '').strip())
+                text = self._normalize_extracted_text('\n\n'.join([chunk for chunk in chunks if chunk]).strip())
+                if text:
+                    candidates.append(text)
+        except Exception:
+            logger.debug('pdfplumber extraction failed', exc_info=True)
+
+        if not candidates:
+            return ''
+
+        # Choose the richest extraction by useful character count.
+        best = max(candidates, key=lambda value: len(value or ''))
+        return best
+
+    @staticmethod
+    def _normalize_extracted_text(text: str) -> str:
+        value = (text or '').replace('\r\n', '\n')
+        value = re.sub(r'\u00a0', ' ', value)
+        value = re.sub(r'[ \t]+', ' ', value)
+        value = re.sub(r'\n{3,}', '\n\n', value)
+        return value.strip()
+
+    def build_extraction_diagnostics(self, *, filename: str, raw_bytes: bytes, extracted_text: str) -> dict:
+        name = (filename or '').strip().lower()
+        text = (extracted_text or '').strip()
+        raw_size = int(len(raw_bytes or b''))
+        raw_kb = max(1.0, float(raw_size) / 1024.0)
+        text_len = len(text)
+        chars_per_kb = float(text_len) / raw_kb
+
+        quality = 'high'
+        reasons: list[str] = []
+
+        if name.endswith('.pdf'):
+            # Image-only or poorly extracted PDFs often have very low text density.
+            if text_len < 400 or chars_per_kb < 10.0:
+                quality = 'low'
+                reasons.append('Low extracted text density for PDF; possible scanned/image-only content.')
+            elif text_len < 1200 or chars_per_kb < 20.0:
+                quality = 'medium'
+                reasons.append('Moderate text extraction quality; review source PDF clarity.')
+        else:
+            if text_len < 200:
+                quality = 'low'
+                reasons.append('Extracted text is very short for reliable assessment.')
+
+        return {
+            'quality': quality,
+            'filename': filename,
+            'raw_size_bytes': raw_size,
+            'extracted_chars': text_len,
+            'chars_per_kb': round(chars_per_kb, 2),
+            'warnings': reasons,
+        }
+
     def analyze_document_bytes(self, *, filename: str, raw_bytes: bytes, organization_id: int | None = None) -> dict:
         text, extraction_error = self.extract_text_from_bytes(filename, raw_bytes)
         if extraction_error:
@@ -137,6 +227,11 @@ class DocumentAnalysisService:
                 'error': extraction_error,
                 'extracted_text': '',
             }
+        extraction_diagnostics = self.build_extraction_diagnostics(
+            filename=filename,
+            raw_bytes=raw_bytes,
+            extracted_text=text,
+        )
 
         matched_requirements = self._match_requirements(text=text, filename=filename, organization_id=organization_id)
         if matched_requirements:
@@ -191,6 +286,16 @@ class DocumentAnalysisService:
             retrieval_mode=retrieval_mode,
         )
 
+        if extraction_diagnostics.get('quality') == 'low' and status in {'Mature', 'OK'}:
+            status = self._downgrade_status(status)
+            confidence = round(min(float(confidence), 0.58), 3)
+            warning_items.append(
+                {
+                    'source': 'extraction',
+                    'message': 'Low extraction quality detected; status was conservatively reduced to avoid overconfidence.',
+                }
+            )
+
         scoring_diagnostics = self._build_scoring_diagnostics(
             document_text=text,
             query_text=snippet_query or question,
@@ -201,8 +306,11 @@ class DocumentAnalysisService:
             status=status,
             confidence=confidence,
         )
+        scoring_diagnostics['extraction'] = extraction_diagnostics
         for message in scoring_diagnostics.get('warnings', []):
             warning_items.append({'source': 'scoring', 'message': message})
+        for message in extraction_diagnostics.get('warnings', []):
+            warning_items.append({'source': 'extraction', 'message': message})
 
         summary, llm_warning, used_model = self._openrouter_summary(
             status=status,
@@ -239,6 +347,7 @@ class DocumentAnalysisService:
             'extracted_text': text,
             'warning_items': warning_items,
             'scoring_diagnostics': scoring_diagnostics,
+            'extraction_diagnostics': extraction_diagnostics,
         }
 
     def _build_requirement_question(self, matched_requirements: list[dict]) -> str:

@@ -41,11 +41,7 @@
           </div>
           <p class="text-body-secondary mb-0">Review repository documents in one dedicated AI experience.</p>
         </div>
-        <div>
-          <a href="{{ url_for('main.ai_scoring_improvements') }}" class="btn btn-sm btn-outline-info" title="Learn about scoring improvements">
-            <i class="bi bi-graph-up"></i> Scoring Improvements
-          </a>
-        </div>
+        <div></div>
       </div>
     </div>
   </div>
@@ -232,6 +228,7 @@
             <div class="border rounded p-3 h-100 bg-body-tertiary">
               <div class="text-body-secondary small mb-1">Confidence</div>
               <div id="resultConfidence" class="fw-semibold fs-4">-</div>
+              <div id="resultConfidenceBreakdown" class="small text-body-secondary mt-1"></div>
             </div>
           </div>
         </div>
@@ -239,7 +236,7 @@
 
       <div class="small text-body-secondary mb-2" id="resultDiagnostics"></div>
       <div class="border rounded p-2 bg-body-tertiary small mb-3" id="scoreWhyPanel">
-        <div class="fw-semibold mb-1">Why this score</div>
+        <div class="fw-semibold mb-1">Why this score (and what blocks a higher score)</div>
         <ul class="mb-0" id="scoreWhyList"></ul>
       </div>
 
@@ -342,6 +339,7 @@
     const resultCard = document.getElementById('demoResultCard');
     const statusBadge = document.getElementById('resultStatusBadge');
     const confidenceEl = document.getElementById('resultConfidence');
+    const confidenceBreakdownEl = document.getElementById('resultConfidenceBreakdown');
     const warningsEl = document.getElementById('resultWarnings');
     const snippetsEl = document.getElementById('resultSnippets');
     const citationsEl = document.getElementById('resultCitations');
@@ -677,6 +675,12 @@
       };
       renderBadge(payload.status);
       confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
+      const confidenceBreakdown = ((payload.meta || {}).confidence_breakdown) || ((payload.scoring_diagnostics || {}).confidence_breakdown) || {};
+      const coverageConf = Number(confidenceBreakdown.coverage_confidence || 0);
+      const evidenceConf = Number(confidenceBreakdown.evidence_confidence || 0);
+      if (confidenceBreakdownEl) {
+        confidenceBreakdownEl.textContent = `Coverage ${(coverageConf * 100).toFixed(0)}% | Evidence ${(evidenceConf * 100).toFixed(0)}%`;
+      }
       const provider = ((payload.meta || {}).provider) || 'deterministic';
       const model = ((payload.meta || {}).model) || '-';
       const source = ((payload.meta || {}).source) || 'repository';
@@ -685,7 +689,9 @@
       const usedQuestion = ((payload.meta || {}).question || '').trim();
       const analyzedAtText = formatAnalysisTime((payload.meta || {}).analysis_at);
       const rubricLabel = ((payload.meta || {}).rubric_label || '').trim();
-      resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${rubricLabel ? ` | Rubric: ${rubricLabel}` : ''}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
+      const extractionMeta = (payload.meta || {}).extraction_diagnostics || {};
+      const extractionQuality = String(extractionMeta.quality || '').trim();
+      resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${rubricLabel ? ` | Rubric: ${rubricLabel}` : ''}${extractionQuality ? ` | Extraction: ${extractionQuality}` : ''}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
       const diagnostics = payload.scoring_diagnostics || {};
       const whyLines = [];
       if (typeof diagnostics.domain_anchor_hits !== 'undefined') {
@@ -703,6 +709,19 @@
       if (diagnostics.looks_like_irrelevant) {
         whyLines.push('Content looks irrelevant (resume/invoice style), so score was capped.');
       }
+      const blockerReasons = Array.isArray(diagnostics.blocking_reasons) ? diagnostics.blocking_reasons : [];
+      blockerReasons.forEach(function (line) {
+        if (line && !whyLines.includes(line)) {
+          whyLines.push(line);
+        }
+      });
+      const extractionInfo = diagnostics.extraction || {};
+      const extractionWarnings = Array.isArray(extractionInfo.warnings) ? extractionInfo.warnings : [];
+      extractionWarnings.forEach(function (line) {
+        if (line && !whyLines.includes(line)) {
+          whyLines.push(line);
+        }
+      });
       const diagWarnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
       diagWarnings.forEach(function (line) {
         if (line && !whyLines.includes(line)) {

@@ -4620,6 +4620,114 @@ def _rank_demo_snippets(document_text: str, query_text: str, top_k: int = 4) -> 
     ]
 
 
+def _requirement_reasoning_terms(requirement_item: dict) -> list[str]:
+    basis = ' '.join(
+        [
+            str(requirement_item.get('requirement_id') or ''),
+            str(requirement_item.get('label') or ''),
+            str(requirement_item.get('module_name') or ''),
+            str(requirement_item.get('standard_name') or ''),
+            str(requirement_item.get('outcome_code') or ''),
+            str(requirement_item.get('quality_indicator_code') or ''),
+            str(requirement_item.get('missing_evidence') or ''),
+        ]
+    )
+    return _tokenize_demo_text(basis)[:24]
+
+
+def _validate_evidence_span(document_text: str, span_text: str) -> bool:
+    haystack = (document_text or '').strip().lower()
+    needle = (span_text or '').strip().lower()
+    if not haystack or not needle:
+        return False
+    return needle in haystack
+
+
+def _build_requirement_reasoning(*, document_text: str, matched_requirements: list[dict], citations: list[dict]) -> list[dict]:
+    blocks = _demo_candidate_blocks(document_text)
+    citation_terms = set()
+    for citation in citations or []:
+        citation_terms.update(_tokenize_demo_text(str(citation.get('text') or '')))
+
+    enriched: list[dict] = []
+    for item in (matched_requirements or []):
+        terms = _requirement_reasoning_terms(item)
+        if not terms or not blocks:
+            candidate = dict(item)
+            candidate['status'] = 'Gap'
+            candidate['score'] = 0.0
+            candidate['evidence_span'] = ''
+            candidate['evidence_validated'] = False
+            candidate['reasoning_note'] = 'No grounded evidence span found in this document for this requirement.'
+            enriched.append(candidate)
+            continue
+
+        best_score = -1.0
+        best_span = ''
+        best_hits = 0
+        for block in blocks:
+            lower = block.lower()
+            hits = sum(1 for term in terms if term in lower)
+            if hits <= 0:
+                continue
+            hit_ratio = float(hits) / max(1.0, float(len(terms)))
+            citation_overlap = sum(1 for term in terms if term in citation_terms)
+            citation_bonus = min(0.35, citation_overlap * 0.05)
+            span_score = hit_ratio + citation_bonus + (0.10 if len(block) >= 120 else 0.0)
+            if span_score > best_score:
+                best_score = span_score
+                best_span = block
+                best_hits = hits
+
+        validated = _validate_evidence_span(document_text, best_span)
+        normalized_score = max(0.0, min(best_score if best_score > 0 else 0.0, 1.0))
+
+        status = 'Gap'
+        if validated and normalized_score >= 0.52:
+            status = 'Clear'
+        elif validated and normalized_score >= 0.28:
+            status = 'Partial'
+
+        candidate = dict(item)
+        candidate['status'] = status
+        candidate['score'] = round(normalized_score, 3)
+        candidate['evidence_span'] = (best_span[:420].rstrip() + '...') if len(best_span) > 420 else best_span
+        candidate['evidence_validated'] = bool(validated)
+        if status == 'Clear':
+            candidate['reasoning_note'] = f"Grounded evidence found with {best_hits} matched requirement terms and validated text span."
+        elif status == 'Partial':
+            candidate['reasoning_note'] = f"Some grounded evidence found ({best_hits} matched terms), but coverage is incomplete."
+        else:
+            candidate['reasoning_note'] = 'Positive claim blocked: no sufficiently grounded and validated evidence span for this requirement.'
+        enriched.append(candidate)
+
+    return enriched
+
+
+def _confidence_breakdown(*, checklist: dict, citations: list[dict], snippets: list[dict], extraction_diagnostics: dict | None) -> dict:
+    summary = (checklist or {}).get('summary') or {}
+    clear_count = len(summary.get('clear') or [])
+    partial_count = len(summary.get('partial') or [])
+    gap_count = len(summary.get('gap') or [])
+    total = max(1, clear_count + partial_count + gap_count)
+
+    coverage = ((clear_count * 1.0) + (partial_count * 0.5)) / float(total)
+    coverage = max(0.0, min(coverage, 1.0))
+
+    citation_factor = min(1.0, float(len(citations or [])) / 3.0)
+    snippet_factor = min(1.0, float(len(snippets or [])) / 4.0)
+    extraction_quality = ((extraction_diagnostics or {}).get('quality') or 'medium').strip().lower()
+    extraction_factor = {'low': 0.45, 'medium': 0.72, 'high': 0.92}.get(extraction_quality, 0.72)
+
+    evidence = (citation_factor * 0.40) + (snippet_factor * 0.25) + (extraction_factor * 0.35)
+    evidence = max(0.0, min(evidence, 1.0))
+
+    return {
+        'coverage_confidence': round(coverage, 3),
+        'evidence_confidence': round(evidence, 3),
+    }
+
+
 def _demo_domain_anchor_hits(lower_text: str) -> int:
     anchors = {
         'ndis', 'participant', 'consent', 'privacy', 'dignity', 'confidentiality',
@@ -4896,7 +5004,58 @@ def _derive_demo_status(
     return 'Critical gap', round(confidence, 3)
 
 
-def _build_demo_scoring_diagnostics(*, document_text: str, query_text: str, snippets: list[dict], citations: list[dict], retrieval_mode: str, profile: dict, status: str, confidence: float) -> dict:
+def _downgrade_demo_status(status: str) -> str:
+    value = (status or '').strip()
+    if value == 'Mature':
+        return 'OK'
+    if value == 'OK':
+        return 'High risk gap'
+    if value == 'High risk gap':
+        return 'Critical gap'
+    return value or 'Critical gap'
+
+
+def _apply_demo_consistency_guards(*, status: str, confidence: float, checklist: dict, citations: list[dict], retrieval_mode: str, extraction_diagnostics: dict | None = None) -> tuple[str, float, list[str]]:
+    final_status = (status or '').strip() or 'Critical gap'
+    final_confidence = float(confidence or 0)
+    blockers: list[str] = []
+
+    summary = (checklist or {}).get('summary') or {}
+    clear_count = len(summary.get('clear') or [])
+    partial_count = len(summary.get('partial') or [])
+    gap_count = len(summary.get('gap') or [])
+    citation_count = len(citations or [])
+
+    if gap_count > 0 and final_status == 'Mature':
+        final_status = 'OK'
+        final_confidence = min(final_confidence, 0.72)
+        blockers.append('Mature is blocked because one or more mapped areas still show gaps.')
+
+    if gap_count >= 2 and clear_count == 0 and final_status in {'Mature', 'OK'}:
+        final_status = 'High risk gap'
+        final_confidence = min(final_confidence, 0.58)
+        blockers.append('Multiple gap items with no clear coverage lowered the overall rating.')
+
+    if partial_count >= 3 and final_status == 'Mature':
+        final_status = 'OK'
+        final_confidence = min(final_confidence, 0.68)
+        blockers.append('Several partial areas prevent a Mature result until evidence is strengthened.')
+
+    if retrieval_mode == 'lexical' and citation_count == 0 and final_status in {'Mature', 'OK'}:
+        final_status = _downgrade_demo_status(final_status)
+        final_confidence = min(final_confidence, 0.52)
+        blockers.append('No semantic citations were retrieved (lexical-only mode), so confidence was reduced.')
+
+    extraction_quality = ((extraction_diagnostics or {}).get('quality') or '').strip().lower()
+    if extraction_quality == 'low' and final_status in {'Mature', 'OK'}:
+        final_status = _downgrade_demo_status(final_status)
+        final_confidence = min(final_confidence, 0.58)
+        blockers.append('Low PDF/text extraction quality was detected, so score was conservatively reduced.')
+
+    return final_status, round(max(0.0, min(final_confidence, 1.0)), 3), blockers
+
+
+def _build_demo_scoring_diagnostics(*, document_text: str, query_text: str, snippets: list[dict], citations: list[dict], retrieval_mode: str, profile: dict, status: str, confidence: float, checklist: dict | None = None, blockers: list[str] | None = None, extraction_diagnostics: dict | None = None) -> dict:
     lower_text = (document_text or '').lower()
     warnings: list[str] = []
     anchor_hits = _demo_domain_anchor_hits(lower_text)
@@ -4910,6 +5069,10 @@ def _build_demo_scoring_diagnostics(*, document_text: str, query_text: str, snip
         warnings.append('No NDIS citations retrieved; confidence was reduced.')
     if retrieval_mode == 'lexical':
         warnings.append('Lexical retrieval mode active; semantic evidence is currently unavailable.')
+    if blockers:
+        warnings.extend([str(item).strip() for item in blockers if str(item).strip()])
+    if extraction_diagnostics and extraction_diagnostics.get('quality') == 'low':
+        warnings.append('Extracted text quality is low, so this result should be reviewed against the source PDF.')
 
     return {
         'document_length': len((document_text or '').strip()),
@@ -4923,6 +5086,9 @@ def _build_demo_scoring_diagnostics(*, document_text: str, query_text: str, snip
         'profile': profile,
         'final_status': status,
         'final_confidence': float(confidence),
+        'checklist_summary': (checklist or {}).get('summary') or {},
+        'blocking_reasons': [str(item).strip() for item in (blockers or []) if str(item).strip()],
+        'extraction': extraction_diagnostics or {},
         'warnings': warnings,
     }
 
@@ -6028,42 +6194,6 @@ def assistant_chat_api():
     )
 
 
-@bp.route('/ai-scoring-improvements')
-@login_required
-def ai_scoring_improvements():
-    """AI Scoring Improvements — before/after comparison and analytics dashboard."""
-    maybe = _require_active_org()
-    if maybe is not None:
-        return maybe
-
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        abort(403)
-
-    # Fetch feedback analytics
-    feedback_events = AIUsageEvent.query.filter(
-        AIUsageEvent.organization_id == int(org_id),
-        AIUsageEvent.event.like('ai_review_feedback_%'),
-    ).order_by(AIUsageEvent.created_at.desc()).limit(100).all()
-
-    # Summary statistics
-    total_feedback = len(feedback_events)
-    fp_count = sum(1 for e in feedback_events if 'false_positive' in (e.event or ''))
-    fn_count = sum(1 for e in feedback_events if 'false_negative' in (e.event or ''))
-    correct_count = sum(1 for e in feedback_events if 'correct' in (e.event or ''))
-    accuracy = int(round((correct_count / total_feedback * 100))) if total_feedback > 0 else 0
-
-    return render_template(
-        'main/ai_scoring_improvements.html',
-        title='AI Scoring Improvements',
-        total_feedback_events=total_feedback,
-        false_positives=fp_count,
-        false_negatives=fn_count,
-        correct_assessments=correct_count,
-        accuracy_percentage=accuracy,
-    )
-
-
 @bp.route('/ai-demo')
 @login_required
 def ai_demo():
@@ -6485,6 +6615,17 @@ def ai_demo_analyze_api():
     doc_text, extraction_error = document_analysis_service.extract_text_from_bytes(source_filename, result.get('data') or b'')
     if extraction_error:
         return jsonify({'success': False, 'error': extraction_error}), 400
+    extraction_diagnostics = document_analysis_service.build_extraction_diagnostics(
+        filename=source_filename,
+        raw_bytes=result.get('data') or b'',
+        extracted_text=doc_text,
+    )
+
+    matched_requirements = document_analysis_service._match_requirements(
+        text=doc_text,
+        filename=source_filename,
+        organization_id=int(org_id),
+    )
 
     scoring_profile = _org_ai_scoring_profile(int(org_id))
     snippets = _rank_demo_snippets(doc_text, question, top_k=4)
@@ -6526,6 +6667,41 @@ def ai_demo_analyze_api():
         rag_warning = 'Could not retrieve NDIS citations; showing document-only analysis.'
         warning_items.append({'source': 'rag', 'message': rag_warning})
 
+    reasoned_requirements = _build_requirement_reasoning(
+        document_text=doc_text,
+        matched_requirements=matched_requirements,
+        citations=rag_citations,
+    )
+
+    checklist = _build_checklist_from_analysis(
+        {
+            'matched_requirements': reasoned_requirements,
+            'status': status,
+            'summary': '',
+            'focus_area': 'General compliance coverage',
+        }
+    )
+    status, confidence, blocking_reasons = _apply_demo_consistency_guards(
+        status=status,
+        confidence=confidence,
+        checklist=checklist,
+        citations=rag_citations,
+        retrieval_mode=_demo_retrieval_mode,
+        extraction_diagnostics=extraction_diagnostics,
+    )
+
+    for message in extraction_diagnostics.get('warnings', []):
+        warning_items.append({'source': 'extraction', 'message': message})
+    for reason in blocking_reasons:
+        warning_items.append({'source': 'consistency', 'message': reason})
+
+    confidence_breakdown = _confidence_breakdown(
+        checklist=checklist,
+        citations=rag_citations,
+        snippets=snippets,
+        extraction_diagnostics=extraction_diagnostics,
+    )
+
     scoring_diagnostics = _build_demo_scoring_diagnostics(
         document_text=doc_text,
         query_text=question,
@@ -6535,7 +6711,20 @@ def ai_demo_analyze_api():
         profile=scoring_profile,
         status=status,
         confidence=confidence,
+        checklist=checklist,
+        blockers=blocking_reasons,
+        extraction_diagnostics=extraction_diagnostics,
     )
+    scoring_diagnostics['confidence_breakdown'] = confidence_breakdown
+    scoring_diagnostics['requirement_reasoning'] = [
+        {
+            'requirement_id': item.get('requirement_id'),
+            'status': item.get('status'),
+            'score': item.get('score'),
+            'evidence_validated': item.get('evidence_validated'),
+        }
+        for item in reasoned_requirements
+    ]
     for msg in scoring_diagnostics.get('warnings', []):
         warning_items.append({'source': 'scoring', 'message': msg})
 
@@ -6601,14 +6790,9 @@ def ai_demo_analyze_api():
         db.session.rollback()
         current_app.logger.exception('Failed to persist demo analysis result')
 
-    matched_requirements = document_analysis_service._match_requirements(
-        text=doc_text,
-        filename=source_filename,
-        organization_id=int(org_id),
-    )
     checklist = _build_checklist_from_analysis(
         {
-            'matched_requirements': matched_requirements,
+            'matched_requirements': reasoned_requirements,
             'status': status,
             'summary': ai_summary,
             'focus_area': 'General compliance coverage',
@@ -6644,6 +6828,9 @@ def ai_demo_analyze_api():
                 'analysis_at': analyzed_at.isoformat(),
                 'doc_type': doc_type,
                 'scoring_profile': scoring_profile,
+                'blocking_reasons': blocking_reasons,
+                'extraction_diagnostics': extraction_diagnostics,
+                'confidence_breakdown': confidence_breakdown,
                 'rubric_label': {
                     'policy': 'Policy/Procedure rubric',
                     'clinical': 'Clinical Reference rubric',
@@ -6752,82 +6939,6 @@ def ai_demo_feedback_api():
     return jsonify({'success': True})
 
 
-@bp.route('/api/ai/demo/feedback-analytics', methods=['GET'])
-@login_required
-@limiter.limit('30 per minute', key_func=_ai_rate_limit_key)
-def ai_demo_feedback_analytics_api():
-    """Get feedback trends for last 7/30 days and summary statistics."""
-    maybe = _require_active_org()
-    if maybe is not None:
-        return jsonify({'success': False, 'error': 'No active organization'}), 400
-
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        return jsonify({'success': False, 'error': 'Forbidden'}), 403
-
-    # Get feedback events for last 30 days
-    from datetime import datetime, timezone, timedelta
-    
-    now = datetime.now(timezone.utc)
-    lookback_30d = now - timedelta(days=30)
-    
-    events = AIUsageEvent.query.filter(
-        AIUsageEvent.organization_id == int(org_id),
-        AIUsageEvent.event.like('ai_review_feedback_%'),
-        AIUsageEvent.created_at >= lookback_30d,
-    ).order_by(AIUsageEvent.created_at.asc()).all()
-    
-    # Group by date and type
-    daily_stats: dict[str, dict[str, int]] = {}
-    feedback_type_counts = {'false_positive': 0, 'false_negative': 0, 'correct': 0}
-    
-    for event in events:
-        date_key = event.created_at.strftime('%Y-%m-%d') if event.created_at else now.strftime('%Y-%m-%d')
-        if date_key not in daily_stats:
-            daily_stats[date_key] = {'false_positive': 0, 'false_negative': 0, 'correct': 0, 'total': 0}
-        
-        # Map event name to feedback type
-        if 'false_positive' in (event.event or ''):
-            daily_stats[date_key]['false_positive'] += 1
-            feedback_type_counts['false_positive'] += 1
-        elif 'false_negative' in (event.event or ''):
-            daily_stats[date_key]['false_negative'] += 1
-            feedback_type_counts['false_negative'] += 1
-        elif 'correct' in (event.event or ''):
-            daily_stats[date_key]['correct'] += 1
-            feedback_type_counts['correct'] += 1
-        
-        daily_stats[date_key]['total'] += 1
-    
-    # Calculate accuracy
-    total_feedback = sum(feedback_type_counts.values())
-    accuracy = 0
-    if total_feedback > 0:
-        accuracy = int(round((feedback_type_counts['correct'] / total_feedback) * 100))
-    
-    return jsonify({
-        'success': True,
-        'period': '30 days',
-        'daily_data': [
-            {
-                'date': date,
-                'false_positive': daily_stats[date]['false_positive'],
-                'false_negative': daily_stats[date]['false_negative'],
-                'correct': daily_stats[date]['correct'],
-                'total': daily_stats[date]['total'],
-            }
-            for date in sorted(daily_stats.keys())
-        ],
-        'summary': {
-            'total_feedback_events': int(total_feedback),
-            'false_positives': int(feedback_type_counts['false_positive']),
-            'false_negatives': int(feedback_type_counts['false_negative']),
-            'correct_assessments': int(feedback_type_counts['correct']),
-            'accuracy_percentage': int(accuracy),
-        },
-    })
-
-
 def _checklist_status_from_score(score: float | None) -> str:
     value = float(score or 0)
     if value >= 0.28:
@@ -6873,13 +6984,17 @@ def _build_checklist_from_analysis(analysis: dict) -> dict:
     matched = analysis.get('matched_requirements') or []
     for item in matched:
         score = item.get('score')
-        status = _checklist_status_from_score(score)
+        raw_status = (item.get('status') or '').strip()
+        status = raw_status if raw_status in {'Clear', 'Partial', 'Gap'} else _checklist_status_from_score(score)
         label = (item.get('label') or item.get('requirement_id') or 'Requirement').strip()
         note = format_note(
             status=status,
             missing=(item.get('missing_evidence') or ''),
-            rationale=(item.get('rationale_note') or ''),
+            rationale=(item.get('reasoning_note') or item.get('rationale_note') or ''),
         )
+        if status in {'Clear', 'Partial'} and not bool(item.get('evidence_validated', True)):
+            status = 'Gap'
+            note = 'Claim downgraded: no validated evidence span found in extracted text.'
         items.append(
             {
                 'label': label,
