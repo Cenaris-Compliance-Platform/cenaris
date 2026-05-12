@@ -4,6 +4,7 @@ import time
 from flask import g
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import event
 from app import db
 
 
@@ -868,3 +869,33 @@ class SuspiciousIP(db.Model):
     __table_args__ = (
         db.Index('ix_suspicious_ips_blocked_until', 'blocked_until'),
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Event Listeners
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@event.listens_for(Organization, 'after_insert')
+def _after_organization_insert(mapper, connection, target):
+    """
+    Auto-create assessment records when a new organization is created.
+    This ensures all orgs have assessments linked to the global NDIS framework.
+    """
+    from sqlalchemy.orm import Session
+    
+    # Create a new session to avoid conflicts with the current transaction
+    session = Session(bind=connection)
+    try:
+        from app.services.compliance_setup_service import compliance_setup_service
+        
+        # Silently skip if global framework doesn't exist yet (e.g., during migrations)
+        compliance_setup_service.create_org_assessments_from_global_framework(
+            org_id=int(target.id),
+            user_id=None,
+        )
+    except Exception:
+        # Silently fail—don't block org creation if setup fails
+        pass
+    finally:
+        session.close()

@@ -104,11 +104,16 @@ class ComplianceMappingService:
         file_path: str,
         *,
         organization_id: int | None = None,
+        is_global: bool = False,
         imported_by_user_id: int | None = None,
         version_label: str = 'v1.0',
     ) -> ImportResult:
         if not file_path or not os.path.exists(file_path):
             raise ComplianceMappingImportError(f'File not found: {file_path}')
+        
+        # If is_global=True, override organization_id to None (create global framework)
+        if is_global:
+            organization_id = None
 
         df = self._read_table(file_path)
         if df.empty:
