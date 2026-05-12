@@ -740,13 +740,16 @@ def org_admin_dashboard():
 @bp.route('/org/admin/compliance/initialize', methods=['POST'])
 @login_required
 def org_admin_initialize_compliance_data():
-    """Initialize NDIS mapping data for the active organisation."""
+    """Initialize NDIS mapping data for the active organisation by creating assessment records."""
     maybe = _require_org_admin()
     if maybe is not None:
         return maybe
 
     from app.main.forms import InitializeComplianceDataForm
-    from app.services.compliance_mapping_service import ComplianceMappingImportError, compliance_mapping_service
+    from app.services.compliance_setup_service import (
+        compliance_setup_service,
+        ComplianceSetupError,
+    )
 
     form = InitializeComplianceDataForm()
     if not form.validate_on_submit():
@@ -754,36 +757,17 @@ def org_admin_initialize_compliance_data():
         return redirect(url_for('main.org_admin_dashboard'))
 
     org_id = _active_org_id()
-    mapping_dir = os.path.abspath(
-        os.path.join(
-            current_app.root_path,
-            os.pardir,
-            'data',
-            'sources',
-            'ndis',
-            'mapping',
-        )
-    )
-    mapping_csv_path = os.path.join(mapping_dir, 'MASTER Cenaris_NDIS_Audit_Master_Mapping_v1.csv')
-    mapping_xlsx_path = os.path.join(mapping_dir, 'MASTER Cenaris_NDIS_Audit_Master_Mapping_v1.xlsx')
-    mapping_file_path = mapping_csv_path if os.path.exists(mapping_csv_path) else mapping_xlsx_path
-
-    if not os.path.exists(mapping_file_path):
-        flash('NDIS mapping file is missing. Please upload or restore it in data/sources/ndis/mapping.', 'error')
-        return redirect(url_for('main.org_admin_dashboard'))
 
     try:
-        result = compliance_mapping_service.import_master_mapping(
-            mapping_file_path,
-            organization_id=int(org_id),
-            imported_by_user_id=int(current_user.id),
-            version_label='v1.0',
+        created = compliance_setup_service.create_org_assessments_from_global_framework(
+            org_id=int(org_id),
+            user_id=int(current_user.id),
         )
         flash(
-            f'NDIS mapping initialized. Loaded {result.imported_requirements} requirements for this organisation.',
+            f'NDIS mapping initialized. Created {created} assessment records for this organisation.',
             'success',
         )
-    except ComplianceMappingImportError as e:
+    except ComplianceSetupError as e:
         flash(f'Initialization failed: {e}', 'error')
     except Exception as e:
         db.session.rollback()
