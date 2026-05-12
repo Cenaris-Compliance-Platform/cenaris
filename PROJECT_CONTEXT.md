@@ -20,6 +20,7 @@ Cenaris
 - `tests/` contains pytest coverage
 - `migrations/` contains Alembic migrations
 - `docs/` contains product and API documentation
+- `docs/product-knowledge-base/` contains the easy-read product, RAG, current work, and security docs
 
 ## Naming Conventions
 - Python: use `snake_case` for functions, variables, routes, and module-level helpers
