@@ -29,7 +29,8 @@ class BillingService:
         'task_workflow': 'team',
         'risk_register': 'team',
         'multi_site_reporting': 'scale',
-        'ai_tagging': 'scale',
+        # Allow AI Review / tagging for Starter (free) plan by default
+        'ai_tagging': 'starter',
         'regulatory_updates': 'scale',
         'sso_api': 'enterprise',
     }

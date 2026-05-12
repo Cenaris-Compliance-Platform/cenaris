@@ -1016,10 +1016,11 @@ def create_app(config_name=None):
 
     @app.cli.command('import-master-mapping')
     @click.option('--file-path', required=True, type=click.Path(exists=True, dir_okay=False), help='Path to CSV/XLSX mapping file.')
-    @click.option('--org-id', type=int, required=False, help='Optional organization ID for org-scoped assessments.')
+    @click.option('--org-id', type=int, required=False, help='Optional organization ID for org-scoped assessments. Omit to create global framework.')
+    @click.option('--is-global', is_flag=True, default=False, help='If set, creates global (organization_id=NULL) framework. Recommended for NDIS.')
     @click.option('--imported-by-user-id', type=int, required=False, help='Optional user ID for audit trail.')
     @click.option('--version-label', default='v1.0', show_default=True, help='Framework version label to import into.')
-    def import_master_mapping(file_path: str, org_id: int | None, imported_by_user_id: int | None, version_label: str):
+    def import_master_mapping(file_path: str, org_id: int | None, is_global: bool, imported_by_user_id: int | None, version_label: str):
         """Import the NDIS master mapping spreadsheet (CSV/XLSX) into canonical compliance tables."""
         from app.services.compliance_mapping_service import (
             compliance_mapping_service,
@@ -1030,6 +1031,7 @@ def create_app(config_name=None):
             result = compliance_mapping_service.import_master_mapping(
                 file_path,
                 organization_id=org_id,
+                is_global=is_global,
                 imported_by_user_id=imported_by_user_id,
                 version_label=version_label,
             )
@@ -1044,6 +1046,8 @@ def create_app(config_name=None):
         click.echo(f'- Rows parsed:          {result.total_rows}')
         click.echo(f'- Requirements loaded:  {result.imported_requirements}')
         click.echo(f'- Assessments loaded:   {result.imported_assessments}')
+        if is_global:
+            click.echo('- Framework scope:      GLOBAL (organization_id=NULL)')
 
     @app.cli.command('recompute-compliance-scores')
     @click.option('--org-id', type=int, required=True, help='Organization ID to recompute scores for.')
