@@ -21,6 +21,7 @@ from app.models import (
 from app import db, mail, limiter, invalidate_org_switcher_context_cache
 from app.services.azure_data_service import azure_data_service
 from app.services.analytics_service import analytics_service
+from app.services.gap_analysis_service import gap_analysis_service
 from app.services.azure_openai_policy_service import azure_openai_policy_service
 from app.services.policy_draft_service import policy_draft_service
 from app.services.compliance_scoring_service import compliance_scoring_service
@@ -3499,7 +3500,7 @@ def ai_evidence_detail(entry_id):
 @bp.route('/gap-analysis')
 @login_required
 def gap_analysis():
-    """Legacy gap analysis route; redirect users into AI Review."""
+    """Audit Readiness Centre for evidence gaps and module readiness."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -3508,8 +3509,47 @@ def gap_analysis():
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
 
-    flash('Gap Analysis has moved into AI Review.', 'info')
-    return redirect(url_for('main.ai_demo'))
+    payload = gap_analysis_service.build_for_organization(int(org_id))
+
+    q_filter = (request.args.get('q') or '').strip()
+    flag_filter = _normalize_computed_flag_filter(request.args.get('flag') or '')
+    module_filter = (request.args.get('module') or '').strip()
+
+    requirements = list(payload.requirements)
+
+    if q_filter:
+        q_lower = q_filter.lower()
+        requirements = [
+            r for r in requirements
+            if q_lower in (r.requirement_id or '').lower()
+            or q_lower in (r.module_name or '').lower()
+            or q_lower in (r.standard_name or '').lower()
+            or q_lower in (r.audit_type or '').lower()
+            or any(q_lower in (rule or '').lower() for rule in (r.gap_rules or []))
+            or q_lower in (r.nonconformity_patterns or '').lower()
+        ]
+
+    if flag_filter:
+        requirements = [r for r in requirements if _normalize_computed_flag_filter(r.computed_flag or '') == flag_filter]
+
+    if module_filter:
+        requirements = [r for r in requirements if (r.module_name or '') == module_filter]
+
+    module_names = [mod.module_name for mod in payload.module_breakdown]
+
+    can_export_audit = current_user.has_permission('audits.export', org_id=int(org_id))
+
+    return render_template(
+        'main/gap_analysis.html',
+        title='Audit Readiness Centre',
+        payload=payload,
+        requirements=requirements,
+        q_filter=q_filter,
+        flag_filter=flag_filter,
+        module_filter=module_filter,
+        module_names=module_names,
+        can_export_audit=can_export_audit,
+    )
 
 
 @bp.route('/compliance-requirements')
