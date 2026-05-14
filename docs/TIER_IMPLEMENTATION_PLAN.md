@@ -35,11 +35,11 @@ Last updated: 2026-05-13
 
 ## Phase 6 - Beta Missing Features (2-4 weeks)
 Must-have:
--- Manual reminders (done)
--- Policy version control (done)
--- Audit/change log register (done, expand coverage)
--- Evidence expiry tracking (done)
--- User limits (free tier) (done, invite enforcement)
+- Manual reminders (done) — visible in UI on requirement detail pages and Plans Preview
+- Policy version control (done) — version history UI present in Policy Studio and listed in Plans Preview
+- Audit/change log register (done, expand coverage) — audit log accessible to org admins and linked from Team Management
+- Evidence expiry tracking (done) — expiry controls on evidence links and Plans Preview updated
+- User limits (free tier) (done, invite enforcement)
 
 Should-have:
 - Compliance calendar (read-only)
