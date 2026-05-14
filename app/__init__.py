@@ -1239,5 +1239,21 @@ def create_app(config_name=None):
                 click.echo(f'Org {org.id} ({org.name}): failed - {e}')
 
         click.echo(f'Done. Total digest emails sent: {total_sent}')
+
+    @app.cli.command('send-requirement-reminders')
+    @click.option('--org-id', type=int, required=False, help='Optional organization ID. If omitted, sends for all organizations.')
+    @click.option('--dry-run', is_flag=True, help='List due reminders without sending emails.')
+    def send_requirement_reminders(org_id: int | None, dry_run: bool):
+        """Send due requirement review reminders."""
+        from app.services.reminder_service import reminder_service
+
+        sent_total = reminder_service.send_due_reminders(
+            organization_id=int(org_id) if org_id is not None else None,
+            dry_run=bool(dry_run),
+        )
+
+        if dry_run:
+            click.echo('Dry run complete. No emails sent.')
+        click.echo(f'Done. Total reminder emails sent: {sent_total}')
     
     return app

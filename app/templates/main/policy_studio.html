@@ -176,6 +176,17 @@
       <textarea id="policyStudioOutput" class="form-control" rows="18" readonly></textarea>
     </div>
   </div>
+
+  <div class="card border-0 shadow-sm d-none" id="policyStudioHistoryCard">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <h5 class="card-title mb-0">Version History</h5>
+        <span class="small text-body-secondary" id="policyStudioHistoryStatus"></span>
+      </div>
+      <div id="policyStudioHistoryList" class="d-flex flex-column gap-2"></div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
 
@@ -188,7 +199,9 @@
     const outputEl = document.getElementById('policyStudioOutput');
     const metaEl = document.getElementById('policyStudioMeta');
     const warningsEl = document.getElementById('policyStudioWarnings');
-
+    const historyCard = document.getElementById('policyStudioHistoryCard');
+    const historyList = document.getElementById('policyStudioHistoryList');
+    const historyStatus = document.getElementById('policyStudioHistoryStatus');
     const sourceEl = document.getElementById('policyStudioSource');
     const documentWrap = document.getElementById('policyStudioDocumentWrap');
     const documentEl = document.getElementById('policyStudioDocument');
@@ -212,7 +225,119 @@
     const csrfToken = document.getElementById('policyStudioCsrf')?.value || '';
 
     let lastPayload = null;
+    let currentDraftId = null;
 
+    const setHistoryStatus = (message, isError) => {
+      if (!historyStatus) return;
+      historyStatus.textContent = message || '';
+      historyStatus.classList.remove('text-danger', 'text-body-secondary');
+      historyStatus.classList.add(isError ? 'text-danger' : 'text-body-secondary');
+    };
+
+    const renderHistory = (versions) => {
+      if (!historyList || !historyCard) return;
+      historyList.innerHTML = '';
+      if (!versions || !versions.length) {
+        historyList.innerHTML = '<div class="text-body-secondary small">No versions saved yet.</div>';
+        return;
+      }
+      versions.forEach((version) => {
+        const row = document.createElement('div');
+        row.className = 'border rounded p-2 d-flex justify-content-between align-items-center flex-wrap gap-2';
+
+        const label = document.createElement('div');
+        label.className = 'small';
+        const createdAt = version.created_at ? new Date(version.created_at).toLocaleString() : '';
+        label.textContent = `v${version.version_number} ${version.draft_mode || ''} ${createdAt}`.trim();
+
+        const actions = document.createElement('div');
+        actions.className = 'd-flex gap-2';
+
+        const loadBtn = document.createElement('button');
+        loadBtn.type = 'button';
+        loadBtn.className = 'btn btn-sm btn-outline-secondary';
+        loadBtn.textContent = 'Load';
+        loadBtn.addEventListener('click', () => loadVersion(version.id));
+
+        const restoreBtn = document.createElement('button');
+        restoreBtn.type = 'button';
+        restoreBtn.className = 'btn btn-sm btn-outline-primary';
+        restoreBtn.textContent = 'Restore';
+        restoreBtn.addEventListener('click', () => restoreVersion(version.id));
+
+        actions.appendChild(loadBtn);
+        actions.appendChild(restoreBtn);
+
+        row.appendChild(label);
+        row.appendChild(actions);
+        historyList.appendChild(row);
+      });
+    };
+
+    const loadHistory = async () => {
+      if (!currentDraftId || !historyCard) return;
+      historyCard.classList.remove('d-none');
+      setHistoryStatus('Loading versions...', false);
+      try {
+        const response = await fetch(`/api/policy/draft/${currentDraftId}/versions`);
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to load versions');
+        }
+        renderHistory(payload.versions || []);
+        setHistoryStatus('', false);
+      } catch (err) {
+        setHistoryStatus(err.message || 'Failed to load versions', true);
+      }
+    };
+
+    const loadVersion = async (versionId) => {
+      if (!versionId) return;
+      setHistoryStatus('Loading version...', false);
+      try {
+        const response = await fetch(`/api/policy/draft/version/${versionId}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to load version');
+        }
+        if (outputEl) outputEl.value = payload.draft_text || '';
+        if (metaEl) metaEl.textContent = `Loaded v${payload.version_number}`;
+        resultCard?.classList.remove('d-none');
+        setHistoryStatus('Version loaded.', false);
+      } catch (err) {
+        setHistoryStatus(err.message || 'Failed to load version', true);
+      }
+    };
+
+    const restoreVersion = async (versionId) => {
+      if (!versionId || !currentDraftId) return;
+      setHistoryStatus('Restoring version...', false);
+      try {
+        const response = await fetch(`/api/policy/draft/${currentDraftId}/restore`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+            'X-CSRF-Token': csrfToken,
+            'X-Requested-With': 'fetch',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ version_id: versionId }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to restore version');
+        }
+        if (outputEl) outputEl.value = payload.draft_text || '';
+        if (metaEl) metaEl.textContent = `Restored v${payload.version_number}`;
+        resultCard?.classList.remove('d-none');
+        await loadHistory();
+        setHistoryStatus('Version restored.', false);
+      } catch (err) {
+        setHistoryStatus(err.message || 'Failed to restore version', true);
+      }
+    };
     const setStatus = (msg, isError) => {
       if (!statusEl) return;
       statusEl.textContent = msg || '';
@@ -278,9 +403,12 @@
         policy_tone: (toneEl?.value || '').trim(),
         strictness: (strictnessEl?.value || '').trim(),
         organization_size: (orgSizeEl?.value || '').trim(),
-        query: (goalEl?.value || '').trim(),
+        goal: (goalEl?.value || '').trim(),
         context_brief: (briefEl?.value || '').trim(),
         requirement_scope: scope,
+        source_mode: source,
+        draft_id: currentDraftId,
+        save_draft: true,
       };
       if (source === 'document' && documentId) {
         payload.document_id = Number(documentId);
@@ -343,6 +471,10 @@
         expandBtn?.classList.remove('d-none');
         wordBtn?.classList.remove('d-none');
         copyBtn?.classList.remove('d-none');
+        if (data.draft_id) {
+          currentDraftId = data.draft_id;
+          await loadHistory();
+        }
         setStatus('Draft generated. Review before use.', false);
       } catch (err) {
         setStatus(err?.message || 'Failed to generate draft.', true);
