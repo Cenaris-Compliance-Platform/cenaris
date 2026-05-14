@@ -202,7 +202,7 @@ class NotificationService:
         return [recipient]
 
     def send_notification_email_to_org_admins(self, notification: AdminNotification) -> int:
-        recipients = self._org_admin_recipients(int(notification.organization_id))
+        recipients = self.org_admin_recipients(int(notification.organization_id))
         if not recipients:
             return 0
 
@@ -220,6 +220,15 @@ class NotificationService:
                 sent += 1
 
         return sent
+
+    def org_admin_recipients(self, organization_id: int) -> list[str]:
+        return self._org_admin_recipients(int(organization_id))
+
+    def send_basic_email(self, *, to_email: str, subject: str, text_body: str, html_body: str) -> bool:
+        recipient = (to_email or '').strip()
+        if not recipient:
+            return False
+        return bool(self._send_email_html(recipient, subject, text_body, html_body))
 
     def _org_admin_recipients(self, organization_id: int) -> list[str]:
         memberships = (

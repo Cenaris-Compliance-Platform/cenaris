@@ -144,6 +144,70 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <h5 class="card-title mb-1">Manual Reminder</h5>
+          <p class="text-body-secondary mb-0 small">Send a reminder email on a simple cadence for this requirement.</p>
+        </div>
+        {% if reminder and reminder.is_active %}
+        <span class="badge bg-success">Active</span>
+        {% else %}
+        <span class="badge bg-secondary">Inactive</span>
+        {% endif %}
+      </div>
+
+      <form method="POST" action="{{ url_for('main.compliance_requirement_update_reminder', requirement_db_id=requirement.id) }}" class="row g-2 align-items-end mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-md-3">
+          <label for="frequency_days" class="form-label">Frequency (days)</label>
+          <input
+            type="number"
+            min="7"
+            max="365"
+            class="form-control"
+            id="frequency_days"
+            name="frequency_days"
+            value="{{ reminder.frequency_days if reminder else 30 }}"
+            required
+          />
+        </div>
+        <div class="col-md-4">
+          <label for="recipient_email" class="form-label">Recipient email (optional)</label>
+          <input
+            type="email"
+            class="form-control"
+            id="recipient_email"
+            name="recipient_email"
+            value="{{ reminder.recipient_email if reminder else '' }}"
+            placeholder="Defaults to org admins"
+          />
+        </div>
+        <div class="col-md-3">
+          <label for="next_send_at" class="form-label">Next send date</label>
+          <input
+            type="date"
+            class="form-control"
+            id="next_send_at"
+            name="next_send_at"
+            value="{{ reminder.next_send_at|datetime_format('%Y-%m-%d') if reminder and reminder.next_send_at else '' }}"
+          />
+        </div>
+        <div class="col-md-2 d-grid">
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+
+      {% if reminder and reminder.is_active %}
+      <form method="POST" action="{{ url_for('main.compliance_requirement_disable_reminder', requirement_db_id=requirement.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn btn-outline-danger btn-sm">Disable reminder</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
       <div class="alert alert-light border mb-3">
         <div class="fw-semibold mb-1"><i class="bi bi-lightbulb me-1"></i>How to improve low score or not-linked evidence</div>
         <ol class="small text-body-secondary mb-0 ps-3">
@@ -215,6 +279,7 @@
             <th>Bucket</th>
             <th>Note</th>
             <th>Linked</th>
+            <th>Expiry</th>
             <th class="text-end">Action</th>
           </tr>
         </thead>
@@ -225,6 +290,17 @@
             <td><span class="badge bg-body-tertiary text-body border">{{ link.evidence_bucket }}</span></td>
             <td>{{ link.rationale_note or '—' }}</td>
             <td>{{ link.linked_at | datetime_format('%b %d, %Y %I:%M %p') if link.linked_at else '—' }}</td>
+            <td>
+              <div class="small text-body-secondary mb-1">
+                {{ link.expires_at | datetime_format('%b %d, %Y') if link.expires_at else 'No expiry set' }}
+              </div>
+              <form method="POST" action="{{ url_for('main.compliance_requirement_update_expiry', requirement_db_id=requirement.id, link_id=link.id) }}" class="d-flex flex-wrap gap-1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="date" name="expires_at" class="form-control form-control-sm" value="{{ link.expires_at|datetime_format('%Y-%m-%d') if link.expires_at else '' }}" />
+                <input type="text" name="expiry_note" class="form-control form-control-sm" placeholder="Note" value="{{ link.expiry_note or '' }}" />
+                <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+              </form>
+            </td>
             <td class="text-end">
               <form method="POST" action="{{ url_for('main.compliance_requirement_unlink_evidence', requirement_db_id=requirement.id, link_id=link.id) }}" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -234,7 +310,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="5" class="text-center py-4 text-body-secondary">No evidence linked yet.</td>
+            <td colspan="6" class="text-center py-4 text-body-secondary">No evidence linked yet.</td>
           </tr>
           {% endfor %}
         </tbody>

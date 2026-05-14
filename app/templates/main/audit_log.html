@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h1 class="h3 fw-bold mb-1">Audit Log</h1>
+        <p class="text-body-secondary mb-0">Recent organisation actions for traceability.</p>
+      </div>
+      <a href="{{ url_for('main.org_admin_dashboard') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Team Management
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="min-width: 160px;">Time</th>
+            <th>Event</th>
+            <th>Actor</th>
+            <th>Entity</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event in events %}
+          <tr>
+            <td class="small text-body-secondary">{{ event.created_at | datetime_format('%b %d, %Y %I:%M %p') if event.created_at else '—' }}</td>
+            <td><span class="badge bg-body-tertiary text-body border">{{ event.event_type }}</span></td>
+            <td>{{ event.actor.display_name() if event.actor else 'System' }}</td>
+            <td class="small text-body-secondary">{{ event.entity_type or '—' }}{% if event.entity_id %} #{{ event.entity_id }}{% endif %}</td>
+            <td>{{ event.message or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center py-4 text-body-secondary">No audit events recorded yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

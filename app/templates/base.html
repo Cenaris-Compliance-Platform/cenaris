@@ -11,91 +11,34 @@
     />
     <meta name="author" content="Cenaris" />
 
-    <title>
-      {% if title %}{{ title }} - {% endif %}Cenaris
-    </title>
+    <title>{% if title %}{{ title }} - {% endif %}Cenaris</title>
 
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" sizes="any" />
     <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='images/fivicon.ico') }}" />
 
-    <!-- Bootstrap 5 CSS -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet" />
 
-    <!-- Bootstrap Icons -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css"
-      rel="stylesheet"
-    />
-
-    <!-- Custom CSS -->
     <style>
       :root {
-        /* Brand color: align Bootstrap variables so utilities like bg-opacity work in dark mode */
         --bs-primary: #0066cc;
         --bs-primary-rgb: 0, 102, 204;
-
         --primary-color: var(--bs-primary);
         --primary-dark: #004499;
-
         --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
       }
 
-      /*
-        Dark-mode compatibility layer.
-        Many templates still use Bootstrap "light" utility classes (bg-white, bg-light, text-dark, text-muted).
-        In BS5.3 dark theme, those can look broken. We remap them to theme variables only when dark.
-      */
-      [data-bs-theme="dark"] .bg-white {
-        background-color: var(--bs-body-bg) !important;
-      }
-
-      [data-bs-theme="dark"] .bg-light {
-        background-color: var(--bs-tertiary-bg) !important;
-      }
-
-      [data-bs-theme="dark"] .text-dark {
-        color: var(--bs-body-color) !important;
-      }
-
-      [data-bs-theme="dark"] .text-muted {
-        color: var(--bs-secondary-color) !important;
-      }
-
-      /*
-        In dark mode, shadows can be subtle and many templates use `border-0`.
-        Add a theme-consistent outline so cards remain visually separated.
-      */
-      [data-bs-theme="dark"] .card.border-0 {
-        border: 1px solid var(--bs-border-color) !important;
-      }
-
-      /* Make cards visually distinct from the page background in dark mode */
-      [data-bs-theme="dark"] .card {
-        background-color: var(--bs-tertiary-bg);
-      }
-
-      /* Consistent card elevation across the site */
-      .card {
-        box-shadow: var(--shadow) !important;
-      }
+      [data-bs-theme="dark"] .bg-white { background-color: var(--bs-body-bg) !important; }
+      [data-bs-theme="dark"] .bg-light { background-color: var(--bs-tertiary-bg) !important; }
+      [data-bs-theme="dark"] .text-dark { color: var(--bs-body-color) !important; }
+      [data-bs-theme="dark"] .text-muted { color: var(--bs-secondary-color) !important; }
+      [data-bs-theme="dark"] .card.border-0 { border: 1px solid var(--bs-border-color) !important; }
+      [data-bs-theme="dark"] .card { background-color: var(--bs-tertiary-bg); }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          "Helvetica Neue", Arial, sans-serif;
-        background-color: var(--bs-body-bg);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         color: var(--bs-body-color);
         line-height: 1.6;
-      }
-
-      .navbar-brand {
-        font-weight: 600;
-        font-size: 1.25rem;
-        color: var(--primary-color) !important;
       }
 
       .navbar {
@@ -104,14 +47,17 @@
         box-shadow: var(--shadow-sm);
       }
 
+      .navbar-brand {
+        font-weight: 600;
+        font-size: 1.25rem;
+        color: var(--primary-color) !important;
+      }
+
       .navbar-nav .nav-link {
         color: var(--bs-body-color) !important;
         font-weight: 500;
-        transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
-          border-color 0.15s ease-in-out;
       }
 
-      /* Make top-level navigation feel like real buttons */
       .navbar-nav .nav-link.nav-btn {
         padding: 0.5rem 0.9rem !important;
         border-radius: 999px;
@@ -119,33 +65,6 @@
         display: inline-flex;
         align-items: center;
         white-space: nowrap;
-      }
-
-      /* Prevent long labels (e.g., org names) from reflowing the navbar */
-      .navbar-user-label {
-        max-width: 240px;
-      }
-
-      @media (min-width: 992px) {
-        .navbar-nav {
-          flex-wrap: nowrap;
-        }
-
-        .navbar-nav .nav-link {
-          white-space: nowrap;
-        }
-      }
-
-      @media (max-width: 991.98px) {
-        /* Make collapsed nav easier to tap and avoid cramped pills */
-        .navbar-nav .nav-link.nav-btn {
-          width: 100%;
-          justify-content: flex-start;
-        }
-
-        .navbar-user-label {
-          max-width: 100%;
-        }
       }
 
       .navbar-nav .nav-link.nav-btn:hover {
@@ -160,67 +79,14 @@
         font-weight: 600;
       }
 
-      .btn-primary {
-        background-color: var(--primary-color);
-        border-color: var(--primary-color);
-        font-weight: 500;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.15s ease-in-out;
-      }
-
-      .btn-primary:hover {
-        background-color: var(--primary-dark);
-        border-color: var(--primary-dark);
-        transform: translateY(-1px);
-        box-shadow: var(--shadow);
-      }
-
-      .btn-outline-primary {
-        color: var(--primary-color);
-        border-color: var(--primary-color);
-        font-weight: 500;
-      }
-
-      .btn-outline-primary:hover {
-        background-color: var(--primary-color);
-        border-color: var(--primary-color);
+      .navbar-user-label {
+        max-width: 240px;
       }
 
       .card {
         border: 1px solid var(--bs-border-color);
-        box-shadow: var(--shadow-sm);
         border-radius: 0.75rem;
-      }
-
-      .card-header {
-        background-color: var(--bs-card-bg);
-        border-bottom: 1px solid var(--bs-border-color);
-        font-weight: 600;
-        color: var(--bs-body-color);
-      }
-
-      .form-control {
-        border: 1px solid var(--bs-border-color);
-        border-radius: 0.5rem;
-        padding: 0.75rem 1rem;
-        font-size: 1rem;
-        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-      }
-
-      .form-control:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
-      }
-
-      .form-label {
-        font-weight: 500;
-        color: var(--bs-body-color);
-        margin-bottom: 0.5rem;
-      }
-
-      .alert {
-        border-radius: 0.5rem;
-        font-weight: 500;
+        box-shadow: var(--shadow-sm);
       }
 
       .footer {
@@ -229,454 +95,45 @@
         color: var(--bs-secondary-color);
         font-size: 0.875rem;
       }
-
-      /* Custom animations */
-      .fade-in {
-        animation: fadeIn 0.5s ease-in;
-      }
-
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      /* Loading states */
-      .btn.loading {
-        position: relative;
-        color: transparent !important;
-      }
-
-      /* Floating add user button */
-      .floating-add-user {
-        position: fixed;
-        bottom: 24px;
-        left: 24px;
-        z-index: 1000;
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        background-color: var(--bs-primary);
-        color: white;
-        border: none;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-size: 24px;
-        animation: floatIn 0.5s ease-out;
-      }
-
-      @keyframes floatIn {
-        from {
-          opacity: 0;
-          transform: translateY(20px) scale(0.8);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
-      }
-
-      .floating-add-user:hover {
-        transform: scale(1.1);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-        background-color: var(--primary-dark);
-      }
-
-      .floating-add-user:active {
-        transform: scale(0.95);
-      }
-
-      [data-bs-theme="dark"] .floating-add-user {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-      }
-
-      /* Smooth modal appearance */
-      .modal.show .modal-dialog {
-        animation: modalSlideIn 0.3s ease-out;
-      }
-
-      @keyframes modalSlideIn {
-        from {
-          opacity: 0;
-          transform: translateY(-50px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      .btn.loading::after {
-        content: "";
-        position: absolute;
-        width: 16px;
-        height: 16px;
-        top: 50%;
-        left: 50%;
-        margin-left: -8px;
-        margin-top: -8px;
-        border: 2px solid transparent;
-        border-top-color: #ffffff;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-
-      /* Responsive adjustments */
-      @media (max-width: 768px) {
-        .container {
-          padding-left: 1rem;
-          padding-right: 1rem;
-        }
-
-        .card {
-          margin: 1rem 0;
-        }
-      }
-
-      /* Cookie Consent Banner */
-      .cookie-consent {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background-color: var(--bs-body-bg);
-        border-top: 2px solid var(--bs-primary);
-        box-shadow: 0 -0.5rem 1.5rem rgba(0, 0, 0, 0.15);
-        z-index: 1050;
-        padding: 1.25rem 0;
-        animation: slideUp 0.4s ease-out;
-      }
-
-      @keyframes slideUp {
-        from {
-          transform: translateY(100%);
-        }
-        to {
-          transform: translateY(0);
-        }
-      }
-
-      .cookie-consent h6 {
-        color: var(--bs-body-color);
-        font-size: 0.95rem;
-      }
-
-      .cookie-consent p {
-        color: var(--bs-secondary-color);
-        line-height: 1.5;
-      }
-
-      .cookie-consent a {
-        color: var(--bs-primary);
-      }
-
-      .cookie-consent a:hover {
-        color: var(--primary-dark);
-      }
-
-      [data-bs-theme="dark"] .cookie-consent {
-        background-color: var(--bs-tertiary-bg);
-        border-top-color: var(--bs-primary);
-      }
-
-      .assistant-fab {
-        position: fixed;
-        right: 24px;
-        bottom: 24px;
-        z-index: 1040;
-        width: 58px;
-        height: 58px;
-        border: none;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #0066cc 0%, #00a3a3 100%);
-        color: #ffffff;
-        box-shadow: 0 10px 24px rgba(0, 102, 204, 0.35);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .assistant-fab:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 12px 28px rgba(0, 102, 204, 0.45);
-      }
-
-      .assistant-messages {
-        height: min(56vh, 460px);
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .assistant-msg {
-        max-width: 88%;
-        border-radius: 14px;
-        padding: 10px 12px;
-        font-size: 0.93rem;
-        white-space: normal;
-        line-height: 1.45;
-      }
-
-      .assistant-msg p {
-        margin: 0 0 0.45rem 0;
-      }
-
-      .assistant-msg p:last-child {
-        margin-bottom: 0;
-      }
-
-      .assistant-msg ul,
-      .assistant-msg ol {
-        margin: 0.15rem 0 0.5rem 1.1rem;
-        padding: 0;
-      }
-
-      .assistant-msg li {
-        margin-bottom: 0.2rem;
-      }
-
-      .assistant-msg.assistant {
-        align-self: flex-start;
-        background: var(--bs-tertiary-bg);
-        border: 1px solid var(--bs-border-color);
-      }
-
-      .assistant-msg.user {
-        align-self: flex-end;
-        background: var(--bs-primary-bg-subtle);
-        border: 1px solid var(--bs-primary-border-subtle);
-      }
-
-      .assistant-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 8px;
-      }
     </style>
 
     {% block extra_css %}{% endblock %}
   </head>
   <body>
-    <!-- Cookie Consent Banner -->
-    <div id="cookieConsent" class="cookie-consent" style="display: none;">
-      <div class="container">
-        <div class="row align-items-center">
-          <div class="col-lg-8 col-md-7 mb-3 mb-md-0">
-            <div class="d-flex align-items-start">
-              <i class="bi bi-cookie fs-4 me-3 text-primary"></i>
-              <div>
-                <h6 class="mb-1 fw-semibold">We use cookies</h6>
-                <p class="mb-0 small">
-                  We use essential cookies to make our site work. With your consent, we may also use non-essential cookies to improve user experience and analyse website traffic. By clicking "Accept All", you agree to our website's cookie use as described in our <a href="{{ url_for('main.privacy') }}" class="link-primary">Privacy Policy</a>.
-                </p>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-4 col-md-5">
-            <div class="d-flex gap-2 justify-content-md-end">
-              <button class="btn btn-sm btn-outline-secondary" id="cookieDecline">
-                <i class="bi bi-x-lg me-1"></i>Decline
-              </button>
-              <button class="btn btn-sm btn-primary" id="cookieAccept">
-                <i class="bi bi-check-lg me-1"></i>Accept All
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Navigation -->
     <nav class="navbar navbar-expand-lg" data-bs-theme="{{ _theme }}">
       <div class="container">
         <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.index') }}" title="Cenaris">
           {% set _brand_logo = 'images/logo_white.png' if _theme == 'dark' else 'images/Logo_NoBackground.png' %}
-          <img
-            src="{{ url_for('static', filename=_brand_logo) }}"
-            alt="Cenaris"
-            style="height: 54px; width: auto;"
-          />
+          <img src="{{ url_for('static', filename=_brand_logo) }}" alt="Cenaris" style="height: 54px; width: auto;" />
           <span class="visually-hidden">Cenaris</span>
         </a>
 
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarNav"
-        >
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
           <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav me-auto gap-1">
+          <ul class="navbar-nav ms-auto gap-1">
             {% if current_user.is_authenticated %}
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
-                href="{{ url_for('main.dashboard') }}"
-              >
-                <i class="bi bi-speedometer2 me-1"></i>Dashboard
-              </a>
+            <li class="nav-item"><a class="nav-link nav-btn {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+            <li class="nav-item"><a class="nav-link nav-btn {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}" href="{{ url_for('main.evidence_repository') }}">Evidence Repository</a></li>
+            <li class="nav-item"><a class="nav-link nav-btn {% if request.endpoint == 'main.compliance_requirements' %}active{% endif %}" href="{{ url_for('main.compliance_requirements') }}">Requirements</a></li>
+            <li class="nav-item"><a class="nav-link nav-btn {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}" href="{{ url_for('main.gap_analysis') }}">Audit Readiness</a></li>
+            <li class="nav-item"><a class="nav-link nav-btn {% if request.endpoint == 'main.ai_demo' %}active{% endif %}" href="{{ url_for('main.ai_demo') }}">AI Review</a></li>
+            <li class="nav-item"><a class="nav-link nav-btn {% if request.endpoint == 'main.policy_studio' %}active{% endif %}" href="{{ url_for('main.policy_studio') }}">Policy Studio</a></li>
+            <li class="nav-item"><a class="nav-link nav-btn {% if request.endpoint == 'main.analytics_dashboard' %}active{% endif %}" href="{{ url_for('main.analytics_dashboard') }}">Analytics</a></li>
+            <li class="nav-item d-flex align-items-center">
+              <form id="themeToggleForm" method="POST" action="{{ url_for('main.set_theme') }}" class="d-inline" data-theme-toggle="1" data-skip-loading="1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="hidden" name="theme" value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}" />
+                <input type="hidden" name="next" value="{{ request.full_path }}" />
+                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Toggle theme" aria-label="Toggle theme">
+                  <i id="themeToggleIcon" class="bi {% if _theme == 'dark' %}bi-sun-fill{% else %}bi-moon-stars-fill{% endif %}"></i>
+                </button>
+              </form>
             </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}"
-                href="{{ url_for('main.evidence_repository') }}"
-              >
-                <i class="bi bi-folder2-open me-1"></i>Evidence Repository
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.compliance_requirements' %}active{% endif %}"
-                href="{{ url_for('main.compliance_requirements') }}"
-              >
-                <i class="bi bi-list-check me-1"></i>Requirements
-              </a>
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
-                href="{{ url_for('main.gap_analysis') }}"
-              >
-                <i class="bi bi-shield-check me-1"></i>Audit Readiness
-              </a>
-            </li>
-            <li class="nav-item">
-              {% if can_use_ai_review %}
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.ai_demo' %}active{% endif %}"
-                href="{{ url_for('main.ai_demo') }}"
-              >
-                <i class="bi bi-stars me-1"></i>AI Review
-              </a>
-              {% else %}
-              <span class="nav-link nav-btn disabled text-body-secondary" title="Requires Scale plan or above">
-                <i class="bi bi-lock me-1"></i>AI Review
-              </span>
-              {% endif %}
-            </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.policy_studio' %}active{% endif %}"
-                href="{{ url_for('main.policy_studio') }}"
-              >
-                <i class="bi bi-file-earmark-text me-1"></i>Policy Studio
-              </a>
-            </li>
-            <li class="nav-item">
-              {% if can_use_analytics %}
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.analytics_dashboard' %}active{% endif %}"
-                href="{{ url_for('main.analytics_dashboard') }}"
-              >
-                <i class="bi bi-bar-chart-line me-1"></i>Analytics
-              </a>
-              {% else %}
-              <span class="nav-link nav-btn disabled text-body-secondary" title="Requires Scale plan or above">
-                <i class="bi bi-lock me-1"></i>Analytics
-              </span>
-              {% endif %}
-            </li>
-            {% endif %}
-          </ul>
-
-          <ul class="navbar-nav gap-1">
-            {% if current_user.is_authenticated %}
-            {% if can_manage_team %}
             <li class="nav-item dropdown">
-              <a
-                class="nav-link nav-btn position-relative"
-                href="#"
-                id="navbarNotificationsDropdown"
-                role="button"
-                data-bs-toggle="dropdown"
-                aria-expanded="false"
-                title="Notifications"
-              >
-                <i class="bi bi-bell"></i>
-                {% if (admin_notifications_unread or 0) > 0 %}
-                <span class="js-admin-unread-count position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" data-unread-count="{{ admin_notifications_unread }}">
-                  {{ admin_notifications_unread }}
-                </span>
-                {% endif %}
-              </a>
-              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarNotificationsDropdown" style="min-width: 320px;">
-                <li class="dropdown-header d-flex justify-content-between align-items-center">
-                  <span>Notifications</span>
-                  <div class="d-flex align-items-center gap-2">
-                    {% if (admin_notifications_unread or 0) > 0 %}
-                    <span class="js-admin-unread-count badge rounded-pill text-bg-danger" data-unread-count="{{ admin_notifications_unread }}">{{ admin_notifications_unread }}</span>
-                    <form method="POST" action="{{ url_for('main.mark_all_notifications_read') }}" class="d-inline js-notification-action-form" data-skip-loading="1" data-action-kind="mark-all">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                      <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2">Mark all read</button>
-                    </form>
-                    {% endif %}
-                  </div>
-                </li>
-                <li><hr class="dropdown-divider" /></li>
-                {% for item in admin_notifications_recent %}
-                <li data-notification-row data-notification-id="{{ item.id }}" data-is-read="{{ '1' if item.is_read else '0' }}">
-                  <div class="dropdown-item py-2">
-                    <div class="d-flex justify-content-between align-items-start gap-2">
-                      <div class="small pe-2">
-                        <div class="fw-semibold">{{ item.title }}</div>
-                        <div class="text-body-secondary text-wrap">{{ item.message[:90] }}{% if item.message|length > 90 %}…{% endif %}</div>
-                      </div>
-                      <div class="d-flex flex-column align-items-end gap-1">
-                        {% if not item.is_read %}
-                        <span class="badge text-bg-primary js-notification-state-badge">New</span>
-                        <form method="POST" action="{{ url_for('main.mark_notification_read', notification_id=item.id) }}" class="d-inline js-notification-action-form" data-skip-loading="1" data-action-kind="mark-one" data-notification-id="{{ item.id }}">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                          <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2">Mark read</button>
-                        </form>
-                        {% else %}
-                        <span class="badge text-bg-secondary js-notification-state-badge">Read</span>
-                        {% endif %}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-                {% else %}
-                <li><span class="dropdown-item-text text-body-secondary small">No notifications yet.</span></li>
-                {% endfor %}
-                <li><hr class="dropdown-divider" /></li>
-                <li>
-                  <a class="dropdown-item text-center fw-semibold" href="{{ url_for('main.notifications') }}">Show more</a>
-                </li>
-              </ul>
-            </li>
-            {% endif %}
-
-            <li class="nav-item dropdown">
-              <a
-                class="nav-link dropdown-toggle"
-                href="#"
-                id="navbarDropdown"
-                role="button"
-                data-bs-toggle="dropdown"
-              >
+              <a class="nav-link dropdown-toggle nav-btn" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
                 {% set _org_name = ((current_user.organization.name if current_user.organization else '') or '') %}
                 {% set _has_org_logo = current_user.organization and current_user.organization.logo_blob_name %}
                 {% if _has_org_logo %}
@@ -684,241 +141,75 @@
                   src="{{ url_for('main.organization_logo', v=(current_user.organization.logo_blob_name or '') ) }}"
                   alt="{{ _org_name }} logo"
                   class="rounded me-2"
-                  style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
+                  style="width: 22px; height: 22px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
                 />
                 {% else %}
-                <i class="bi bi-building text-body-secondary me-2" style="font-size: 20px;"></i>
+                <i class="bi bi-building text-body-secondary me-2" style="font-size: 18px;"></i>
                 {% endif %}
                 <span class="navbar-user-label text-truncate d-inline-block align-middle">
                   {{ _org_name.strip() if _org_name.strip() else current_user.email }}
                 </span>
               </a>
-              <ul class="dropdown-menu">
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.profile') }}">
-                    <i class="bi bi-person me-2"></i>My Profile
-                  </a>
-                </li>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{{ url_for('main.profile') }}"><i class="bi bi-person me-2"></i>My Profile</a></li>
                 {% if active_role_name %}
-                <li>
-                  <div class="dropdown-item-text small text-body-secondary">
-                    Role: <span class="badge bg-primary ms-1" id="activeRoleBadge">{{ active_role_name }}</span>
-                  </div>
-                </li>
+                <li><div class="dropdown-item-text small text-body-secondary">Role: <span class="badge bg-primary ms-1">{{ active_role_name }}</span></div></li>
                 {% endif %}
-
-                {% if user_organizations and (user_organizations|length) > 1 %}
                 <li><hr class="dropdown-divider" /></li>
-                <li class="px-3 py-1 text-body-secondary small">Switch organisation</li>
-                {% for org_info in user_organizations_with_logos %}
+                <li><a class="dropdown-item" href="{{ url_for('main.org_admin_dashboard') }}"><i class="bi bi-people me-2"></i>Team Management</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('main.audit_log') }}"><i class="bi bi-journal-text me-2"></i>Audit Log</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('main.organization_settings') }}"><i class="bi bi-building me-2"></i>Organisation Profile</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('main.system_logs') }}"><i class="bi bi-list-columns-reverse me-2"></i>System Logs</a></li>
+                <li><hr class="dropdown-divider" /></li>
                 <li>
-                  <form method="POST" action="{{ url_for('main.switch_organization') }}" class="d-inline">
+                  <form method="POST" action="{{ url_for('auth.logout') }}" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                    <input type="hidden" name="organization_id" value="{{ org_info.id }}" />
-                    <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
-                      {% if org_info.has_logo %}
-                      <img
-                        src="{{ url_for('main.organization_logo_by_id', org_id=org_info.id, v=(org_info.logo_blob_name or '') ) }}"
-                        alt="{{ org_info.name }} logo"
-                        class="rounded"
-                        style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
-                      />
-                      {% else %}
-                      <i class="bi bi-building text-body-secondary" style="width: 24px; text-align: center;"></i>
-                      {% endif %}
-                      <span class="text-truncate flex-grow-1" style="max-width: 200px;">{{ org_info.name }}</span>
-                      {% if current_user.organization_id == org_info.id %}
-                      <i class="bi bi-check2 ms-auto"></i>
-                      {% endif %}
-                    </button>
-                  </form>
-                </li>
-                {% endfor %}
-                {% endif %}
-
-                {% if can_manage_team or can_manage_org %}
-                <li><hr class="dropdown-divider" /></li>
-                {% endif %}
-
-                {% if can_manage_team %}
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.org_admin_dashboard') }}">
-                    <i class="bi bi-people me-2"></i>Team Management
-                  </a>
-                </li>
-                {% endif %}
-
-                {% if can_manage_org %}
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
-                    <i class="bi bi-building me-2"></i>Organisation Profile
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.system_logs') }}">
-                    <i class="bi bi-list-columns-reverse me-2"></i>System Logs
-                  </a>
-                </li>
-                {% endif %}
-                <li><hr class="dropdown-divider" /></li>
-                <li>
-                  <form
-                    method="POST"
-                    action="{{ url_for('auth.logout') }}"
-                    class="d-inline"
-                  >
-                    <input
-                      type="hidden"
-                      name="csrf_token"
-                      value="{{ csrf_token() }}"
-                    />
-                    <button type="submit" class="dropdown-item">
-                      <i class="bi bi-box-arrow-right me-2"></i>Sign Out
-                    </button>
+                    <button type="submit" class="dropdown-item"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</button>
                   </form>
                 </li>
               </ul>
             </li>
             {% else %}
-            <li class="nav-item">
-              <a class="nav-link nav-btn" href="{{ url_for('auth.login') }}">
-                <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link nav-btn" href="{{ url_for('auth.signup') }}">
-                <i class="bi bi-person-plus me-1"></i>Sign Up
-              </a>
-            </li>
-            {% endif %}
-
+            <li class="nav-item"><a class="nav-link nav-btn" href="{{ url_for('auth.login') }}"><i class="bi bi-box-arrow-in-right me-1"></i>Sign In</a></li>
+            <li class="nav-item"><a class="nav-link nav-btn" href="{{ url_for('auth.signup') }}"><i class="bi bi-person-plus me-1"></i>Sign Up</a></li>
             <li class="nav-item d-flex align-items-center">
-              <form
-                id="themeToggleForm"
-                method="POST"
-                action="{{ url_for('main.set_theme') }}"
-                class="d-inline"
-                data-theme-toggle="1"
-                data-skip-loading="1"
-              >
+              <form id="themeToggleForm" method="POST" action="{{ url_for('main.set_theme') }}" class="d-inline" data-theme-toggle="1" data-skip-loading="1">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <input
-                  type="hidden"
-                  name="theme"
-                  value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}"
-                />
+                <input type="hidden" name="theme" value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}" />
                 <input type="hidden" name="next" value="{{ request.full_path }}" />
-                <button
-                  type="submit"
-                  class="btn btn-sm btn-outline-secondary"
-                  title="Toggle theme"
-                  aria-label="Toggle theme"
-                >
-                  <i
-                    id="themeToggleIcon"
-                    class="bi {% if _theme == 'dark' %}bi-sun-fill{% else %}bi-moon-stars-fill{% endif %}"
-                  ></i>
+                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Toggle theme" aria-label="Toggle theme">
+                  <i id="themeToggleIcon" class="bi {% if _theme == 'dark' %}bi-sun-fill{% else %}bi-moon-stars-fill{% endif %}"></i>
                 </button>
               </form>
             </li>
+            {% endif %}
           </ul>
         </div>
       </div>
     </nav>
 
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %} {% if
-    messages %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
     <div class="container mt-3">
       {% for category, message in messages %}
-      <div
-        class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show"
-        role="alert"
-      >
-        {% if category == 'success' %}
-        <i class="bi bi-check-circle-fill me-2"></i>
-        {% elif category == 'error' %}
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-        {% elif category == 'info' %}
-        <i class="bi bi-info-circle-fill me-2"></i>
-        {% elif category == 'warning' %}
-        <i class="bi bi-exclamation-circle-fill me-2"></i>
-        {% endif %} {{ message }}
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="alert"
-        ></button>
+      <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
       </div>
       {% endfor %}
     </div>
-    {% endif %} {% endwith %}
+    {% endif %}
+    {% endwith %}
 
-    <!-- Main Content -->
     <main class="{% block main_class %}container my-4{% endblock %}">
       {% block content %}{% endblock %}
     </main>
 
-    {% if current_user.is_authenticated and request.endpoint and not request.endpoint.startswith('auth.') and not request.endpoint.startswith('onboarding.') %}
-    <button
-      id="assistantFab"
-      class="assistant-fab"
-      type="button"
-      data-bs-toggle="offcanvas"
-      data-bs-target="#appAssistantPanel"
-      aria-controls="appAssistantPanel"
-      title="Open assistant"
-    >
-      <img src="{{ url_for('static', filename='images/cenaris_compass.svg') }}" alt="Compass" style="width: 30px; height: 30px;" />
-    </button>
-
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="appAssistantPanel" aria-labelledby="appAssistantPanelLabel">
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title d-flex align-items-center gap-2" id="appAssistantPanelLabel">
-          <img src="{{ url_for('static', filename='images/cenaris_compass.svg') }}" alt="Cenaris Compass" style="width: 22px; height: 22px;" />
-          <span>Cenaris Compass</span>
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
-      <div class="offcanvas-body d-flex flex-column gap-3">
-        <div class="small text-body-secondary">
-          Ask product questions or run a safe admin task like marking notifications as read.
-        </div>
-
-        <div id="assistantMessages" class="assistant-messages"></div>
-
-        <div class="d-flex flex-wrap gap-2">
-          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Open requirements workboard">Requirements</button>
-          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="How do I upload evidence?">Upload evidence</button>
-          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Open AI Review">AI review</button>
-          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="What is compliance readiness?">Readiness</button>
-          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="How do I link evidence and why does it help?">Link evidence</button>
-          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Show analytics">Analytics</button>
-          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Mark all notifications as read">Mark notifications read</button>
-          <button class="btn btn-outline-secondary btn-sm assistant-chip" type="button" data-prompt="Open unread notifications">Unread notifications</button>
-        </div>
-
-        <form id="assistantChatForm" class="mt-auto" data-skip-loading="1">
-          <div class="input-group">
-            <input id="assistantInput" type="text" class="form-control" maxlength="800" placeholder="Ask Compass..." autocomplete="off" />
-            <button id="assistantSendBtn" class="btn btn-primary" type="submit">Send</button>
-          </div>
-        </form>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Footer -->
     <footer class="footer mt-5 py-4" style="border-top: 2px solid var(--bs-border-color); background-color: var(--bs-tertiary-bg);">
       <div class="container">
         <div class="row">
           <div class="col-md-6">
-            <p class="mb-0">
-              &copy; {{ current_year }} Cenaris. All rights reserved.
-            </p>
-            <p class="mb-0 small text-body-secondary">
-              Cenaris is a decision-support platform only. Cenaris does not provide auditing, certification, legal, or compliance advice, and does not guarantee compliance, registration, or audit outcomes. Users remain responsible for governance, regulatory compliance, and independent professional advice.
-            </p>
+            <p class="mb-0">&copy; {{ current_year }} Cenaris. All rights reserved.</p>
           </div>
           <div class="col-md-6 text-md-end">
             <p class="mb-1">Secure • Professional • Compliant</p>
@@ -934,603 +225,7 @@
       </div>
     </footer>
 
-    {% if current_user.is_authenticated %}
-      {% set _has_name = ((current_user.full_name or '')|trim) or ((current_user.first_name or '')|trim) or ((current_user.last_name or '')|trim) %}
-      {% if not _has_name %}
-      <div
-        class="modal fade"
-        id="profileNameRequiredModal"
-        tabindex="-1"
-        aria-labelledby="profileNameRequiredModalLabel"
-        aria-hidden="true"
-      >
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title" id="profileNameRequiredModalLabel">Complete your profile</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                Please add your name so your organisation can identify you.
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Later</button>
-              <a class="btn btn-primary" href="{{ url_for('main.profile') }}">Add my name</a>
-            </div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-    {% endif %}
-
-    <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Custom JavaScript -->
-    <script>
-      // Show coming soon alert for placeholder features
-      function showComingSoon(feature) {
-        alert(
-          `${feature} functionality is coming soon! This feature will be available in a future update.`
-        );
-      }
-
-      // Auto-dismiss alerts after 5 seconds
-      document.addEventListener("DOMContentLoaded", function () {
-        const alerts = document.querySelectorAll(
-          ".alert:not(.alert-permanent)"
-        );
-        alerts.forEach(function (alert) {
-          setTimeout(function () {
-            const bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
-          }, 5000);
-        });
-      });
-
-      // Form submission loading states
-      document.addEventListener("DOMContentLoaded", function () {
-        const forms = document.querySelectorAll("form");
-        forms.forEach(function (form) {
-          form.addEventListener("submit", function () {
-            if ((form.dataset && form.dataset.skipLoading) || form.getAttribute('data-skip-loading')) {
-              return;
-            }
-            const submitBtn = form.querySelector('button[type="submit"]');
-            if (submitBtn) {
-              submitBtn.classList.add("loading");
-              submitBtn.disabled = true;
-            }
-          });
-        });
-      });
-
-      // Theme toggle (client-side): avoids full page reload so users don't lose typed input.
-      document.addEventListener("DOMContentLoaded", function () {
-        const form = document.getElementById('themeToggleForm');
-        if (!form) return;
-
-        const themeInput = form.querySelector('input[name="theme"]');
-        const icon = document.getElementById('themeToggleIcon');
-
-        function applyTheme(theme) {
-          const t = (theme === 'dark') ? 'dark' : 'light';
-          document.documentElement.setAttribute('data-bs-theme', t);
-
-          // Some components (like the navbar) set their own data-bs-theme.
-          document.querySelectorAll('[data-bs-theme]').forEach((el) => {
-            if (el.tagName && el.tagName.toLowerCase() === 'nav') {
-              el.setAttribute('data-bs-theme', t);
-            }
-          });
-
-          if (icon) {
-            icon.classList.remove('bi-sun-fill', 'bi-moon-stars-fill');
-            icon.classList.add(t === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars-fill');
-          }
-
-          try {
-            const meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute('content', t === 'dark' ? '#0b0f19' : '#ffffff');
-          } catch (e) {
-            // Ignore
-          }
-        }
-
-        function setThemeCookie(theme) {
-          const t = (theme === 'dark') ? 'dark' : 'light';
-          const maxAge = 60 * 60 * 24 * 365; // 1 year
-          const secure = (window.location && window.location.protocol === 'https:') ? '; Secure' : '';
-          document.cookie = `theme=${t}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
-        }
-
-        form.addEventListener('submit', function (e) {
-          // If JS is available, toggle immediately without reload.
-          e.preventDefault();
-          const nextTheme = (themeInput && themeInput.value) ? themeInput.value : 'light';
-          applyTheme(nextTheme);
-          setThemeCookie(nextTheme);
-
-          if (themeInput) {
-            themeInput.value = (nextTheme === 'dark') ? 'light' : 'dark';
-          }
-        });
-      });
-
-      // On validation errors, bring the first error into view.
-      document.addEventListener("DOMContentLoaded", function () {
-        // Prefer any visible field-level invalid feedback blocks.
-        const feedback = document.querySelector(
-          ".invalid-feedback.d-block, .text-danger:has(i.bi-exclamation-circle)"
-        );
-
-        if (!feedback) return;
-
-        const field = feedback
-          .closest(".mb-3, .mb-4, .mb-5, .form-group")
-          ?.querySelector("input, select, textarea");
-
-        const target = field || feedback;
-        try {
-          target.scrollIntoView({ behavior: "smooth", block: "center" });
-        } catch (e) {
-          target.scrollIntoView(true);
-        }
-
-        if (field) {
-          try {
-            field.focus({ preventScroll: true });
-          } catch (e) {
-            field.focus();
-          }
-        }
-      });
-
-      // Cookie Consent Banner Logic
-      document.addEventListener("DOMContentLoaded", function () {
-        const cookieConsent = document.getElementById("cookieConsent");
-        const cookieAccept = document.getElementById("cookieAccept");
-        const cookieDecline = document.getElementById("cookieDecline");
-
-        // Check if user has already made a choice
-        const cookieChoice = localStorage.getItem("cookieConsent");
-
-        if (!cookieChoice) {
-          // Show banner if no choice made yet
-          cookieConsent.style.display = "block";
-        }
-
-        // Accept cookies
-        cookieAccept.addEventListener("click", function () {
-          localStorage.setItem("cookieConsent", "accepted");
-          cookieConsent.style.display = "none";
-          // Optional: Enable analytics or other non-essential cookies here
-          console.log("Cookies accepted");
-        });
-
-        // Decline cookies
-        cookieDecline.addEventListener("click", function () {
-          localStorage.setItem("cookieConsent", "declined");
-          cookieConsent.style.display = "none";
-          // Optional: Disable non-essential cookies here
-          console.log("Cookies declined");
-        });
-      });
-
-      // App assistant widget (lightweight Q&A + safe actions).
-      document.addEventListener("DOMContentLoaded", function () {
-        const panel = document.getElementById("appAssistantPanel");
-        const form = document.getElementById("assistantChatForm");
-        const input = document.getElementById("assistantInput");
-        const sendBtn = document.getElementById("assistantSendBtn");
-        const messages = document.getElementById("assistantMessages");
-        const chips = document.querySelectorAll(".assistant-chip");
-        const csrfToken = "{{ csrf_token() }}";
-        const assistantUserName = {{ ((current_user.first_name or current_user.full_name or current_user.email or '')|trim)|tojson }};
-        let busy = false;
-
-        if (!panel || !form || !input || !sendBtn || !messages) {
-          return;
-        }
-
-        const scrollToBottom = () => {
-          messages.scrollTop = messages.scrollHeight;
-        };
-
-        const setBusy = (nextBusy) => {
-          busy = !!nextBusy;
-          sendBtn.disabled = busy;
-          input.disabled = busy;
-          if (busy) {
-            sendBtn.classList.add("loading");
-          } else {
-            sendBtn.classList.remove("loading");
-          }
-        };
-
-        const appendInlineFormatting = (target, text) => {
-          const value = String(text || "");
-          if (!value) return;
-
-          // Minimal, safe inline markdown support for bold segments: **text**
-          const segments = value.split(/(\*\*[^*]+\*\*)/g);
-          segments.forEach((segment) => {
-            if (!segment) return;
-            if (segment.startsWith("**") && segment.endsWith("**") && segment.length > 4) {
-              const strong = document.createElement("strong");
-              strong.textContent = segment.slice(2, -2);
-              target.appendChild(strong);
-              return;
-            }
-            target.appendChild(document.createTextNode(segment));
-          });
-        };
-
-        const renderAssistantText = (container, text) => {
-          const value = String(text || "").replace(/\r\n/g, "\n").trim();
-          if (!value) {
-            container.textContent = "";
-            return;
-          }
-
-          const lines = value.split("\n");
-          let activeList = null;
-          let activeListType = "";
-
-          const flushList = () => {
-            activeList = null;
-            activeListType = "";
-          };
-
-          lines.forEach((line) => {
-            const trimmed = (line || "").trim();
-            if (!trimmed) {
-              flushList();
-              return;
-            }
-
-            const orderedMatch = trimmed.match(/^(\d+)[\.)]\s+(.+)$/);
-            const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
-
-            if (orderedMatch) {
-              if (!activeList || activeListType !== "ol") {
-                activeList = document.createElement("ol");
-                activeListType = "ol";
-                container.appendChild(activeList);
-              }
-              const li = document.createElement("li");
-              appendInlineFormatting(li, orderedMatch[2]);
-              activeList.appendChild(li);
-              return;
-            }
-
-            if (bulletMatch) {
-              if (!activeList || activeListType !== "ul") {
-                activeList = document.createElement("ul");
-                activeListType = "ul";
-                container.appendChild(activeList);
-              }
-              const li = document.createElement("li");
-              appendInlineFormatting(li, bulletMatch[1]);
-              activeList.appendChild(li);
-              return;
-            }
-
-            flushList();
-            const p = document.createElement("p");
-            appendInlineFormatting(p, trimmed);
-            container.appendChild(p);
-          });
-        };
-
-        const addMessage = (role, text, actions) => {
-          const item = document.createElement("div");
-          item.className = `assistant-msg ${role === "user" ? "user" : "assistant"}`;
-          if (role === "assistant") {
-            renderAssistantText(item, text || "");
-          } else {
-            item.textContent = text || "";
-          }
-          messages.appendChild(item);
-
-          if (actions && actions.length > 0) {
-            const actionsWrap = document.createElement("div");
-            actionsWrap.className = "assistant-actions";
-
-            actions.forEach((action) => {
-              const btn = document.createElement("button");
-              btn.type = "button";
-              btn.className = "btn btn-sm btn-outline-primary";
-              btn.textContent = action.label || "Action";
-
-              btn.addEventListener("click", async () => {
-                if (busy) return;
-                if ((action.kind || "") === "navigate" && action.url) {
-                  window.location.href = action.url;
-                  return;
-                }
-                if ((action.kind || "") === "execute" && action.id) {
-                  const promptText = action.confirm || "Run this action now?";
-                  if (!window.confirm(promptText)) {
-                    return;
-                  }
-                  await sendToAssistant("", { execute: true, action_id: action.id });
-                }
-              });
-
-              actionsWrap.appendChild(btn);
-            });
-
-            messages.appendChild(actionsWrap);
-          }
-
-          scrollToBottom();
-        };
-
-        const sendToAssistant = async (message, extraPayload) => {
-          const trimmed = (message || "").trim();
-          const payload = Object.assign({ message: trimmed }, extraPayload || {});
-          if (!payload.execute && !trimmed) {
-            return;
-          }
-
-          if (trimmed) {
-            addMessage("user", trimmed);
-          }
-
-          setBusy(true);
-          try {
-            const response = await fetch("{{ url_for('main.assistant_chat_api') }}", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": csrfToken,
-              },
-              body: JSON.stringify(payload),
-            });
-
-            let data = null;
-            try {
-              data = await response.json();
-            } catch (_e) {
-              data = null;
-            }
-
-            if (!response.ok || !data || !data.success) {
-              const err = (data && data.error) || "Assistant is temporarily unavailable.";
-              addMessage("assistant", err);
-              return;
-            }
-
-            addMessage("assistant", data.reply || "", data.actions || []);
-          } catch (_err) {
-            addMessage("assistant", "Could not reach assistant. Please retry.");
-          } finally {
-            setBusy(false);
-            input.focus();
-          }
-        };
-
-        const firstName = String(assistantUserName || "").trim().split(/\s+/)[0] || "";
-        const hour = new Date().getHours();
-        const timeGreeting = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good evening");
-        const personalizedGreeting = `${timeGreeting}${firstName ? `, ${firstName}` : ""}. I am Cenaris Compass.`;
-
-        addMessage(
-          "assistant",
-          `${personalizedGreeting}\nI can answer Cenaris questions in detail and guide you step by step.\nTry asking: "How does Policy Studio work end-to-end?"`,
-          [
-            { kind: "navigate", label: "Open Dashboard", url: "{{ url_for('main.dashboard') }}" },
-            { kind: "navigate", label: "Open AI Review", url: "{{ url_for('main.ai_demo') }}" }
-          ]
-        );
-
-        form.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          if (busy) return;
-          const text = (input.value || "").trim();
-          if (!text) return;
-          input.value = "";
-          await sendToAssistant(text);
-        });
-
-        chips.forEach((chip) => {
-          chip.addEventListener("click", async () => {
-            if (busy) return;
-            const prompt = (chip.getAttribute("data-prompt") || "").trim();
-            if (!prompt) return;
-            input.value = "";
-            await sendToAssistant(prompt);
-          });
-        });
-      });
-
-      // Prompt for missing profile name (once per browser session)
-      document.addEventListener("DOMContentLoaded", function () {
-        const modalEl = document.getElementById("profileNameRequiredModal");
-        if (!modalEl || typeof bootstrap === 'undefined') return;
-
-        try {
-          const key = "cenaris_name_prompt_shown";
-          if (window.sessionStorage.getItem(key) === '1') return;
-          window.sessionStorage.setItem(key, '1');
-        } catch (e) {
-          // If sessionStorage is unavailable, just show it.
-        }
-
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
-      });
-
-      // Notification popup quick actions (mark one/all as read) without leaving current page.
-      document.addEventListener("DOMContentLoaded", function () {
-        const actionForms = Array.from(document.querySelectorAll("form.js-notification-action-form"));
-        if (!actionForms.length) return;
-
-        const unreadBadges = () => Array.from(document.querySelectorAll('.js-admin-unread-count'));
-        const readRows = () => Array.from(document.querySelectorAll('[data-notification-row]'));
-
-        const getUnreadCount = () => {
-          const fromRow = readRows().filter((row) => row.getAttribute('data-is-read') === '0').length;
-          if (fromRow >= 0) return fromRow;
-          const badge = unreadBadges()[0];
-          return Number((badge && badge.getAttribute('data-unread-count')) || 0) || 0;
-        };
-
-        const setUnreadCount = (count) => {
-          const safe = Math.max(0, Number(count) || 0);
-          unreadBadges().forEach((badge) => {
-            badge.setAttribute('data-unread-count', String(safe));
-            badge.textContent = String(safe);
-            badge.classList.toggle('d-none', safe === 0);
-          });
-        };
-
-        const markRowRead = (row) => {
-          if (!row) return;
-          row.setAttribute('data-is-read', '1');
-          const badge = row.querySelector('.js-notification-state-badge');
-          if (badge) {
-            badge.className = 'badge text-bg-secondary js-notification-state-badge';
-            badge.textContent = 'Read';
-          }
-          const form = row.querySelector('form.js-notification-action-form[data-action-kind="mark-one"]');
-          if (form) {
-            form.remove();
-          }
-        };
-
-        const postForm = async (form) => {
-          const response = await fetch(form.action, {
-            method: 'POST',
-            body: new FormData(form),
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest',
-            },
-          });
-          return response.ok;
-        };
-
-        actionForms.forEach((form) => {
-          form.addEventListener('submit', async function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-
-            const submitBtn = form.querySelector('button[type="submit"]');
-            if (submitBtn) submitBtn.disabled = true;
-
-            const actionKind = (form.getAttribute('data-action-kind') || '').trim();
-            const ok = await postForm(form).catch(() => false);
-            if (!ok) {
-              if (submitBtn) submitBtn.disabled = false;
-              return;
-            }
-
-            if (actionKind === 'mark-one') {
-              const row = form.closest('[data-notification-row]');
-              markRowRead(row);
-              setUnreadCount(getUnreadCount());
-              return;
-            }
-
-            if (actionKind === 'mark-all') {
-              readRows().forEach((row) => markRowRead(row));
-              setUnreadCount(0);
-              form.classList.add('d-none');
-            }
-          });
-        });
-      });
-    </script>
-
     {% block extra_js %}{% endblock %}
-
-    <!-- Floating Add User Button (only for org admins, exclude auth/onboarding pages) -->
-    {% if current_user.is_authenticated and can_invite_member and request.endpoint and not request.endpoint.startswith('auth.') and not request.endpoint.startswith('onboarding.') %}
-    <button 
-      class="floating-add-user" 
-      data-bs-toggle="modal" 
-      data-bs-target="#inviteUserModal"
-      title="Invite team member"
-      aria-label="Invite team member"
-    >
-      <i class="bi bi-person-plus-fill"></i>
-    </button>
-
-    <!-- Invite User Modal -->
-    <div class="modal fade" id="inviteUserModal" tabindex="-1" aria-labelledby="inviteUserModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="inviteUserModalLabel">
-              <i class="bi bi-person-plus me-2"></i>Invite Team Member
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <form method="POST" action="{{ url_for('main.org_admin_invite_member') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <div class="modal-body">
-              <div class="mb-3">
-                <label for="inviteEmail" class="form-label">Email Address</label>
-                <input 
-                  type="email" 
-                  class="form-control" 
-                  id="inviteEmail" 
-                  name="email" 
-                  placeholder="colleague@example.com"
-                  required
-                />
-                <div class="form-text">
-                  An invitation email will be sent to this address.
-                </div>
-              </div>
-              
-              <div class="mb-3">
-                <label for="inviteRole" class="form-label">Role</label>
-                <select class="form-select" id="inviteRole" name="role" required style="max-height: 200px; overflow-y: auto;">
-                  {% for r in available_roles %}
-                    <option value="{{ r.id if r.id is defined else r['id'] }}">{{ r.name if r.name is defined else r['name'] }}</option>
-                  {% endfor %}
-                </select>
-                <div class="form-text">
-                  Choose the user's access level for this organisation.
-                </div>
-              </div>
-
-              <div class="mb-3">
-                <label for="inviteDepartment" class="form-label">Department</label>
-                <div class="input-group">
-                  <select class="form-select" id="inviteDepartment" name="department_id" required>
-                    <option value="">Select department</option>
-                    {% if user_departments %}
-                      {% for dept in user_departments %}
-                        <option value="{{ dept.id }}">{{ dept.name }}</option>
-                      {% endfor %}
-                    {% endif %}
-                  </select>
-                  <a 
-                    href="{{ url_for('main.org_admin_dashboard') }}" 
-                    class="btn btn-outline-secondary" 
-                    title="Manage departments"
-                  >
-                    <i class="bi bi-gear"></i>
-                  </a>
-                </div>
-                <div class="form-text">
-                  Need to create a department? Click the gear icon to go to Team Management.
-                </div>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-primary">
-                <i class="bi bi-send me-2"></i>Send Invitation
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-    {% endif %}
   </body>
 </html>

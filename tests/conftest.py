@@ -1,19 +1,22 @@
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 
+os.environ.setdefault("FLASK_CONFIG", "testing")
+os.environ.setdefault(
+    "TEST_DATABASE_URL",
+    f"sqlite:///{(Path(__file__).resolve().parents[1] / 'instance' / 'test_pytest.sqlite').as_posix()}",
+)
+
+
 @pytest.fixture()
-def app(tmp_path):
-    # Configure a per-test SQLite DB file so state persists across requests.
-    db_path = tmp_path / "test_app.sqlite"
-    db_uri = f"sqlite:///{db_path.as_posix()}"
-
-    os.environ["TEST_DATABASE_URL"] = db_uri
-    os.environ["FLASK_CONFIG"] = "testing"
-
+def app():
     from app import create_app, db
+
+    db_uri = os.environ["TEST_DATABASE_URL"]
 
     flask_app = create_app("testing")
     flask_app.config.update(
