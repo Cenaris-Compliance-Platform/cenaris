@@ -19,10 +19,10 @@ Action: Decide mapping or add a 5th plan.
 - Basic Dashboard: Implemented (no tier gating)
 - Limited Policy Studio: Partial (no limits enforced)
 - Limited Mapping: Partial (manual only)
-- One User: Implemented (Starter user limit enforced on invites)
-- No exports: Not implemented
-- No reminders: Partial (manual reminders added on requirements)
-- No registers: Partial (audit log added; coverage is still limited)
+ - One User: Implemented (Starter user limit enforced on invites)
+ - No exports: Not implemented
+ - Manual Reminders: Implemented (manual reminders available on requirement detail pages)
+ - Audit / Change Log: Implemented (audit log available to org admins)
 - Limit policy generation: Not implemented
 
 ## Tier 1

@@ -515,6 +515,7 @@
             src="{{ url_for('static', filename=_brand_logo) }}"
             alt="Cenaris"
             style="height: 54px; width: auto;"
+            onerror="this.onerror=null;this.src='{{ url_for('static', filename='images/Logo_BG.png') }}'"
           />
           <span class="visually-hidden">Cenaris</span>
         </a>
@@ -531,6 +532,17 @@
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav me-auto gap-1">
             {% if current_user.is_authenticated %}
+            {% if can_manage_org %}
+            <li class="nav-item">
+              <a
+                class="nav-link nav-btn {% if request.endpoint == 'main.audit_log' %}active{% endif %}"
+                href="{{ url_for('main.audit_log') }}"
+                title="Audit Log"
+              >
+                <i class="bi bi-journal-text me-1"></i>Audit Log
+              </a>
+            </li>
+            {% endif %}
             <li class="nav-item">
               <a
                 class="nav-link nav-btn {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
@@ -683,11 +695,12 @@
                 <img
                   src="{{ url_for('main.organization_logo', v=(current_user.organization.logo_blob_name or '') ) }}"
                   alt="{{ _org_name }} logo"
-                  class="rounded me-2"
+                  class="rounded me-2 org-logo-img"
                   style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
+                  onerror="this.onerror=null;this.src='{{ url_for('static', filename='images/Logo_NoBackground.png') }}'"
                 />
                 {% else %}
-                <i class="bi bi-building text-body-secondary me-2" style="font-size: 20px;"></i>
+                <i class="bi bi-building text-body-secondary me-2 org-logo-fallback" style="font-size: 20px;"></i>
                 {% endif %}
                 <span class="navbar-user-label text-truncate d-inline-block align-middle">
                   {{ _org_name.strip() if _org_name.strip() else current_user.email }}
@@ -757,6 +770,11 @@
                 <li>
                   <a class="dropdown-item" href="{{ url_for('main.system_logs') }}">
                     <i class="bi bi-list-columns-reverse me-2"></i>System Logs
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('main.audit_log') }}">
+                    <i class="bi bi-journal-text me-2"></i>Audit Log
                   </a>
                 </li>
                 {% endif %}
