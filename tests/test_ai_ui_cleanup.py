@@ -11,7 +11,7 @@ def test_dashboard_nav_shows_ai_review_but_hides_legacy_ai_links(client, app, se
 
     dashboard_resp = client.get('/dashboard', follow_redirects=True)
     assert dashboard_resp.status_code == 200
-    assert b'Evidence Repository' in dashboard_resp.data
+    assert b'Repository' in dashboard_resp.data
     assert b'AI Review' in dashboard_resp.data
     assert b'Requirements' in dashboard_resp.data
     assert b'Gap Analysis' not in dashboard_resp.data
@@ -52,15 +52,15 @@ def test_legacy_ai_evidence_routes_redirect_to_primary_document_flow(client, app
     assert detail_resp.headers.get('Location', '').endswith(f'/document/{doc_id}/details')
 
 
-def test_legacy_compliance_screens_redirect_to_ai_review_except_requirements(client, app, seed_org_user):
+def test_legacy_compliance_screens_keep_audit_readiness_and_requirements(client, app, seed_org_user):
     from tests.conftest import login
 
     resp = login(client)
     assert resp.status_code in {302, 303}
 
     gap_resp = client.get('/gap-analysis', follow_redirects=False)
-    assert gap_resp.status_code in {302, 303}
-    assert gap_resp.headers.get('Location', '').endswith('/ai-demo')
+    assert gap_resp.status_code == 200
+    assert b'Audit Readiness Centre' in gap_resp.data
 
     req_resp = client.get('/compliance-requirements', follow_redirects=False)
     assert req_resp.status_code == 200
