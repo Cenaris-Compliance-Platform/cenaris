@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.models import User, Organization, OrganizationMembership, LoginEvent, SuspiciousIP
 from app import db, oauth, mail, limiter
 from app.services.logging_service import log_security_event
+from app.services.billing_service import billing_service
 from app.services.microsoft_oauth2_email import create_oauth2_email_service
 
 
@@ -38,6 +39,36 @@ def _password_reset_token_ttl_seconds() -> int:
 def _org_invite_token_ttl_seconds() -> int:
     # Default 24 hours so invited users have time to accept.
     return max(60, _safe_int_env('ORG_INVITE_TOKEN_TTL_SECONDS', 60 * 60 * 24))
+
+
+def _plan_user_limit(plan_code: str) -> int | None:
+    limit_map = {
+        'starter': _safe_int_env('STARTER_USER_LIMIT', 1),
+    }
+    limit = limit_map.get((plan_code or '').strip().lower())
+    if limit is None:
+        return None
+    return max(1, int(limit))
+
+
+def _org_can_add_member(org_id: int) -> tuple[bool, str | None]:
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        return False, 'Organization not found.'
+
+    plan_code = billing_service.normalize_plan_code(organization.billing_plan_code or organization.subscription_tier)
+    user_limit = _plan_user_limit(plan_code)
+    if user_limit is None:
+        return True, None
+
+    active_count = (
+        OrganizationMembership.query
+        .filter_by(organization_id=int(org_id), is_active=True)
+        .count()
+    )
+    if int(active_count) >= int(user_limit):
+        return False, f'This plan allows up to {int(user_limit)} active user(s).'
+    return True, None
 
 _LOGIN_LOCKOUT_THRESHOLD = 5
 _LOGIN_LOCKOUT_SECONDS = 60 * 15
@@ -877,6 +908,10 @@ def reset_password(token):
                         .all()
                     )
                     for m in pending_memberships:
+                        ok, reason = _org_can_add_member(int(m.organization_id))
+                        if not ok:
+                            flash(reason or 'This plan cannot add more users.', 'warning')
+                            continue
                         m.invite_accepted_at = now
                         m.is_active = True  # Activate membership when user accepts invite
                 except Exception:
@@ -1339,6 +1374,10 @@ def oauth_callback(provider):
             .all()
         )
         for m in pending_memberships:
+            ok, reason = _org_can_add_member(int(m.organization_id))
+            if not ok:
+                flash(reason or 'This plan cannot add more users.', 'warning')
+                continue
             m.invite_accepted_at = now
             m.is_active = True  # Activate membership when OAuth user accepts invite
 

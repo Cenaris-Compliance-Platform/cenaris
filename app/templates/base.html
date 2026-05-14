@@ -515,16 +515,12 @@
             src="{{ url_for('static', filename=_brand_logo) }}"
             alt="Cenaris"
             style="height: 54px; width: auto;"
+            onerror="this.onerror=null;this.src='{{ url_for('static', filename='images/Logo_BG.png') }}'"
           />
           <span class="visually-hidden">Cenaris</span>
         </a>
 
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarNav"
-        >
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
           <span class="navbar-toggler-icon"></span>
         </button>
 
@@ -532,43 +528,23 @@
           <ul class="navbar-nav me-auto gap-1">
             {% if current_user.is_authenticated %}
             <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
-                href="{{ url_for('main.dashboard') }}"
-              >
+              <a class="nav-link nav-btn {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="{{ url_for('main.dashboard') }}">
                 <i class="bi bi-speedometer2 me-1"></i>Dashboard
               </a>
             </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}"
-                href="{{ url_for('main.evidence_repository') }}"
-              >
-                <i class="bi bi-folder2-open me-1"></i>Evidence Repository
+            <li class="nav-item d-none d-lg-block">
+              <a class="nav-link nav-btn {% if request.endpoint == 'main.evidence_repository' %}active{% endif %}" href="{{ url_for('main.evidence_repository') }}">
+                <i class="bi bi-folder2-open me-1"></i>Repository
               </a>
             </li>
-            <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.compliance_requirements' %}active{% endif %}"
-                href="{{ url_for('main.compliance_requirements') }}"
-              >
+            <li class="nav-item d-none d-lg-block">
+              <a class="nav-link nav-btn {% if request.endpoint == 'main.compliance_requirements' %}active{% endif %}" href="{{ url_for('main.compliance_requirements') }}">
                 <i class="bi bi-list-check me-1"></i>Requirements
               </a>
             </li>
             <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}"
-                href="{{ url_for('main.gap_analysis') }}"
-              >
-                <i class="bi bi-shield-check me-1"></i>Audit Readiness
-              </a>
-            </li>
-            <li class="nav-item">
               {% if can_use_ai_review %}
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.ai_demo' %}active{% endif %}"
-                href="{{ url_for('main.ai_demo') }}"
-              >
+              <a class="nav-link nav-btn {% if request.endpoint == 'main.ai_demo' %}active{% endif %}" href="{{ url_for('main.ai_demo') }}">
                 <i class="bi bi-stars me-1"></i>AI Review
               </a>
               {% else %}
@@ -578,26 +554,20 @@
               {% endif %}
             </li>
             <li class="nav-item">
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.policy_studio' %}active{% endif %}"
-                href="{{ url_for('main.policy_studio') }}"
-              >
+              <a class="nav-link nav-btn {% if request.endpoint == 'main.policy_studio' %}active{% endif %}" href="{{ url_for('main.policy_studio') }}">
                 <i class="bi bi-file-earmark-text me-1"></i>Policy Studio
               </a>
             </li>
-            <li class="nav-item">
-              {% if can_use_analytics %}
-              <a
-                class="nav-link nav-btn {% if request.endpoint == 'main.analytics_dashboard' %}active{% endif %}"
-                href="{{ url_for('main.analytics_dashboard') }}"
-              >
-                <i class="bi bi-bar-chart-line me-1"></i>Analytics
+            <li class="nav-item dropdown">
+              {% set more_active = request.endpoint in ['main.gap_analysis','main.analytics_dashboard','main.audit_log'] %}
+              <a class="nav-link nav-btn dropdown-toggle {% if more_active %}active{% endif %}" href="#" id="navbarMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-grid-3x3-gap me-1"></i>More
               </a>
-              {% else %}
-              <span class="nav-link nav-btn disabled text-body-secondary" title="Requires Scale plan or above">
-                <i class="bi bi-lock me-1"></i>Analytics
-              </span>
-              {% endif %}
+              <ul class="dropdown-menu" aria-labelledby="navbarMoreDropdown">
+                <li><a class="dropdown-item {% if request.endpoint == 'main.gap_analysis' %}active{% endif %}" href="{{ url_for('main.gap_analysis') }}"><i class="bi bi-shield-check me-2"></i>Audit Readiness</a></li>
+                <li>{% if can_use_analytics %}<a class="dropdown-item {% if request.endpoint == 'main.analytics_dashboard' %}active{% endif %}" href="{{ url_for('main.analytics_dashboard') }}"><i class="bi bi-bar-chart-line me-2"></i>Analytics</a>{% else %}<span class="dropdown-item disabled text-body-secondary" title="Requires Scale plan or above"><i class="bi bi-lock me-2"></i>Analytics</span>{% endif %}</li>
+                {% if can_manage_org %}<li><hr class="dropdown-divider" /></li><li><a class="dropdown-item {% if request.endpoint == 'main.audit_log' %}active{% endif %}" href="{{ url_for('main.audit_log') }}"><i class="bi bi-journal-text me-2"></i>Audit Log</a></li>{% endif %}
+              </ul>
             </li>
             {% endif %}
           </ul>
@@ -606,20 +576,10 @@
             {% if current_user.is_authenticated %}
             {% if can_manage_team %}
             <li class="nav-item dropdown">
-              <a
-                class="nav-link nav-btn position-relative"
-                href="#"
-                id="navbarNotificationsDropdown"
-                role="button"
-                data-bs-toggle="dropdown"
-                aria-expanded="false"
-                title="Notifications"
-              >
+              <a class="nav-link nav-btn position-relative" href="#" id="navbarNotificationsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
                 <i class="bi bi-bell"></i>
                 {% if (admin_notifications_unread or 0) > 0 %}
-                <span class="js-admin-unread-count position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" data-unread-count="{{ admin_notifications_unread }}">
-                  {{ admin_notifications_unread }}
-                </span>
+                <span class="js-admin-unread-count position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger" data-unread-count="{{ admin_notifications_unread }}">{{ admin_notifications_unread }}</span>
                 {% endif %}
               </a>
               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarNotificationsDropdown" style="min-width: 320px;">
@@ -662,51 +622,27 @@
                 <li><span class="dropdown-item-text text-body-secondary small">No notifications yet.</span></li>
                 {% endfor %}
                 <li><hr class="dropdown-divider" /></li>
-                <li>
-                  <a class="dropdown-item text-center fw-semibold" href="{{ url_for('main.notifications') }}">Show more</a>
-                </li>
+                <li><a class="dropdown-item text-center fw-semibold" href="{{ url_for('main.notifications') }}">Show more</a></li>
               </ul>
             </li>
             {% endif %}
 
             <li class="nav-item dropdown">
-              <a
-                class="nav-link dropdown-toggle"
-                href="#"
-                id="navbarDropdown"
-                role="button"
-                data-bs-toggle="dropdown"
-              >
+              <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
                 {% set _org_name = ((current_user.organization.name if current_user.organization else '') or '') %}
                 {% set _has_org_logo = current_user.organization and current_user.organization.logo_blob_name %}
                 {% if _has_org_logo %}
-                <img
-                  src="{{ url_for('main.organization_logo', v=(current_user.organization.logo_blob_name or '') ) }}"
-                  alt="{{ _org_name }} logo"
-                  class="rounded me-2"
-                  style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
-                />
+                <img src="{{ url_for('main.organization_logo', v=(current_user.organization.logo_blob_name or '') ) }}" alt="{{ _org_name }} logo" class="rounded me-2 org-logo-img" style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;" onerror="this.onerror=null;this.src='{{ url_for('static', filename='images/Logo_NoBackground.png') }}'" />
                 {% else %}
-                <i class="bi bi-building text-body-secondary me-2" style="font-size: 20px;"></i>
+                <i class="bi bi-building text-body-secondary me-2 org-logo-fallback" style="font-size: 20px;"></i>
                 {% endif %}
-                <span class="navbar-user-label text-truncate d-inline-block align-middle">
-                  {{ _org_name.strip() if _org_name.strip() else current_user.email }}
-                </span>
+                <span class="navbar-user-label text-truncate d-inline-block align-middle">{{ _org_name.strip() if _org_name.strip() else current_user.email }}</span>
               </a>
               <ul class="dropdown-menu">
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.profile') }}">
-                    <i class="bi bi-person me-2"></i>My Profile
-                  </a>
-                </li>
+                <li><a class="dropdown-item" href="{{ url_for('main.profile') }}"><i class="bi bi-person me-2"></i>My Profile</a></li>
                 {% if active_role_name %}
-                <li>
-                  <div class="dropdown-item-text small text-body-secondary">
-                    Role: <span class="badge bg-primary ms-1" id="activeRoleBadge">{{ active_role_name }}</span>
-                  </div>
-                </li>
+                <li><div class="dropdown-item-text small text-body-secondary">Role: <span class="badge bg-primary ms-1" id="activeRoleBadge">{{ active_role_name }}</span></div></li>
                 {% endif %}
-
                 {% if user_organizations and (user_organizations|length) > 1 %}
                 <li><hr class="dropdown-divider" /></li>
                 <li class="px-3 py-1 text-body-secondary small">Switch organisation</li>
@@ -717,12 +653,7 @@
                     <input type="hidden" name="organization_id" value="{{ org_info.id }}" />
                     <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
                       {% if org_info.has_logo %}
-                      <img
-                        src="{{ url_for('main.organization_logo_by_id', org_id=org_info.id, v=(org_info.logo_blob_name or '') ) }}"
-                        alt="{{ org_info.name }} logo"
-                        class="rounded"
-                        style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;"
-                      />
+                      <img src="{{ url_for('main.organization_logo_by_id', org_id=org_info.id, v=(org_info.logo_blob_name or '') ) }}" alt="{{ org_info.name }} logo" class="rounded" style="width: 24px; height: 24px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 2px;" />
                       {% else %}
                       <i class="bi bi-building text-body-secondary" style="width: 24px; text-align: center;"></i>
                       {% endif %}
@@ -735,89 +666,34 @@
                 </li>
                 {% endfor %}
                 {% endif %}
-
-                {% if can_manage_team or can_manage_org %}
-                <li><hr class="dropdown-divider" /></li>
-                {% endif %}
-
-                {% if can_manage_team %}
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.org_admin_dashboard') }}">
-                    <i class="bi bi-people me-2"></i>Team Management
-                  </a>
-                </li>
-                {% endif %}
-
+                {% if can_manage_team or can_manage_org %}<li><hr class="dropdown-divider" /></li>{% endif %}
+                {% if can_manage_team %}<li><a class="dropdown-item" href="{{ url_for('main.org_admin_dashboard') }}"><i class="bi bi-people me-2"></i>Team Management</a></li>{% endif %}
                 {% if can_manage_org %}
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.organization_settings') }}">
-                    <i class="bi bi-building me-2"></i>Organisation Profile
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('main.system_logs') }}">
-                    <i class="bi bi-list-columns-reverse me-2"></i>System Logs
-                  </a>
-                </li>
+                <li><a class="dropdown-item" href="{{ url_for('main.organization_settings') }}"><i class="bi bi-building me-2"></i>Organisation Profile</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('main.system_logs') }}"><i class="bi bi-list-columns-reverse me-2"></i>System Logs</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('main.audit_log') }}"><i class="bi bi-journal-text me-2"></i>Audit Log</a></li>
                 {% endif %}
                 <li><hr class="dropdown-divider" /></li>
                 <li>
-                  <form
-                    method="POST"
-                    action="{{ url_for('auth.logout') }}"
-                    class="d-inline"
-                  >
-                    <input
-                      type="hidden"
-                      name="csrf_token"
-                      value="{{ csrf_token() }}"
-                    />
-                    <button type="submit" class="dropdown-item">
-                      <i class="bi bi-box-arrow-right me-2"></i>Sign Out
-                    </button>
+                  <form method="POST" action="{{ url_for('auth.logout') }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <button type="submit" class="dropdown-item"><i class="bi bi-box-arrow-right me-2"></i>Sign Out</button>
                   </form>
                 </li>
               </ul>
             </li>
             {% else %}
-            <li class="nav-item">
-              <a class="nav-link nav-btn" href="{{ url_for('auth.login') }}">
-                <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link nav-btn" href="{{ url_for('auth.signup') }}">
-                <i class="bi bi-person-plus me-1"></i>Sign Up
-              </a>
-            </li>
+            <li class="nav-item"><a class="nav-link nav-btn" href="{{ url_for('auth.login') }}"><i class="bi bi-box-arrow-in-right me-1"></i>Sign In</a></li>
+            <li class="nav-item"><a class="nav-link nav-btn" href="{{ url_for('auth.signup') }}"><i class="bi bi-person-plus me-1"></i>Sign Up</a></li>
             {% endif %}
 
             <li class="nav-item d-flex align-items-center">
-              <form
-                id="themeToggleForm"
-                method="POST"
-                action="{{ url_for('main.set_theme') }}"
-                class="d-inline"
-                data-theme-toggle="1"
-                data-skip-loading="1"
-              >
+              <form id="themeToggleForm" method="POST" action="{{ url_for('main.set_theme') }}" class="d-inline" data-theme-toggle="1" data-skip-loading="1">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <input
-                  type="hidden"
-                  name="theme"
-                  value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}"
-                />
+                <input type="hidden" name="theme" value="{% if _theme == 'dark' %}light{% else %}dark{% endif %}" />
                 <input type="hidden" name="next" value="{{ request.full_path }}" />
-                <button
-                  type="submit"
-                  class="btn btn-sm btn-outline-secondary"
-                  title="Toggle theme"
-                  aria-label="Toggle theme"
-                >
-                  <i
-                    id="themeToggleIcon"
-                    class="bi {% if _theme == 'dark' %}bi-sun-fill{% else %}bi-moon-stars-fill{% endif %}"
-                  ></i>
+                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Toggle theme" aria-label="Toggle theme">
+                  <i id="themeToggleIcon" class="bi {% if _theme == 'dark' %}bi-sun-fill{% else %}bi-moon-stars-fill{% endif %}"></i>
                 </button>
               </form>
             </li>

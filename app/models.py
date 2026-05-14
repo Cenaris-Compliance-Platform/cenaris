@@ -514,10 +514,15 @@ class RequirementEvidenceLink(db.Model):
 
     evidence_bucket = db.Column(db.String(30), nullable=False)
     rationale_note = db.Column(db.Text, nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    expires_at_set_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    expires_at_set_at = db.Column(db.DateTime, nullable=True)
+    expiry_note = db.Column(db.String(255), nullable=True)
     linked_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     linked_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
 
     linked_by = db.relationship('User', foreign_keys=[linked_by_user_id], lazy='select')
+    expires_at_set_by = db.relationship('User', foreign_keys=[expires_at_set_by_user_id], lazy='select')
     document = db.relationship('Document', foreign_keys=[document_id], lazy='select')
 
     __table_args__ = (
@@ -530,6 +535,122 @@ class RequirementEvidenceLink(db.Model):
         ),
         db.Index('ix_requirement_evidence_links_org_requirement', 'organization_id', 'requirement_id'),
         db.Index('ix_requirement_evidence_links_document', 'document_id'),
+        db.Index('ix_requirement_evidence_links_expires_at', 'expires_at'),
+    )
+
+
+class RequirementReminder(db.Model):
+    __tablename__ = 'requirement_reminders'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    requirement_id = db.Column(db.Integer, db.ForeignKey('compliance_requirements.id'), nullable=False)
+    frequency_days = db.Column(db.Integer, nullable=False, default=30)
+    next_send_at = db.Column(db.DateTime, nullable=True)
+    last_sent_at = db.Column(db.DateTime, nullable=True)
+    recipient_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    recipient_email = db.Column(db.String(160), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        onupdate=datetime.now(timezone.utc),
+    )
+
+    requirement = db.relationship('ComplianceRequirement', lazy='select')
+    recipient_user = db.relationship('User', foreign_keys=[recipient_user_id], lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'requirement_id', name='uq_requirement_reminders_org_requirement'),
+        db.Index('ix_requirement_reminders_org', 'organization_id'),
+        db.Index('ix_requirement_reminders_next_send', 'next_send_at'),
+        db.Index('ix_requirement_reminders_active', 'organization_id', 'is_active'),
+    )
+
+
+class PolicyDraft(db.Model):
+    __tablename__ = 'policy_drafts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    title = db.Column(db.String(200), nullable=False)
+    policy_type = db.Column(db.String(160), nullable=True)
+    source_mode = db.Column(db.String(20), nullable=True)
+    scope_mode = db.Column(db.String(20), nullable=True)
+    requirement_code = db.Column(db.String(120), nullable=True)
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=True)
+    last_version_number = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        onupdate=datetime.now(timezone.utc),
+    )
+
+    organization = db.relationship('Organization', lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+    document = db.relationship('Document', foreign_keys=[document_id], lazy='select')
+    versions = db.relationship('PolicyDraftVersion', backref='draft', lazy='dynamic', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.Index('ix_policy_drafts_org', 'organization_id'),
+        db.Index('ix_policy_drafts_created', 'created_at'),
+    )
+
+
+class PolicyDraftVersion(db.Model):
+    __tablename__ = 'policy_draft_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    policy_draft_id = db.Column(db.Integer, db.ForeignKey('policy_drafts.id'), nullable=False)
+    version_number = db.Column(db.Integer, nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    draft_text = db.Column(db.Text, nullable=False)
+    draft_mode = db.Column(db.String(40), nullable=True)
+    output_mode = db.Column(db.String(40), nullable=True)
+    policy_tone = db.Column(db.String(120), nullable=True)
+    policy_audience = db.Column(db.String(120), nullable=True)
+    policy_strictness = db.Column(db.String(120), nullable=True)
+    org_profile = db.Column(db.String(120), nullable=True)
+    context_goal = db.Column(db.String(500), nullable=True)
+    context_brief = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('policy_draft_id', 'version_number', name='uq_policy_draft_version_number'),
+        db.Index('ix_policy_draft_versions_draft', 'policy_draft_id'),
+        db.Index('ix_policy_draft_versions_created', 'created_at'),
+    )
+
+
+class AuditEvent(db.Model):
+    __tablename__ = 'audit_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    event_type = db.Column(db.String(80), nullable=False)
+    entity_type = db.Column(db.String(80), nullable=True)
+    entity_id = db.Column(db.String(120), nullable=True)
+    message = db.Column(db.String(255), nullable=True)
+    payload_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    actor = db.relationship('User', foreign_keys=[actor_user_id], lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_audit_events_org_created', 'organization_id', 'created_at'),
+        db.Index('ix_audit_events_type', 'event_type'),
+        db.Index('ix_audit_events_entity', 'entity_type', 'entity_id'),
     )
 
 
