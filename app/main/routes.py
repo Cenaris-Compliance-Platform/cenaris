@@ -3,7 +3,6 @@ from flask_login import login_required, current_user, logout_user
 from app.main import bp
 from app.models import (
     AIUsageEvent,
-    AuditEvent,
     ComplianceFrameworkVersion,
     ComplianceRequirement,
     Document,
@@ -12,22 +11,16 @@ from app.models import (
     OrganizationAISettings,
     OrganizationMembership,
     OrganizationRequirementAssessment,
-    PolicyDraft,
-    PolicyDraftVersion,
     RequirementEvidenceLink,
-    RequirementReminder,
     User,
 )
 from app import db, mail, limiter, invalidate_org_switcher_context_cache
 from app.services.azure_data_service import azure_data_service
 from app.services.analytics_service import analytics_service
-from app.services.gap_analysis_service import gap_analysis_service
 from app.services.azure_openai_policy_service import azure_openai_policy_service
 from app.services.policy_draft_service import policy_draft_service
 from app.services.compliance_scoring_service import compliance_scoring_service
-from app.services.audit_log_service import audit_log_service
 from app.services.notification_service import notification_service
-from app.services.reminder_service import reminder_service
 from app.services.rag_query_service import rag_query_service
 from app.services.document_analysis_service import document_analysis_service
 from app.services.billing_service import billing_service
@@ -80,16 +73,6 @@ def _limit_text(text: str, *, max_chars: int) -> str:
     if max_chars <= 0:
         return value
     return value[:max_chars]
-
-
-def _plan_user_limit(plan_code: str) -> int | None:
-    limit_map = {
-        'starter': _safe_int_env('STARTER_USER_LIMIT', 1),
-    }
-    limit = limit_map.get((plan_code or '').strip().lower())
-    if limit is None:
-        return None
-    return max(1, int(limit))
 
 
 def _log_ai_call(event_name: str, *, org_id: int, mode: str, provider: str, model: str, usage: dict | None, latency_ms: int):
@@ -780,15 +763,6 @@ def org_admin_initialize_compliance_data():
             org_id=int(org_id),
             user_id=int(current_user.id),
         )
-        audit_log_service.record_event(
-            organization_id=int(org_id),
-            event_type='compliance.initialize',
-            actor_user_id=int(current_user.id),
-            entity_type='organization',
-            entity_id=str(org_id),
-            message='Initialized compliance mapping for organization',
-            payload={'assessments_created': int(created)},
-        )
         flash(
             f'NDIS mapping initialized. Created {created} assessment records for this organisation.',
             'success',
@@ -877,19 +851,6 @@ def org_admin_update_member_department():
     try:
         membership.department_id = int(new_dept.id) if new_dept else None
         db.session.commit()
-
-        audit_log_service.record_event(
-            organization_id=int(org_id),
-            event_type='membership.department_updated',
-            actor_user_id=int(current_user.id),
-            entity_type='organization_membership',
-            entity_id=str(membership.id),
-            message='Member department updated',
-            payload={
-                'user_id': int(membership.user_id),
-                'department_id': int(new_dept.id) if new_dept else None,
-            },
-        )
 
         if _wants_json():
             return jsonify(
@@ -1005,20 +966,6 @@ def org_admin_update_member_role():
         # Keep legacy string role in sync during transition.
         membership.role = 'Admin' if new_admin else 'User'
         db.session.commit()
-
-        audit_log_service.record_event(
-            organization_id=int(org_id),
-            event_type='membership.role_updated',
-            actor_user_id=int(current_user.id),
-            entity_type='organization_membership',
-            entity_id=str(membership.id),
-            message='Member role updated',
-            payload={
-                'user_id': int(membership.user_id),
-                'role_id': int(target_role.id),
-                'role_name': target_role.name,
-            },
-        )
 
         # Invalidate cached navigation context (role badge/permissions) so the
         # change is reflected immediately for the affected user.
@@ -1174,21 +1121,6 @@ def org_admin_invite_member():
             if department and int(department.organization_id) != int(org_id):
                 department = None
 
-    plan_code = billing_service.normalize_plan_code(organization.billing_plan_code or organization.subscription_tier)
-    user_limit = _plan_user_limit(plan_code)
-    if user_limit is not None:
-        active_count = (
-            OrganizationMembership.query
-            .filter_by(organization_id=int(org_id), is_active=True)
-            .count()
-        )
-        if int(active_count) >= int(user_limit):
-            flash(
-                f'This plan allows up to {int(user_limit)} active user(s). Upgrade to add more team members.',
-                'warning',
-            )
-            return redirect(url_for('main.org_admin_dashboard'))
-
     # Check if user already has an active membership in this org
     user = User.query.filter_by(email=email).first()
     if user:
@@ -1298,21 +1230,6 @@ def org_admin_invite_member():
             )
         else:
             flash('User added to the organisation.', 'success')
-    audit_log_service.record_event(
-        organization_id=int(org_id),
-        event_type='membership.invited',
-        actor_user_id=int(current_user.id),
-        entity_type='organization_membership',
-        entity_id=str(membership.id),
-        message='User invited to organization',
-        payload={
-            'user_id': int(user.id),
-            'email': (user.email or '').strip().lower(),
-            'department_id': int(department.id) if department else None,
-            'role_id': int(selected_role_id) if selected_role_id else None,
-        },
-    )
-
     return redirect(url_for('main.org_admin_dashboard'))
 
 
@@ -1366,15 +1283,6 @@ def org_admin_create_department():
         dept = Department(organization_id=int(org_id), name=name, color=color)
         db.session.add(dept)
         db.session.commit()
-        audit_log_service.record_event(
-            organization_id=int(org_id),
-            event_type='department.created',
-            actor_user_id=int(current_user.id),
-            entity_type='department',
-            entity_id=str(dept.id),
-            message='Department created',
-            payload={'name': dept.name, 'color': dept.color},
-        )
         return jsonify({
             'success': True,
             'created': True,
@@ -1991,7 +1899,16 @@ def dashboard():
     dashboard_deadlines = _build_dashboard_deadlines(org_id=int(org_id), limit=3)
     dashboard_bridge = _build_dashboard_bridge_stats(org_id=int(org_id))
 
-    return render_template('main/dashboard.html', 
+    # Get eligible walkthroughs for user
+    from app.services.walkthrough_service import walkthrough_service
+    eligible_walkthroughs = walkthrough_service.get_eligible_walkthroughs_for_user(
+        org_id=int(org_id),
+        user_id=current_user.id
+    )
+
+    can_manage_org = current_user.has_permission('users.manage', org_id=int(org_id))
+
+    return render_template('main/dashboard.html',
                          title='Dashboard',
                          recent_documents=recent_documents,
                          recent_analysed_documents=recent_analysed_documents,
@@ -2000,7 +1917,9 @@ def dashboard():
                          dashboard_summary=dashboard_summary,
                          dashboard_frameworks=dashboard_frameworks,
                          dashboard_deadlines=dashboard_deadlines,
-                         dashboard_bridge=dashboard_bridge)
+                         dashboard_bridge=dashboard_bridge,
+                         eligible_walkthroughs=eligible_walkthroughs,
+                         can_manage_org=can_manage_org)
 
 @bp.route('/upload')
 @login_required
@@ -3500,7 +3419,7 @@ def ai_evidence_detail(entry_id):
 @bp.route('/gap-analysis')
 @login_required
 def gap_analysis():
-    """Audit Readiness Centre for evidence gaps and module readiness."""
+    """Audit Readiness Centre — live compliance gap view for the active organisation."""
     maybe = _require_active_org()
     if maybe is not None:
         return maybe
@@ -3509,45 +3428,43 @@ def gap_analysis():
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
         abort(403)
 
-    payload = gap_analysis_service.build_for_organization(int(org_id))
+    from app.services.gap_analysis_service import gap_analysis_service
 
-    q_filter = (request.args.get('q') or '').strip()
-    flag_filter = _normalize_computed_flag_filter(request.args.get('flag') or '')
+    payload = gap_analysis_service.build_for_organization(org_id)
+
+    # Filters from query string
+    flag_filter = (request.args.get('flag') or '').strip()
     module_filter = (request.args.get('module') or '').strip()
+    q_filter = (request.args.get('q') or '').strip().lower()
 
-    requirements = list(payload.requirements)
-
+    # Apply filters to the requirements list
+    requirements = payload.requirements
+    if flag_filter:
+        requirements = [r for r in requirements if (r.computed_flag or '') == flag_filter]
+    if module_filter:
+        requirements = [r for r in requirements if r.module_name == module_filter]
     if q_filter:
-        q_lower = q_filter.lower()
         requirements = [
             r for r in requirements
-            if q_lower in (r.requirement_id or '').lower()
-            or q_lower in (r.module_name or '').lower()
-            or q_lower in (r.standard_name or '').lower()
-            or q_lower in (r.audit_type or '').lower()
-            or any(q_lower in (rule or '').lower() for rule in (r.gap_rules or []))
-            or q_lower in (r.nonconformity_patterns or '').lower()
+            if q_filter in r.requirement_id.lower()
+            or q_filter in r.module_name.lower()
+            or q_filter in r.standard_name.lower()
         ]
 
-    if flag_filter:
-        requirements = [r for r in requirements if _normalize_computed_flag_filter(r.computed_flag or '') == flag_filter]
+    # Distinct module names for the filter dropdown (from full list, not filtered)
+    module_names = sorted({r.module_name for r in payload.requirements if r.module_name})
 
-    if module_filter:
-        requirements = [r for r in requirements if (r.module_name or '') == module_filter]
-
-    module_names = [mod.module_name for mod in payload.module_breakdown]
-
-    can_export_audit = current_user.has_permission('audits.export', org_id=int(org_id))
+    can_export_audit = current_user.has_permission('documents.manage', org_id=int(org_id))
 
     return render_template(
         'main/gap_analysis.html',
         title='Audit Readiness Centre',
         payload=payload,
         requirements=requirements,
-        q_filter=q_filter,
+        module_names=module_names,
         flag_filter=flag_filter,
         module_filter=module_filter,
-        module_names=module_names,
+        q_filter=q_filter,
         can_export_audit=can_export_audit,
     )
 
@@ -4183,20 +4100,6 @@ def _auto_link_from_analyzed_documents(
                 current_app.logger.exception('Failed to recompute assessment for requirement %s', requirement_id)
         db.session.commit()
 
-    if links_added > 0:
-        audit_log_service.record_event(
-            organization_id=int(org_id),
-            event_type='evidence.auto_link',
-            actor_user_id=int(user_id),
-            entity_type='requirement_evidence_link',
-            entity_id=None,
-            message='Auto-linked evidence',
-            payload={
-                'links_added': int(links_added),
-                'requirements_updated': int(len(touched_requirements)),
-            },
-        )
-
     return {
         'docs_scanned': int(docs_scanned),
         'links_added': int(links_added),
@@ -4249,11 +4152,6 @@ def compliance_requirement_detail(requirement_db_id):
         .all()
     )
 
-    reminder = RequirementReminder.query.filter_by(
-        organization_id=int(org_id),
-        requirement_id=int(requirement.id),
-    ).first()
-
     linked_doc_ids = {int(link.document_id) for link in linked_evidence}
     bucket_counts = _requirement_bucket_counts(org_id=int(org_id), requirement_id=int(requirement.id))
     required_buckets = _required_buckets_for_requirement(requirement)
@@ -4273,7 +4171,6 @@ def compliance_requirement_detail(requirement_db_id):
         requirement_display_code=_requirement_display_code(requirement),
         assessment=assessment,
         linked_evidence=linked_evidence,
-        reminder=reminder,
         available_documents=available_documents,
         linked_doc_ids=linked_doc_ids,
         required_buckets=required_buckets,
@@ -4455,20 +4352,6 @@ def compliance_requirement_link_evidence(requirement_db_id):
         commit=True,
     )
 
-    audit_log_service.record_event(
-        organization_id=int(org_id),
-        event_type='evidence.linked',
-        actor_user_id=int(current_user.id),
-        entity_type='requirement_evidence_link',
-        entity_id=str(link.id),
-        message='Evidence linked to requirement',
-        payload={
-            'requirement_id': int(requirement.id),
-            'document_id': int(document.id),
-            'bucket': evidence_bucket,
-        },
-    )
-
     flash('Evidence linked to requirement.', 'success')
     return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
 
@@ -4503,175 +4386,7 @@ def compliance_requirement_unlink_evidence(requirement_db_id, link_id):
         commit=True,
     )
 
-    audit_log_service.record_event(
-        organization_id=int(org_id),
-        event_type='evidence.unlinked',
-        actor_user_id=int(current_user.id),
-        entity_type='requirement_evidence_link',
-        entity_id=str(link.id),
-        message='Evidence link removed',
-        payload={
-            'requirement_id': int(requirement.id),
-            'document_id': int(link.document_id),
-        },
-    )
-
     flash('Evidence link removed.', 'success')
-    return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
-
-
-@bp.route('/compliance-requirements/<int:requirement_db_id>/evidence/<int:link_id>/expiry', methods=['POST'])
-@login_required
-def compliance_requirement_update_expiry(requirement_db_id, link_id):
-    """Update evidence expiry tracking for a linked document."""
-    maybe = _require_active_org()
-    if maybe is not None:
-        return maybe
-
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        abort(403)
-
-    requirement = _get_org_visible_requirement_or_404(requirement_db_id=int(requirement_db_id), org_id=int(org_id))
-    link = RequirementEvidenceLink.query.filter_by(
-        id=int(link_id),
-        organization_id=int(org_id),
-        requirement_id=int(requirement.id),
-    ).first()
-    if not link:
-        abort(404)
-
-    expires_at_raw = (request.form.get('expires_at') or '').strip()
-    expiry_note = (request.form.get('expiry_note') or '').strip() or None
-    expires_at = None
-    if expires_at_raw:
-        try:
-            expires_at = datetime.strptime(expires_at_raw, '%Y-%m-%d')
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        except Exception:
-            flash('Invalid expiry date. Use YYYY-MM-DD.', 'error')
-            return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
-
-    link.expires_at = expires_at
-    link.expiry_note = expiry_note
-    link.expires_at_set_by_user_id = int(current_user.id)
-    link.expires_at_set_at = datetime.now(timezone.utc)
-    db.session.commit()
-
-    audit_log_service.record_event(
-        organization_id=int(org_id),
-        event_type='evidence.expiry_updated',
-        actor_user_id=int(current_user.id),
-        entity_type='requirement_evidence_link',
-        entity_id=str(link.id),
-        message='Evidence expiry updated',
-        payload={
-            'requirement_id': int(requirement.id),
-            'document_id': int(link.document_id),
-            'expires_at': expires_at.isoformat() if expires_at else None,
-        },
-    )
-
-    flash('Evidence expiry updated.', 'success')
-    return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
-
-
-@bp.route('/compliance-requirements/<int:requirement_db_id>/reminder', methods=['POST'])
-@login_required
-def compliance_requirement_update_reminder(requirement_db_id):
-    """Create or update a basic manual reminder for a requirement."""
-    maybe = _require_active_org()
-    if maybe is not None:
-        return maybe
-
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        abort(403)
-
-    requirement = _get_org_visible_requirement_or_404(requirement_db_id=int(requirement_db_id), org_id=int(org_id))
-
-    frequency_days = _clamp_int(request.form.get('frequency_days', 30), default=30, minimum=7, maximum=365)
-    recipient_email = (request.form.get('recipient_email') or '').strip().lower() or None
-    next_send_raw = (request.form.get('next_send_at') or '').strip()
-    next_send_at = None
-    if next_send_raw:
-        try:
-            next_send_at = datetime.strptime(next_send_raw, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-        except Exception:
-            flash('Invalid next reminder date. Use YYYY-MM-DD.', 'error')
-            return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
-
-    reminder = RequirementReminder.query.filter_by(
-        organization_id=int(org_id),
-        requirement_id=int(requirement.id),
-    ).first()
-
-    if not reminder:
-        reminder = RequirementReminder(
-            organization_id=int(org_id),
-            requirement_id=int(requirement.id),
-            created_by_user_id=int(current_user.id),
-        )
-        db.session.add(reminder)
-
-    reminder.frequency_days = int(frequency_days)
-    reminder.recipient_email = recipient_email
-    reminder.is_active = True
-    reminder.next_send_at = next_send_at or datetime.now(timezone.utc) + timedelta(days=int(frequency_days))
-    db.session.commit()
-
-    audit_log_service.record_event(
-        organization_id=int(org_id),
-        event_type='reminder.updated',
-        actor_user_id=int(current_user.id),
-        entity_type='requirement_reminder',
-        entity_id=str(reminder.id),
-        message='Requirement reminder updated',
-        payload={
-            'requirement_id': int(requirement.id),
-            'frequency_days': int(frequency_days),
-            'recipient_email': recipient_email,
-        },
-    )
-
-    flash('Reminder saved.', 'success')
-    return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
-
-
-@bp.route('/compliance-requirements/<int:requirement_db_id>/reminder/disable', methods=['POST'])
-@login_required
-def compliance_requirement_disable_reminder(requirement_db_id):
-    maybe = _require_active_org()
-    if maybe is not None:
-        return maybe
-
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        abort(403)
-
-    requirement = _get_org_visible_requirement_or_404(requirement_db_id=int(requirement_db_id), org_id=int(org_id))
-    reminder = RequirementReminder.query.filter_by(
-        organization_id=int(org_id),
-        requirement_id=int(requirement.id),
-    ).first()
-    if not reminder:
-        flash('No reminder to disable.', 'info')
-        return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
-
-    reminder.is_active = False
-    db.session.commit()
-
-    audit_log_service.record_event(
-        organization_id=int(org_id),
-        event_type='reminder.disabled',
-        actor_user_id=int(current_user.id),
-        entity_type='requirement_reminder',
-        entity_id=str(reminder.id),
-        message='Requirement reminder disabled',
-        payload={'requirement_id': int(requirement.id)},
-    )
-
-    flash('Reminder disabled.', 'success')
     return redirect(url_for('main.compliance_requirement_detail', requirement_db_id=int(requirement.id)))
 
 
@@ -7592,87 +7307,6 @@ def rag_query_api():
     )
 
 
-def _get_policy_draft_for_org(draft_id: int | None, org_id: int) -> PolicyDraft | None:
-    if not draft_id:
-        return None
-    draft = db.session.get(PolicyDraft, int(draft_id))
-    if not draft or int(draft.organization_id) != int(org_id):
-        return None
-    return draft
-
-
-def _save_policy_draft_version(
-    *,
-    org_id: int,
-    actor_user_id: int,
-    draft_id: int | None,
-    policy_type: str,
-    source_mode: str,
-    scope_mode: str,
-    requirement_code: str,
-    document_id: int | None,
-    draft_text: str,
-    draft_mode: str,
-    output_mode: str,
-    policy_tone: str,
-    audience: str,
-    strictness: str,
-    organization_size: str,
-    context_goal: str,
-    context_brief: str,
-) -> tuple[PolicyDraft, PolicyDraftVersion]:
-    draft = _get_policy_draft_for_org(draft_id, int(org_id))
-    if draft is None:
-        draft = PolicyDraft(
-            organization_id=int(org_id),
-            created_by_user_id=int(actor_user_id) if actor_user_id else None,
-            title=policy_type or 'Policy Draft',
-            policy_type=policy_type or None,
-            source_mode=(source_mode or '').strip().lower() or None,
-            scope_mode=(scope_mode or '').strip().lower() or None,
-            requirement_code=(requirement_code or '').strip() or None,
-            document_id=int(document_id) if document_id else None,
-            last_version_number=0,
-        )
-        db.session.add(draft)
-        db.session.flush()
-
-    next_version = int(getattr(draft, 'last_version_number', 0) or 0) + 1
-    version = PolicyDraftVersion(
-        policy_draft_id=int(draft.id),
-        version_number=int(next_version),
-        created_by_user_id=int(actor_user_id) if actor_user_id else None,
-        draft_text=draft_text,
-        draft_mode=draft_mode,
-        output_mode=output_mode,
-        policy_tone=policy_tone,
-        policy_audience=audience,
-        policy_strictness=strictness,
-        org_profile=organization_size,
-        context_goal=context_goal,
-        context_brief=context_brief,
-    )
-    draft.last_version_number = int(next_version)
-    draft.updated_at = datetime.now(timezone.utc)
-    db.session.add(version)
-    db.session.commit()
-
-    audit_log_service.record_event(
-        organization_id=int(org_id),
-        event_type='policy_draft.versioned',
-        actor_user_id=int(actor_user_id),
-        entity_type='policy_draft',
-        entity_id=str(draft.id),
-        message=f'Policy draft version {int(next_version)} saved',
-        payload={
-            'policy_type': policy_type,
-            'version_number': int(next_version),
-        },
-    )
-
-    return draft, version
-
-
 @bp.route('/api/policy/draft', methods=['POST'])
 @login_required
 @limiter.limit(_policy_rate_limit_value, key_func=_ai_rate_limit_key)
@@ -7706,11 +7340,7 @@ def policy_draft_api():
     policy_tone = _limit_text((payload.get('policy_tone') or '').strip(), max_chars=120)
     strictness = _limit_text((payload.get('strictness') or '').strip(), max_chars=120)
     organization_size = _limit_text((payload.get('organization_size') or '').strip(), max_chars=120)
-    context_goal = _limit_text((payload.get('goal') or '').strip(), max_chars=400)
     context_brief = _limit_text((payload.get('context_brief') or '').strip(), max_chars=max_query_chars)
-    draft_id_raw = str(payload.get('draft_id') or '').strip()
-    draft_id = int(draft_id_raw) if draft_id_raw.isdigit() else None
-    save_draft = bool(payload.get('save_draft', True))
 
     if output_mode not in {'template', 'template_plus', 'full_draft'}:
         output_mode = 'full_draft'
@@ -7806,8 +7436,6 @@ def policy_draft_api():
     ]
 
     context_parts = []
-    if context_goal:
-        context_parts.append(f"Goal: {context_goal}")
     if context_brief:
         context_parts.append(context_brief)
     if selected_document is not None:
@@ -7896,43 +7524,12 @@ def policy_draft_api():
         latency_ms=latency_ms,
     )
 
-    saved_draft_id = None
-    saved_version_number = None
-    if save_draft:
-        try:
-            saved_draft, saved_version = _save_policy_draft_version(
-                org_id=int(org_id),
-                actor_user_id=int(current_user.id),
-                draft_id=draft_id,
-                policy_type=policy_type,
-                source_mode=(payload.get('source_mode') or '').strip().lower(),
-                scope_mode=requirement_scope,
-                requirement_code=requirement_id,
-                document_id=document_id,
-                draft_text=draft_text,
-                draft_mode=draft_mode,
-                output_mode=output_mode,
-                policy_tone=policy_tone,
-                audience=audience,
-                strictness=strictness,
-                organization_size=organization_size,
-                context_goal=context_goal,
-                context_brief=context_brief,
-            )
-            saved_draft_id = int(saved_draft.id)
-            saved_version_number = int(saved_version.version_number)
-        except Exception:
-            db.session.rollback()
-            current_app.logger.exception('Failed to save policy draft version')
-
     return jsonify(
         {
             'success': True,
             'draft_text': draft_text,
             'disclaimer': disclaimer_text,
             'draft_mode': draft_mode,
-            'draft_id': saved_draft_id,
-            'version_number': saved_version_number,
             'llm': {
                 'provider': provider,
                 'model': model,
@@ -7959,124 +7556,6 @@ def policy_draft_api():
                 'max_citation_text_chars': max_citation_text_chars,
                 'max_policy_draft_chars': max_draft_chars,
             },
-        }
-    )
-
-
-@bp.route('/api/policy/draft/<int:draft_id>/versions', methods=['GET'])
-@login_required
-def policy_draft_versions_api(draft_id: int):
-    maybe = _require_active_org()
-    if maybe is not None:
-        return jsonify({'success': False, 'error': 'No active organization'}), 400
-
-    org_id = _active_org_id()
-    draft = _get_policy_draft_for_org(int(draft_id), int(org_id))
-    if not draft:
-        return jsonify({'success': False, 'error': 'Draft not found'}), 404
-
-    versions = (
-        PolicyDraftVersion.query
-        .filter_by(policy_draft_id=int(draft.id))
-        .order_by(PolicyDraftVersion.version_number.desc())
-        .limit(25)
-        .all()
-    )
-    payload = [
-        {
-            'id': int(v.id),
-            'version_number': int(v.version_number),
-            'draft_mode': (v.draft_mode or '').strip(),
-            'created_at': v.created_at.isoformat() if v.created_at else None,
-            'created_by': (v.created_by.display_name() if v.created_by else None),
-        }
-        for v in versions
-    ]
-
-    return jsonify({'success': True, 'draft_id': int(draft.id), 'versions': payload})
-
-
-@bp.route('/api/policy/draft/version/<int:version_id>', methods=['GET'])
-@login_required
-def policy_draft_version_api(version_id: int):
-    maybe = _require_active_org()
-    if maybe is not None:
-        return jsonify({'success': False, 'error': 'No active organization'}), 400
-
-    org_id = _active_org_id()
-    version = db.session.get(PolicyDraftVersion, int(version_id))
-    if not version or not version.draft or int(version.draft.organization_id) != int(org_id):
-        return jsonify({'success': False, 'error': 'Version not found'}), 404
-
-    return jsonify(
-        {
-            'success': True,
-            'draft_id': int(version.policy_draft_id),
-            'version_id': int(version.id),
-            'version_number': int(version.version_number),
-            'draft_text': version.draft_text,
-            'draft_mode': (version.draft_mode or '').strip(),
-            'output_mode': (version.output_mode or '').strip(),
-        }
-    )
-
-
-@bp.route('/api/policy/draft/<int:draft_id>/restore', methods=['POST'])
-@login_required
-def policy_draft_restore_api(draft_id: int):
-    maybe = _require_active_org()
-    if maybe is not None:
-        return jsonify({'success': False, 'error': 'No active organization'}), 400
-
-    org_id = _active_org_id()
-    if not current_user.has_permission('documents.view', org_id=int(org_id)):
-        return jsonify({'success': False, 'error': 'Forbidden'}), 403
-
-    payload = request.get_json(silent=True) or {}
-    version_id_raw = str(payload.get('version_id') or '').strip()
-    if not version_id_raw.isdigit():
-        return jsonify({'success': False, 'error': 'version_id is required'}), 400
-
-    draft = _get_policy_draft_for_org(int(draft_id), int(org_id))
-    if not draft:
-        return jsonify({'success': False, 'error': 'Draft not found'}), 404
-
-    version = db.session.get(PolicyDraftVersion, int(version_id_raw))
-    if not version or int(version.policy_draft_id) != int(draft.id):
-        return jsonify({'success': False, 'error': 'Version not found'}), 404
-
-    try:
-        saved_draft, saved_version = _save_policy_draft_version(
-            org_id=int(org_id),
-            actor_user_id=int(current_user.id),
-            draft_id=int(draft.id),
-            policy_type=(draft.policy_type or draft.title or 'Policy Draft'),
-            source_mode=(draft.source_mode or ''),
-            scope_mode=(draft.scope_mode or ''),
-            requirement_code=(draft.requirement_code or ''),
-            document_id=int(draft.document_id) if draft.document_id else None,
-            draft_text=version.draft_text,
-            draft_mode=(version.draft_mode or ''),
-            output_mode=(version.output_mode or ''),
-            policy_tone=(version.policy_tone or ''),
-            audience=(version.policy_audience or ''),
-            strictness=(version.policy_strictness or ''),
-            organization_size=(version.org_profile or ''),
-            context_goal=(version.context_goal or ''),
-            context_brief=(version.context_brief or ''),
-        )
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception('Policy restore failed')
-        return jsonify({'success': False, 'error': 'Failed to restore version'}), 500
-
-    return jsonify(
-        {
-            'success': True,
-            'draft_id': int(saved_draft.id),
-            'version_number': int(saved_version.version_number),
-            'draft_text': saved_version.draft_text,
-            'draft_mode': (saved_version.draft_mode or '').strip(),
         }
     )
 
@@ -8262,6 +7741,13 @@ def profile():
             .all()
         )
 
+    # Get current walkthrough states
+    from app.services.walkthrough_service import walkthrough_service
+    user_walkthroughs = walkthrough_service.get_all_walkthroughs_for_user(
+        org_id=int(org_id) if org_id else 0,
+        user_id=current_user.id
+    )
+
     return render_template(
         'main/profile.html',
         title='My Profile',
@@ -8269,6 +7755,7 @@ def profile():
         current_membership=current_membership,
         departments=departments,
         has_local_password=bool((getattr(current_user, 'password_hash', '') or '').strip()),
+        user_walkthroughs=user_walkthroughs,
     )
 
 
@@ -8503,33 +7990,6 @@ def mark_all_notifications_read():
     if marked > 0:
         flash(f'Marked {marked} notification(s) as read.', 'success')
     return redirect(url_for('main.notifications'))
-
-
-@bp.route('/audit-log')
-@login_required
-def audit_log():
-    """Organisation audit log for critical actions."""
-    maybe = _require_org_admin()
-    if maybe is not None:
-        return maybe
-
-    org_id = _active_org_id()
-    if not org_id:
-        abort(400)
-
-    events = (
-        AuditEvent.query
-        .filter_by(organization_id=int(org_id))
-        .order_by(AuditEvent.created_at.desc())
-        .limit(200)
-        .all()
-    )
-
-    return render_template(
-        'main/audit_log.html',
-        title='Audit Log',
-        events=events,
-    )
 
 @bp.route('/audit-export')
 @login_required

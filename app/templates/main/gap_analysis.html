@@ -24,7 +24,7 @@
   {# ── PAGE HEADER ────────────────────────────────────────────────────────── #}
   <div class="row mb-4 align-items-center">
     <div class="col">
-      <h1 class="h2 fw-bold mb-1">
+      <h1 id="wt-audit-heading" class="h2 fw-bold mb-1">
         <i class="bi bi-shield-check me-2 text-primary"></i>Audit Readiness Centre
       </h1>
       <p class="text-body-secondary mb-0">
@@ -39,7 +39,7 @@
     </div>
     <div class="col-auto d-flex gap-2 align-items-center">
       {% if can_export_audit %}
-      <a href="{{ url_for('main.generate_report', report_type='gap-analysis') }}" class="btn btn-outline-primary btn-sm">
+      <a id="wt-audit-export" href="{{ url_for('main.generate_report', report_type='gap-analysis') }}" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-file-earmark-pdf me-1"></i>Export Report
       </a>
       {% endif %}
@@ -72,7 +72,7 @@
   <div class="row mb-4 g-3">
 
     {# Big readiness ring #}
-    <div class="col-md-3">
+    <div id="wt-audit-score" class="col-md-3">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body d-flex flex-column align-items-center justify-content-center py-4">
           <div class="readiness-ring mb-2">
@@ -130,7 +130,7 @@
   </div>
 
   {# ── MODULE PROGRESS ─────────────────────────────────────────────────────── #}
-  <div class="card border-0 shadow-sm mb-4">
+  <div id="wt-audit-breakdown" class="card border-0 shadow-sm mb-4">
     <div class="card-header">
       <h5 class="mb-0"><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Readiness by Practice Standard Module</h5>
     </div>
@@ -336,6 +336,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>window.WALKTHROUGH_PAGE_KEY = 'tour-audit-readiness';</script>
 <script>
 function toggleGapPanel(id) {
   const row = document.getElementById('gap-panel-' + id);

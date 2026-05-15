@@ -18,32 +18,29 @@
 
   <div class="row">
     <div class="col-12 col-lg-8 col-xl-7 mx-auto">
-      <div class="card">
+
+      {# ── Account Card ─────────────────────────────────────── #}
+      <div class="card mb-4">
         <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-person-badge me-2 text-primary"></i>Account
           </h5>
         </div>
         <div class="card-body">
+
+          {# Profile photo #}
           <div class="d-flex align-items-center gap-3 mb-4">
             <div id="profilePhotoContainer">
               {% set _oauth_photo = session.get('oauth_profile_picture_url') %}
               {% if _oauth_photo %}
-              <img
-                id="profilePhotoImg"
-                src="{{ _oauth_photo }}"
-                alt="Profile photo"
-                class="rounded-circle"
+              <img id="profilePhotoImg" src="{{ _oauth_photo }}" alt="Profile photo" class="rounded-circle"
                 style="width: 72px; height: 72px; object-fit: cover; border: 1px solid var(--bs-border-color);"
-                referrerpolicy="no-referrer"
-              />
+                referrerpolicy="no-referrer" />
               {% else %}
-              <div
-                id="profilePhotoPlaceholder"
+              <div id="profilePhotoPlaceholder"
                 class="rounded-circle d-inline-flex align-items-center justify-content-center"
                 style="width: 72px; height: 72px; border: 1px solid var(--bs-border-color); background: var(--bs-tertiary-bg);"
-                aria-label="No profile photo"
-              >
+                aria-label="No profile photo">
                 <i class="bi bi-person" style="font-size: 2rem"></i>
               </div>
               {% endif %}
@@ -59,6 +56,7 @@
 
           <hr class="my-4" />
 
+          {# Name form #}
           <h6 class="fw-semibold mb-3"><i class="bi bi-card-text me-2 text-primary"></i>Name</h6>
           <form method="post" action="{{ url_for('main.profile') }}" novalidate>
             {% if form %}{{ form.hidden_tag() }}{% endif %}
@@ -66,24 +64,24 @@
             <div class="mb-3">
               {% if form %}{{ form.first_name.label(class="form-label") }}{% endif %}
               {% if form %}
-                {{ form.first_name(class="form-control form-control-lg" + (" is-invalid" if form.first_name.errors else "")) }}
-                {% if form.first_name.errors %}
-                  <div class="invalid-feedback d-block">{{ form.first_name.errors[0] }}</div>
-                {% endif %}
+              {{ form.first_name(class="form-control form-control-lg" + (" is-invalid" if form.first_name.errors else "")) }}
+              {% if form.first_name.errors %}
+              <div class="invalid-feedback d-block">{{ form.first_name.errors[0] }}</div>
+              {% endif %}
               {% else %}
-                <input class="form-control form-control-lg" value="{{ current_user.first_name or '' }}" disabled />
+              <input class="form-control form-control-lg" value="{{ current_user.first_name or '' }}" disabled />
               {% endif %}
             </div>
 
             <div class="mb-3">
               {% if form %}{{ form.last_name.label(class="form-label") }}{% endif %}
               {% if form %}
-                {{ form.last_name(class="form-control form-control-lg" + (" is-invalid" if form.last_name.errors else "")) }}
-                {% if form.last_name.errors %}
-                  <div class="invalid-feedback d-block">{{ form.last_name.errors[0] }}</div>
-                {% endif %}
+              {{ form.last_name(class="form-control form-control-lg" + (" is-invalid" if form.last_name.errors else "")) }}
+              {% if form.last_name.errors %}
+              <div class="invalid-feedback d-block">{{ form.last_name.errors[0] }}</div>
+              {% endif %}
               {% else %}
-                <input class="form-control form-control-lg" value="{{ current_user.last_name or '' }}" disabled />
+              <input class="form-control form-control-lg" value="{{ current_user.last_name or '' }}" disabled />
               {% endif %}
             </div>
 
@@ -93,9 +91,9 @@
             </div>
           </form>
 
+          {# Department form #}
           {% if current_membership and departments %}
           <hr class="my-4" />
-
           <h6 class="fw-semibold mb-3"><i class="bi bi-diagram-3 me-2 text-primary"></i>Department</h6>
           <form method="post" action="{{ url_for('main.profile_update_department') }}" novalidate>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -104,9 +102,9 @@
               <select name="department_id" class="form-select form-select-lg">
                 <option value="">No department assigned</option>
                 {% for dept in departments %}
-                  <option value="{{ dept.id }}" {% if current_membership.department_id == dept.id %}selected{% endif %}>
-                    {{ dept.name }}
-                  </option>
+                <option value="{{ dept.id }}" {% if current_membership.department_id == dept.id %}selected{% endif %}>
+                  {{ dept.name }}
+                </option>
                 {% endfor %}
               </select>
               <div class="form-text">Select the department you belong to in your organisation.</div>
@@ -115,95 +113,197 @@
           </form>
           {% endif %}
 
+          {# Profile photo toggle #}
           <hr class="my-4" />
+          <div class="form-check">
             <input class="form-check-input" type="checkbox" value="1" id="toggleProfilePhoto" checked>
             <label class="form-check-label" for="toggleProfilePhoto">
               Show my Google profile photo on this page
             </label>
-            <div class="form-text">This photo is only shown on My Profile and is pulled from your Google sign-in.</div>
+          </div>
+          <div class="form-text">This photo is only shown on My Profile and is pulled from your Google sign-in.</div>
+
+        </div>{# /card-body #}
+      </div>{# /account card #}
+
+      {# ── Guided Walkthroughs Card ──────────────────────────── #}
+      <div class="card mb-4">
+        <div class="card-header bg-body-tertiary border-bottom">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-map me-2 text-primary"></i>Guided Walkthroughs
+          </h5>
+        </div>
+        <div class="card-body">
+          <p class="text-body-secondary small mb-3">
+            Track your tour progress across each section of Cenaris. You can disable, redo, or re-enable tours at any time.
+          </p>
+          <div class="row g-3">
+            {% for walkthrough in user_walkthroughs %}
+            <div class="col-12 col-md-6">
+              <div class="card border h-100 shadow-sm">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title fw-semibold mb-0">{{ walkthrough.name }}</h6>
+                    {% if walkthrough.state == 'completed' %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Completed</span>
+                    {% elif walkthrough.permanently_dismissed or walkthrough.state == 'dismissed' %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Off</span>
+                    {% elif walkthrough.state == 'in_progress' %}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">In Progress</span>
+                    {% else %}
+                    <span class="badge bg-light text-dark border">Not Started</span>
+                    {% endif %}
+                  </div>
+                  <p class="small text-body-secondary mb-3">{{ walkthrough.description }}</p>
+
+                  <div class="d-flex justify-content-between small text-body-secondary mb-1">
+                    <span>Progress</span>
+                    <span>{{ walkthrough.completion_percentage|round(0)|int }}%</span>
+                  </div>
+                  <div class="progress mb-3" style="height: 6px;">
+                    <div class="progress-bar bg-primary" role="progressbar"
+                      style="width: {{ walkthrough.completion_percentage|round(0)|int }}%"
+                      aria-valuenow="{{ walkthrough.completion_percentage|round(0)|int }}"
+                      aria-valuemin="0" aria-valuemax="100"></div>
+                  </div>
+
+                  <div class="d-flex flex-wrap gap-2 mt-auto">
+                    {% if walkthrough.permanently_dismissed or walkthrough.state == 'dismissed' %}
+                    <button type="button" class="btn btn-sm btn-outline-primary w-100 btn-walkthrough-toggle"
+                      data-walkthrough-id="{{ walkthrough.id }}">
+                      <i class="bi bi-toggle-on me-1"></i>Enable
+                    </button>
+                    {% else %}
+                    <div class="d-flex w-100 gap-2">
+                      <button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1 btn-walkthrough-toggle"
+                        data-walkthrough-id="{{ walkthrough.id }}">
+                        <i class="bi bi-toggle-off me-1"></i>Disable
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1 btn-walkthrough-reset"
+                        data-walkthrough-id="{{ walkthrough.id }}">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Redo
+                      </button>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% else %}
+            <div class="col-12">
+              <p class="text-body-secondary small mb-0">No walkthroughs available yet. Navigate to any page to start a tour.</p>
+            </div>
+            {% endfor %}
+          </div>
+        </div>{# /card-body #}
+      </div>{# /walkthroughs card #}
+
+      {# ── Danger Zone Card ──────────────────────────────────── #}
+      <div class="card mb-4 border-danger-subtle">
+        <div class="card-header bg-danger-subtle border-bottom border-danger-subtle">
+          <h5 class="card-title mb-0 text-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>Danger Zone
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-danger py-2 px-3 small mb-3">
+            This permanently disables your login and removes your active memberships. This action cannot be undone.
           </div>
 
-          <script>
-            (function () {
-              const key = 'cenaris_show_profile_photo';
-              const checkbox = document.getElementById('toggleProfilePhoto');
-              const img = document.getElementById('profilePhotoImg');
-              const placeholder = document.getElementById('profilePhotoPlaceholder');
+          <form method="post" action="{{ url_for('main.profile_delete_account') }}" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
-              if (!checkbox) return;
-
-              const stored = window.localStorage.getItem(key);
-              if (stored === '0') checkbox.checked = false;
-
-              const apply = () => {
-                const show = checkbox.checked;
-                if (img) img.style.display = show ? '' : 'none';
-                if (placeholder) placeholder.style.display = show ? '' : 'none';
-                window.localStorage.setItem(key, show ? '1' : '0');
-              };
-
-              checkbox.addEventListener('change', apply);
-              apply();
-            })();
-          </script>
-
-          <hr class="my-4" />
-
-          <div class="border border-danger-subtle rounded-4 p-3 p-md-4 bg-danger-subtle bg-opacity-10">
-            <h6 class="fw-semibold mb-3 text-danger d-flex align-items-center gap-2">
-              <i class="bi bi-exclamation-triangle-fill"></i>
-              Danger Zone
-            </h6>
-
-            <div class="alert alert-danger py-2 px-3 small mb-3">
-              This permanently disables your login and removes your active memberships. This action cannot be undone.
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="deleteConfirmText">Type <span class="text-danger">DELETE</span> to confirm</label>
+              <input id="deleteConfirmText" name="confirm_text" class="form-control form-control-lg"
+                placeholder="DELETE" autocomplete="off" required />
             </div>
 
-            <form method="post" action="{{ url_for('main.profile_delete_account') }}" novalidate>
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            {% if has_local_password %}
+            <div class="mb-3">
+              <label class="form-label" for="deletePassword">Password</label>
+              <input id="deletePassword" type="password" name="password" class="form-control"
+                placeholder="Enter your password" autocomplete="current-password" />
+              <div class="form-text">Required for password-based accounts.</div>
+            </div>
+            {% else %}
+            <div class="mb-3">
+              <div class="form-text">This account uses SSO. No password is required for deletion.</div>
+            </div>
+            {% endif %}
 
-              <div class="mb-3">
-                <label class="form-label fw-semibold" for="deleteConfirmText">Type <span class="text-danger">DELETE</span> to confirm</label>
-                <input
-                  id="deleteConfirmText"
-                  name="confirm_text"
-                  class="form-control form-control-lg"
-                  placeholder="DELETE"
-                  autocomplete="off"
-                  required
-                />
-              </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash3 me-1"></i>Delete My Account
+              </button>
+              <span class="small text-body-secondary">Only proceed if you are sure.</span>
+            </div>
+          </form>
+        </div>{# /card-body #}
+      </div>{# /danger card #}
 
-              {% if has_local_password %}
-              <div class="mb-3">
-                <label class="form-label" for="deletePassword">Password</label>
-                <input
-                  id="deletePassword"
-                  type="password"
-                  name="password"
-                  class="form-control"
-                  placeholder="Enter your password"
-                  autocomplete="current-password"
-                />
-                <div class="form-text">Required for password-based accounts.</div>
-              </div>
-              {% else %}
-              <div class="mb-3">
-                <div class="form-text">This account uses SSO. No password is required for deletion.</div>
-              </div>
-              {% endif %}
+    </div>{# /col #}
+  </div>{# /row #}
+</div>{# /fade-in #}
+{% endblock %}
 
-              <div class="d-flex flex-wrap gap-2 align-items-center">
-                <button type="submit" class="btn btn-danger">
-                  <i class="bi bi-trash3 me-1"></i>Delete My Account
-                </button>
-                <span class="small text-body-secondary">Only proceed if you are sure.</span>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+{% block extra_js %}
+<script>
+  (function () {
+    /* ── Profile photo show/hide toggle ── */
+    var key = 'cenaris_show_profile_photo';
+    var checkbox = document.getElementById('toggleProfilePhoto');
+    var img = document.getElementById('profilePhotoImg');
+    var placeholder = document.getElementById('profilePhotoPlaceholder');
+
+    if (checkbox) {
+      var stored = window.localStorage.getItem(key);
+      if (stored === '0') checkbox.checked = false;
+
+      function applyPhotoToggle() {
+        var show = checkbox.checked;
+        if (img) img.style.display = show ? '' : 'none';
+        if (placeholder) placeholder.style.display = show ? '' : 'none';
+        window.localStorage.setItem(key, show ? '1' : '0');
+      }
+
+      checkbox.addEventListener('change', applyPhotoToggle);
+      applyPhotoToggle();
+    }
+
+    /* ── Walkthrough toggle/reset buttons ── */
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    var csrfToken = csrfMeta ? csrfMeta.content : '';
+
+    document.querySelectorAll('.btn-walkthrough-toggle').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        var id = e.currentTarget.dataset.walkthroughId;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        fetch('/api/v1/walkthroughs/state/' + id + '/toggle-dismissal', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }
+        }).then(function (res) {
+          if (res.ok) window.location.reload();
+          else { btn.disabled = false; btn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Error'; }
+        }).catch(function () { window.location.reload(); });
+      });
+    });
+
+    document.querySelectorAll('.btn-walkthrough-reset').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        var id = e.currentTarget.dataset.walkthroughId;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        fetch('/api/v1/walkthroughs/state/' + id + '/reset', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }
+        }).then(function (res) {
+          if (res.ok) window.location.reload();
+          else { btn.disabled = false; btn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Error'; }
+        }).catch(function () { window.location.reload(); });
+      });
+    });
+  })();
+</script>
 {% endblock %}

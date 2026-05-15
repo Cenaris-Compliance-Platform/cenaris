@@ -843,6 +843,7 @@ class OrganizationAISettings(db.Model):
     max_policy_draft_chars = db.Column(db.Integer, nullable=False, default=6000)
     rag_rate_limit = db.Column(db.String(40), nullable=False, default='20 per minute')
     policy_rate_limit = db.Column(db.String(40), nullable=False, default='10 per minute')
+    walkthroughs_enabled = db.Column(db.Boolean, nullable=False, default=True)
     updated_at = db.Column(
         db.DateTime,
         default=datetime.now(timezone.utc),
@@ -856,6 +857,87 @@ class OrganizationAISettings(db.Model):
 
     __table_args__ = (
         db.Index('ix_org_ai_settings_org_id', 'organization_id'),
+    )
+
+
+class WalkthroughState(db.Model):
+    """Tracks user progress through guided walkthroughs (onboarding, feature discovery, etc.)"""
+    __tablename__ = 'walkthrough_states'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    walkthrough_key = db.Column(db.String(100), nullable=False)  # e.g., 'getting-started', 'strengthen-evidence'
+    
+    # State tracking
+    state = db.Column(db.String(20), nullable=False, default='not_started')  # not_started, in_progress, completed, dismissed
+    current_stage = db.Column(db.Integer, nullable=False, default=0)  # 0-indexed stage number
+    eligible = db.Column(db.Boolean, nullable=False, default=True)  # Whether user meets eligibility criteria
+    auto_triggered = db.Column(db.Boolean, nullable=False, default=False)  # Auto-triggered vs manual
+    manual_triggered = db.Column(db.Boolean, nullable=False, default=False)  # User manually started
+    
+    # Dismissal tracking
+    dismissed_until = db.Column(db.DateTime, nullable=True)  # Show again after this time (e.g., 24h snooze)
+    permanently_dismissed = db.Column(db.Boolean, nullable=False, default=False)  # User opted out permanently
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    first_started_at = db.Column(db.DateTime, nullable=True)  # When user first clicked "Start"
+    completed_at = db.Column(db.DateTime, nullable=True)  # When user reached final stage
+    last_interacted_at = db.Column(db.DateTime, nullable=True)  # Last stage viewed/completed
+    
+    # Progress tracking
+    completion_percentage = db.Column(db.Integer, nullable=False, default=0)  # 0-100
+    stages_completed = db.Column(db.Integer, nullable=False, default=0)  # Number of stages completed
+    total_stages = db.Column(db.Integer, nullable=False, default=0)  # Total stages in walkthrough
+    
+    # Metadata (JSON for extensibility) - renamed from 'metadata' to avoid SQLAlchemy reserved word
+    walkthrough_metadata = db.Column(db.JSON, nullable=True)  # e.g., {"custom_field": "value", "engagement_level": "high"}
+    
+    # Relationships
+    organization = db.relationship('Organization', lazy='select')
+    user = db.relationship('User', lazy='select')
+    stages = db.relationship('WalkthroughStage', lazy='select', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'user_id', 'walkthrough_key', name='uq_walkthrough_state_org_user_key'),
+        db.Index('ix_walkthrough_state_org_user', 'organization_id', 'user_id'),
+        db.Index('ix_walkthrough_state_org_state', 'organization_id', 'state'),
+        db.Index('ix_walkthrough_state_user_eligible', 'user_id', 'eligible'),
+    )
+
+
+class WalkthroughStage(db.Model):
+    """Individual stages within a walkthrough (used as templates; actual progress tracked in WalkthroughState.current_stage)"""
+    __tablename__ = 'walkthrough_stages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    walkthrough_state_id = db.Column(db.Integer, db.ForeignKey('walkthrough_states.id', ondelete='CASCADE'), nullable=False)
+    
+    # Stage content
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    target_element = db.Column(db.String(500), nullable=True)  # CSS selector for DOM targeting (e.g., ".sidebar-menu", "#dashboard-widget")
+    stage_order = db.Column(db.Integer, nullable=False)  # 0-indexed order within walkthrough
+    
+    # Content and metadata
+    content = db.Column(db.Text, nullable=False)  # Markdown or HTML content for stage display
+    cta_text = db.Column(db.String(100), nullable=True)  # Call-to-action button text (e.g., "Next", "Start Collection")
+    cta_action = db.Column(db.String(200), nullable=True)  # Action to trigger (e.g., "navigate:/upload", "highlight:#element")
+    icon = db.Column(db.String(100), nullable=True)  # Icon name or emoji (e.g., "upload", "✅")
+    
+    # Completion criteria
+    completion_criteria = db.Column(db.String(200), nullable=True)  # e.g., "manual", "auto_after_3_seconds", "element_click"
+    auto_advance_seconds = db.Column(db.Integer, nullable=True)  # Auto-advance after N seconds if completion_criteria='auto'
+    
+    # Tracking
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    
+    # Relationships
+    walkthrough_state = db.relationship('WalkthroughState', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_walkthrough_stage_state_order', 'walkthrough_state_id', 'stage_order'),
     )
 
 
