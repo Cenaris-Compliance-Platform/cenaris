@@ -22,18 +22,26 @@
    2. Spotlight highlight on the targeted element
    ---------------------------------------------------------- */
 .wt-spotlight {
-  position: relative;
-  z-index: 9995 !important;
+  position: relative !important;
+  z-index: 9996 !important;
   border-radius: 6px;
-  outline: 2px solid var(--bs-primary, #0066cc);
-  outline-offset: 4px;
-  /* The giant box-shadow creates the dark backdrop effect */
-  box-shadow:
-    0 0 0 9999px rgba(0, 0, 0, 0.6),
-    0 0 0 6px rgba(0, 102, 204, 0.15),
-    0 4px 24px rgba(0, 102, 204, 0.3);
-  transition: box-shadow 0.25s ease, outline 0.25s ease;
+  outline: 2px solid var(--bs-primary, #0066cc) !important;
+  outline-offset: 4px !important;
+  transition: outline 0.25s ease;
   animation: wt-pulse 2s ease-in-out infinite;
+}
+
+/* The giant box-shadow creates the dark backdrop effect */
+/* Applied to a separate element appended to body to avoid overflow clipping */
+.wt-spotlight-shadow {
+  position: absolute;
+  z-index: 9994;
+  pointer-events: none;
+  background: transparent;
+  /* Use outline instead of box-shadow to prevent GPU rendering glitches on large pages */
+  outline: 9999px solid rgba(0, 0, 0, 0.6);
+  transition: all 0.25s ease;
+  border-radius: inherit;
 }
 
 @keyframes wt-pulse {

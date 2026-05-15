@@ -128,11 +128,28 @@
   }
 
   /* ── Spotlight ───────────────────────────────────────────── */
+  let shadowEl = null;
+
   function spotlight(el) {
     clearSpotlight();
     if (!el) return;
     el.classList.add('wt-spotlight');
     currentHighlighted = el;
+
+    // Create standalone shadow to avoid clipping
+    if (!shadowEl) {
+      shadowEl = document.createElement('div');
+      shadowEl.className = 'wt-spotlight-shadow';
+      document.body.appendChild(shadowEl);
+    }
+    const rect = el.getBoundingClientRect();
+    shadowEl.style.top = (rect.top + window.scrollY) + 'px';
+    shadowEl.style.left = (rect.left + window.scrollX) + 'px';
+    shadowEl.style.width = rect.width + 'px';
+    shadowEl.style.height = rect.height + 'px';
+    const style = window.getComputedStyle(el);
+    shadowEl.style.borderRadius = style.borderRadius || '6px';
+
     // Scroll into view gently
     try {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -145,6 +162,10 @@
     if (currentHighlighted) {
       currentHighlighted.classList.remove('wt-spotlight');
       currentHighlighted = null;
+    }
+    if (shadowEl) {
+      shadowEl.remove();
+      shadowEl = null;
     }
   }
 
@@ -278,8 +299,13 @@
       if (arrow) arrow.classList.add('arrow-right');
     }
 
-    tooltipEl.style.top = Math.max(8, top) + 'px';
-    tooltipEl.style.left = Math.max(8, left) + 'px';
+    // Ensure tooltip is strictly bounded within the viewport
+    // Even if an element is massive (like a long table), the card will stay on screen.
+    const finalTop = Math.min(Math.max(8, top), vh - TH - 8);
+    const finalLeft = Math.min(Math.max(8, left), vw - TW - 8);
+
+    tooltipEl.style.top = finalTop + 'px';
+    tooltipEl.style.left = finalLeft + 'px';
     tooltipEl.style.transform = 'none';
   }
 
@@ -312,9 +338,34 @@
     const targetEl = step.target_element
       ? document.getElementById(step.target_element)
       : null;
-    spotlight(targetEl);
-    // Small delay so scroll settles before we position
-    setTimeout(function () { renderTooltip(idx); }, 180);
+
+    // Automatically expand any collapsed parent containers (or the element itself)
+    let didExpand = false;
+    if (targetEl) {
+      let node = targetEl;
+      while (node) {
+        if (node.classList && node.classList.contains('collapse') && !node.classList.contains('show')) {
+          node.classList.add('show');
+          didExpand = true;
+          if (node.id) {
+            const btn = document.querySelector('[aria-controls="' + node.id + '"]');
+            if (btn) btn.setAttribute('aria-expanded', 'true');
+          }
+        }
+        node = node.parentElement;
+      }
+    }
+
+    if (didExpand) {
+      // Wait for Bootstrap collapse animation to finish
+      setTimeout(function() {
+        spotlight(targetEl);
+        setTimeout(function () { renderTooltip(idx); }, 180);
+      }, 350);
+    } else {
+      spotlight(targetEl);
+      setTimeout(function () { renderTooltip(idx); }, 180);
+    }
   }
 
   async function onNext() {
