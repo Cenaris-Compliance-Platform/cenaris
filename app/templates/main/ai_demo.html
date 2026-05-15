@@ -137,6 +137,7 @@
                   <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Gaps</button>
                   <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="How well does this document support audit readiness, and what are the top 3 remediation actions?">Actions</button>
                 </div>
+                <!-- /#wt-ai-doc-list -->
               </div>
               <div class="col-md-4">
                 <label for="docTypeSelect" class="form-label small mb-1">Document type <span class="text-body-secondary">(for scoring)</span></label>
@@ -192,7 +193,7 @@
             <button type="button" class="btn btn-sm btn-outline-primary" id="showStoredAnalysisBtn">Show Last Saved Result</button>
           </div>
         </div>
-        <div class="col-12 d-flex gap-2 align-items-center">
+        <div id="wt-ai-generate" class="col-12 d-flex gap-2 align-items-center">
           <button id="runDemoBtn" type="submit" class="btn btn-primary" {% if not selected_documents %}disabled{% endif %}>
             <span id="runDemoLabel">Analyze Document</span>
           </button>
@@ -207,8 +208,14 @@
     </div>
   </div>
 
-  <div id="demoResultCard" class="card border-0 shadow-sm d-none">
-    <div class="card-body">
+  <div id="wt-ai-results">
+    <div id="demoResultPlaceholder" class="card border border-secondary border-opacity-25 shadow-sm text-center py-5 text-body-secondary" style="border-style: dashed !important;">
+      <i class="bi bi-robot fs-1 mb-3 opacity-50"></i>
+      <h5 class="fw-semibold">Ready for Analysis</h5>
+      <p class="mb-0 small">Select a document and run the AI analysis to see your compliance score and gaps here.</p>
+    </div>
+    <div id="demoResultCard" class="card border-0 shadow-sm d-none">
+      <div class="card-body">
       <div class="mb-3">
         <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
           <h5 class="card-title mb-0">Analysis Result</h5>
@@ -449,6 +456,7 @@
     };
 
     const clearResultBlocks = () => {
+      document.getElementById('demoResultPlaceholder').classList.remove('d-none');
       resultCard.classList.add('d-none');
       warningsEl.innerHTML = '';
       snippetsEl.innerHTML = '';
@@ -819,6 +827,7 @@
       }
 
       renderImprovementGuide(payload);
+      document.getElementById('demoResultPlaceholder').classList.add('d-none');
       resultCard.classList.remove('d-none');
     };
 

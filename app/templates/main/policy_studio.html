@@ -166,14 +166,21 @@
     </div>
   </div>
 
-  <div id="wt-ps-output" class="card border-0 shadow-sm d-none">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
-        <h5 class="card-title mb-0">Generated Draft</h5>
-        <div class="small text-body-secondary" id="policyStudioMeta"></div>
+  <div id="wt-ps-output">
+    <div id="policyStudioPlaceholder" class="card border border-secondary border-opacity-25 shadow-sm text-center py-5 text-body-secondary mb-3" style="border-style: dashed !important;">
+      <i class="bi bi-file-earmark-plus fs-1 mb-3 opacity-50"></i>
+      <h5 class="fw-semibold">Ready to Generate</h5>
+      <p class="mb-0 small">Select a policy type and click Generate Policy to draft your document here.</p>
+    </div>
+    <div id="policyStudioCard" class="card border-0 shadow-sm d-none mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+          <h5 class="card-title mb-0">Generated Draft</h5>
+          <div class="small text-body-secondary" id="policyStudioMeta"></div>
+        </div>
+        <div class="alert alert-light border py-2 px-3 small mb-3" id="policyStudioWarnings"></div>
+        <textarea id="policyStudioOutput" class="form-control" rows="18" readonly></textarea>
       </div>
-      <div class="alert alert-light border py-2 px-3 small mb-3" id="policyStudioWarnings"></div>
-      <textarea id="policyStudioOutput" class="form-control" rows="18" readonly></textarea>
     </div>
   </div>
 
@@ -196,7 +203,7 @@
   (function () {
     const form = document.getElementById('policyStudioForm');
     const statusEl = document.getElementById('policyStudioStatus');
-    const resultCard = document.getElementById('wt-ps-output');
+    const resultCard = document.getElementById('policyStudioCard');
     const outputEl = document.getElementById('policyStudioOutput');
     const metaEl = document.getElementById('policyStudioMeta');
     const warningsEl = document.getElementById('policyStudioWarnings');
@@ -421,6 +428,7 @@
       lastPayload = payload;
       setBusy(true);
       resultCard?.classList.add('d-none');
+      document.getElementById('policyStudioPlaceholder')?.classList.remove('d-none');
       setStatus('Generating draft...', false);
 
       try {
@@ -469,6 +477,7 @@
           }
         }
         resultCard?.classList.remove('d-none');
+        document.getElementById('policyStudioPlaceholder')?.classList.add('d-none');
         expandBtn?.classList.remove('d-none');
         wordBtn?.classList.remove('d-none');
         copyBtn?.classList.remove('d-none');

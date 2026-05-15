@@ -64,7 +64,7 @@ class WalkthroughService:
                     'title': 'Compliance Stats',
                     'description': 'Track your overall compliance score and see exactly which requirements are missing or need review.',
                     'target_element': 'walkthrough-compliance-readiness',
-                    'placement': 'left',
+                    'placement': 'top',
                 },
                 {
                     'title': 'Tour Complete!',
@@ -124,26 +124,26 @@ class WalkthroughService:
             'stages': [
                 {
                     'title': 'AI Review',
-                    'description': 'Upload or select a document and get an AI compliance score against your chosen framework.',
+                    'description': 'This is your dedicated workspace for deep compliance analysis using AI.',
                     'target_element': 'wt-ai-heading',
                     'placement': 'bottom',
                 },
                 {
-                    'title': 'Select Framework',
-                    'description': 'Choose the compliance framework (e.g. NDIS Practice Standards) to score against.',
-                    'target_element': 'wt-ai-framework',
+                    'title': 'Select Document',
+                    'description': 'Select a document from your repository to review.',
+                    'target_element': 'storedDocId',
                     'placement': 'bottom',
                 },
                 {
-                    'title': 'Upload or Select Document',
-                    'description': 'Upload a new document or select one from your repository to review.',
-                    'target_element': 'wt-ai-upload',
-                    'placement': 'bottom',
+                    'title': 'Advanced Options',
+                    'description': 'Expand more options to select a specific document type or define common analysis questions.',
+                    'target_element': 'aiReviewOptions',
+                    'placement': 'top',
                 },
                 {
                     'title': 'Run Analysis',
-                    'description': 'Click Analyse to start the AI review. Results appear within a few seconds.',
-                    'target_element': 'wt-ai-submit',
+                    'description': 'Click Analyze Document to start the AI review. Results appear within a few seconds.',
+                    'target_element': 'runDemoBtn',
                     'placement': 'top',
                 },
                 {
@@ -160,7 +160,7 @@ class WalkthroughService:
             'focus': 'AI policy generation',
             'hint': 'Choose a policy type, add context, and generate a draft Word document instantly.',
             'target_audience': 'all_users',
-            'total_stages': 4,
+            'total_stages': 5,
             'stages': [
                 {
                     'title': 'Policy Studio',
@@ -171,8 +171,14 @@ class WalkthroughService:
                 {
                     'title': 'Select Policy Type',
                     'description': 'Choose the type of policy you need from the dropdown.',
-                    'target_element': 'wt-ps-type',
+                    'target_element': 'policyStudioType',
                     'placement': 'bottom',
+                },
+                {
+                    'title': 'Advanced Options',
+                    'description': 'Expand more options to select a requirement scope, organization profile, and custom instructions.',
+                    'target_element': 'policyStudioAdvanced',
+                    'placement': 'top',
                 },
                 {
                     'title': 'Generate Policy',
@@ -209,16 +215,16 @@ class WalkthroughService:
                     'placement': 'bottom',
                 },
                 {
-                    'title': 'Requirement Cards',
-                    'description': 'Each card shows the requirement, its status, and linked evidence. Click to expand.',
-                    'target_element': 'wt-req-list',
+                    'title': 'Requirement Workboard',
+                    'description': 'Each row shows the requirement, its owner, evidence coverage, and review due state.',
+                    'target_element': 'wt-req-table',
                     'placement': 'top',
                 },
                 {
-                    'title': 'Add Evidence',
-                    'description': 'Link existing documents as evidence for each requirement to improve your coverage score.',
-                    'target_element': 'wt-req-add-evidence',
-                    'placement': 'top',
+                    'title': 'Actions',
+                    'description': 'Open individual requirements to edit them, assign owners, or update linked evidence.',
+                    'target_element': 'wt-req-status',
+                    'placement': 'left',
                 },
             ],
         },
@@ -245,13 +251,13 @@ class WalkthroughService:
                 {
                     'title': 'Evidence Gap Table',
                     'description': 'This table lists every requirement with gaps. Sort by priority to tackle the most critical first.',
-                    'target_element': 'wt-audit-gap-table',
+                    'target_element': 'readinessTable',
                     'placement': 'top',
                 },
                 {
-                    'title': 'Framework Filter',
-                    'description': 'Switch between frameworks to see gaps specific to each standard.',
-                    'target_element': 'wt-audit-framework-filter',
+                    'title': 'Filter Results',
+                    'description': 'Filter by status or module to narrow down exactly what you want to focus on.',
+                    'target_element': 'filterForm',
                     'placement': 'bottom',
                 },
             ],
