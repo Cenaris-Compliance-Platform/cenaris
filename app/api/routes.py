@@ -13,6 +13,7 @@ from typing import Any
 import jwt
 import requests
 from flask import Response, current_app, g, jsonify, request, send_file, url_for
+from flask_login import current_user
 
 from app import db, limiter
 from app.api import bp
@@ -1119,12 +1120,36 @@ def api_test_webhook(webhook_id: int):
 def get_walkthrough_state(walkthrough_key: str):
     """Get current walkthrough state for authenticated user."""
     from app.services.walkthrough_service import walkthrough_service
-    
-    user_id = g.api_user_id
-    org_id = g.api_org_id
+    # Support both API-authenticated and session-authenticated (browser) callers
+    user_id = None
+    org_id = None
+    if getattr(g, 'api_user', None):
+        user_id = int(getattr(g.api_user, 'id'))
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        user_id = int(current_user.id)
+
+    if getattr(g, 'api_org_id', None):
+        org_id = int(g.api_org_id)
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        org_id = int(getattr(current_user, 'organization_id', 0) or 0)
+
+    if not user_id or not org_id:
+        return jsonify({'success': False, 'error': 'Authentication/organization context required'}), 401
 
     try:
         state = walkthrough_service.get_or_create_state(org_id, user_id, walkthrough_key)
+        walkthrough_def = walkthrough_service.WALKTHROUGHS.get(walkthrough_key, {})
+        stages_def = walkthrough_def.get('stages', [])
+        
+        stages_data = []
+        for stage_def in stages_def:
+            stages_data.append({
+                'title': stage_def.get('title', ''),
+                'description': stage_def.get('description', ''),
+                'target_element': stage_def.get('target_element'),
+                'placement': stage_def.get('placement', 'bottom')
+            })
+            
         return jsonify({
             'success': True,
             'state': {
@@ -1140,6 +1165,7 @@ def get_walkthrough_state(walkthrough_key: str):
                 'completed_at': state.completed_at.isoformat() if state.completed_at else None,
                 'dismissed_until': state.dismissed_until.isoformat() if state.dismissed_until else None,
                 'permanently_dismissed': state.permanently_dismissed,
+                'stages': stages_data,
             }
         })
     except Exception as e:
@@ -1152,9 +1178,21 @@ def get_walkthrough_state(walkthrough_key: str):
 def start_walkthrough(walkthrough_key: str):
     """Start a walkthrough for authenticated user."""
     from app.services.walkthrough_service import walkthrough_service
-    
-    user_id = g.api_user_id
-    org_id = g.api_org_id
+    # Support both API-authenticated and session-authenticated (browser) callers
+    user_id = None
+    org_id = None
+    if getattr(g, 'api_user', None):
+        user_id = int(getattr(g.api_user, 'id'))
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        user_id = int(current_user.id)
+
+    if getattr(g, 'api_org_id', None):
+        org_id = int(g.api_org_id)
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        org_id = int(getattr(current_user, 'organization_id', 0) or 0)
+
+    if not user_id or not org_id:
+        return jsonify({'success': False, 'error': 'Authentication/organization context required'}), 401
 
     try:
         state = walkthrough_service.get_or_create_state(org_id, user_id, walkthrough_key)
@@ -1178,15 +1216,30 @@ def start_walkthrough(walkthrough_key: str):
 def advance_walkthrough_stage(state_id: int):
     """Move to next stage in walkthrough."""
     from app.services.walkthrough_service import walkthrough_service
-    
+    from app.models import WalkthroughState, WalkthroughStage
+
+    user_id = None
+    org_id = None
+    if getattr(g, 'api_user', None):
+        user_id = int(getattr(g.api_user, 'id'))
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        user_id = int(current_user.id)
+    if getattr(g, 'api_org_id', None):
+        org_id = int(g.api_org_id)
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        org_id = int(getattr(current_user, 'organization_id', 0) or 0)
+
+    if not user_id or not org_id:
+        return jsonify({'success': False, 'error': 'Authentication required'}), 401
+
+    state_obj = WalkthroughState.query.filter_by(id=state_id, user_id=user_id, organization_id=org_id).first()
+    if not state_obj:
+        return jsonify({'success': False, 'error': 'Walkthrough state not found'}), 404
+
     try:
         success = walkthrough_service.next_stage(state_id)
-        
         if success:
-            return jsonify({
-                'success': True,
-                'message': 'Advanced to next stage',
-            })
+            return jsonify({'success': True, 'message': 'Advanced to next stage'})
         else:
             return jsonify({'success': False, 'error': 'Could not advance stage (may be at last stage)'}), 400
     except Exception as e:
@@ -1199,15 +1252,30 @@ def advance_walkthrough_stage(state_id: int):
 def complete_walkthrough(state_id: int):
     """Mark walkthrough as completed."""
     from app.services.walkthrough_service import walkthrough_service
-    
+    from app.models import WalkthroughState
+
+    user_id = None
+    org_id = None
+    if getattr(g, 'api_user', None):
+        user_id = int(getattr(g.api_user, 'id'))
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        user_id = int(current_user.id)
+    if getattr(g, 'api_org_id', None):
+        org_id = int(g.api_org_id)
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        org_id = int(getattr(current_user, 'organization_id', 0) or 0)
+
+    if not user_id or not org_id:
+        return jsonify({'success': False, 'error': 'Authentication required'}), 401
+
+    state_obj = WalkthroughState.query.filter_by(id=state_id, user_id=user_id, organization_id=org_id).first()
+    if not state_obj:
+        return jsonify({'success': False, 'error': 'Walkthrough state not found'}), 404
+
     try:
         success = walkthrough_service.complete_walkthrough(state_id)
-        
         if success:
-            return jsonify({
-                'success': True,
-                'message': 'Walkthrough completed',
-            })
+            return jsonify({'success': True, 'message': 'Walkthrough completed'})
         else:
             return jsonify({'success': False, 'error': 'Failed to complete walkthrough'}), 400
     except Exception as e:
@@ -1215,23 +1283,75 @@ def complete_walkthrough(state_id: int):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/walkthroughs/state/<int:state_id>/reset', methods=['POST'])
+@limiter.limit('20 per minute')
+def reset_walkthrough(state_id: int):
+    """Reset walkthrough to initial state."""
+    from app.services.walkthrough_service import walkthrough_service
+    from app.models import WalkthroughState
+
+    user_id = None
+    org_id = None
+    if getattr(g, 'api_user', None):
+        user_id = int(getattr(g.api_user, 'id'))
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        user_id = int(current_user.id)
+    if getattr(g, 'api_org_id', None):
+        org_id = int(g.api_org_id)
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        org_id = int(getattr(current_user, 'organization_id', 0) or 0)
+
+    if not user_id or not org_id:
+        return jsonify({'success': False, 'error': 'Authentication required'}), 401
+
+    state_obj = WalkthroughState.query.filter_by(id=state_id, user_id=user_id, organization_id=org_id).first()
+    if not state_obj:
+        return jsonify({'success': False, 'error': 'Walkthrough state not found'}), 404
+
+    try:
+        success = walkthrough_service.reset_walkthrough(state_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Walkthrough reset'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to reset walkthrough'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error resetting walkthrough: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+
 @bp.route('/walkthroughs/state/<int:state_id>/dismiss', methods=['POST'])
 @limiter.limit('20 per minute')
 def dismiss_walkthrough(state_id: int):
-    """Snooze walkthrough (user can see it again later)."""
+    """Snooze walkthrough (user can see it again after the snooze period)."""
     from app.services.walkthrough_service import walkthrough_service
-    
-    data = request.get_json() or {}
-    hours = data.get('hours', 24)
+    from app.models import WalkthroughState
+
+    user_id = None
+    org_id = None
+    if getattr(g, 'api_user', None):
+        user_id = int(getattr(g.api_user, 'id'))
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        user_id = int(current_user.id)
+    if getattr(g, 'api_org_id', None):
+        org_id = int(g.api_org_id)
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        org_id = int(getattr(current_user, 'organization_id', 0) or 0)
+
+    if not user_id or not org_id:
+        return jsonify({'success': False, 'error': 'Authentication required'}), 401
+
+    state_obj = WalkthroughState.query.filter_by(id=state_id, user_id=user_id, organization_id=org_id).first()
+    if not state_obj:
+        return jsonify({'success': False, 'error': 'Walkthrough state not found'}), 404
+
+    data = request.get_json(silent=True) or {}
+    hours = int(data.get('hours', 24))
 
     try:
         success = walkthrough_service.dismiss_walkthrough(state_id, hours=hours)
-        
         if success:
-            return jsonify({
-                'success': True,
-                'message': f'Walkthrough snoozed for {hours} hours',
-            })
+            return jsonify({'success': True, 'message': f'Walkthrough snoozed for {hours} hours'})
         else:
             return jsonify({'success': False, 'error': 'Failed to snooze walkthrough'}), 400
     except Exception as e:
@@ -1244,15 +1364,30 @@ def dismiss_walkthrough(state_id: int):
 def permanently_dismiss_walkthrough(state_id: int):
     """Permanently dismiss walkthrough (user opts out)."""
     from app.services.walkthrough_service import walkthrough_service
-    
+    from app.models import WalkthroughState
+
+    user_id = None
+    org_id = None
+    if getattr(g, 'api_user', None):
+        user_id = int(getattr(g.api_user, 'id'))
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        user_id = int(current_user.id)
+    if getattr(g, 'api_org_id', None):
+        org_id = int(g.api_org_id)
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        org_id = int(getattr(current_user, 'organization_id', 0) or 0)
+
+    if not user_id or not org_id:
+        return jsonify({'success': False, 'error': 'Authentication required'}), 401
+
+    state_obj = WalkthroughState.query.filter_by(id=state_id, user_id=user_id, organization_id=org_id).first()
+    if not state_obj:
+        return jsonify({'success': False, 'error': 'Walkthrough state not found'}), 404
+
     try:
         success = walkthrough_service.permanently_dismiss_walkthrough(state_id)
-        
         if success:
-            return jsonify({
-                'success': True,
-                'message': 'Walkthrough permanently dismissed',
-            })
+            return jsonify({'success': True, 'message': 'Walkthrough permanently dismissed'})
         else:
             return jsonify({'success': False, 'error': 'Failed to permanently dismiss walkthrough'}), 400
     except Exception as e:
@@ -1265,9 +1400,21 @@ def permanently_dismiss_walkthrough(state_id: int):
 def get_eligible_walkthroughs():
     """Get all eligible walkthroughs for authenticated user."""
     from app.services.walkthrough_service import walkthrough_service
-    
-    user_id = g.api_user_id
-    org_id = g.api_org_id
+    # Support both API-authenticated and session-authenticated (browser) callers
+    user_id = None
+    org_id = None
+    if getattr(g, 'api_user', None):
+        user_id = int(getattr(g.api_user, 'id'))
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        user_id = int(current_user.id)
+
+    if getattr(g, 'api_org_id', None):
+        org_id = int(g.api_org_id)
+    elif current_user and getattr(current_user, 'is_authenticated', False):
+        org_id = int(getattr(current_user, 'organization_id', 0) or 0)
+
+    if not user_id or not org_id:
+        return jsonify({'success': False, 'error': 'Authentication/organization context required'}), 401
 
     try:
         walkthroughs = walkthrough_service.get_eligible_walkthroughs_for_user(org_id, user_id)

@@ -843,6 +843,7 @@ class OrganizationAISettings(db.Model):
     max_policy_draft_chars = db.Column(db.Integer, nullable=False, default=6000)
     rag_rate_limit = db.Column(db.String(40), nullable=False, default='20 per minute')
     policy_rate_limit = db.Column(db.String(40), nullable=False, default='10 per minute')
+    walkthroughs_enabled = db.Column(db.Boolean, nullable=False, default=True)
     updated_at = db.Column(
         db.DateTime,
         default=datetime.now(timezone.utc),
