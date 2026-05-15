@@ -1906,7 +1906,9 @@ def dashboard():
         user_id=current_user.id
     )
 
-    return render_template('main/dashboard.html', 
+    can_manage_org = current_user.has_permission('users.manage', org_id=int(org_id))
+
+    return render_template('main/dashboard.html',
                          title='Dashboard',
                          recent_documents=recent_documents,
                          recent_analysed_documents=recent_analysed_documents,
@@ -1916,7 +1918,8 @@ def dashboard():
                          dashboard_frameworks=dashboard_frameworks,
                          dashboard_deadlines=dashboard_deadlines,
                          dashboard_bridge=dashboard_bridge,
-                         eligible_walkthroughs=eligible_walkthroughs)
+                         eligible_walkthroughs=eligible_walkthroughs,
+                         can_manage_org=can_manage_org)
 
 @bp.route('/upload')
 @login_required
@@ -7738,6 +7741,13 @@ def profile():
             .all()
         )
 
+    # Get current walkthrough states
+    from app.services.walkthrough_service import walkthrough_service
+    user_walkthroughs = walkthrough_service.get_all_walkthroughs_for_user(
+        org_id=int(org_id) if org_id else 0,
+        user_id=current_user.id
+    )
+
     return render_template(
         'main/profile.html',
         title='My Profile',
@@ -7745,6 +7755,7 @@ def profile():
         current_membership=current_membership,
         departments=departments,
         has_local_password=bool((getattr(current_user, 'password_hash', '') or '').strip()),
+        user_walkthroughs=user_walkthroughs,
     )
 
 

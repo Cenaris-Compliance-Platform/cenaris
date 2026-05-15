@@ -2,6 +2,79 @@
 
 {% block extra_css %}
 <style>
+  .walkthrough-launcher {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.18);
+    background:
+      linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.11), rgba(var(--bs-info-rgb), 0.06)),
+      var(--bs-body-bg);
+  }
+
+  .walkthrough-launcher::after {
+    content: "";
+    position: absolute;
+    inset: auto -3rem -3rem auto;
+    width: 10rem;
+    height: 10rem;
+    border-radius: 999px;
+    background: rgba(var(--bs-primary-rgb), 0.08);
+    pointer-events: none;
+  }
+
+  .walkthrough-launcher .card-body {
+    position: relative;
+    z-index: 1;
+  }
+
+  .walkthrough-pill {
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+  }
+
+  .walkthrough-step {
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    border-radius: 0.85rem;
+  }
+
+  .walkthrough-step.is-active {
+    border-color: rgba(var(--bs-primary-rgb), 0.45);
+    background: rgba(var(--bs-primary-rgb), 0.08);
+  }
+
+  .walkthrough-step.is-complete {
+    border-color: rgba(var(--bs-success-rgb), 0.35);
+    background: rgba(var(--bs-success-rgb), 0.08);
+  }
+
+  .walkthrough-progress {
+    height: 0.7rem;
+    border-radius: 999px;
+    background: var(--bs-tertiary-bg);
+  }
+
+  .walkthrough-highlight-target {
+    scroll-margin-top: 100px;
+    transition: box-shadow 0.3s ease;
+  }
+
+  @keyframes walkthroughSpotlight {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--bs-primary-rgb), 0); }
+    25%  { box-shadow: 0 0 0 6px rgba(var(--bs-primary-rgb), 0.35); }
+    75%  { box-shadow: 0 0 0 6px rgba(var(--bs-primary-rgb), 0.35); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--bs-primary-rgb), 0); }
+  }
+
+  .walkthrough-spotlight-active {
+    animation: walkthroughSpotlight 2s ease forwards;
+    border-radius: 0.5rem;
+  }
+
   /* Upload drop-zone: theme-aware (light/dark) */
   #dropZone.upload-dropzone {
     border: 2px dashed var(--bs-border-color);
@@ -36,12 +109,13 @@
               alt="{{ (current_user.organization.name or '') }} logo"
               class="rounded shadow-sm org-dashboard-logo"
               style="width: 72px; height: 72px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 6px;"
-              onerror="this.onerror=null;this.src='{{ url_for('static', filename='images/Logo_NoBackground.png') }}'"
+              data-fallback-src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+              onerror="this.onerror=null;this.src=this.dataset.fallbackSrc;"
             />
           </div>
           {% endif %}
           <div>
-            <h1 class="h2 fw-bold mb-1">
+            <h1 id="wt-dash-heading" class="h2 fw-bold mb-1">
               Welcome back, {{ current_user.email.split('@')[0].title() }}
             </h1>
             <p class="text-body-secondary mb-0">
@@ -49,15 +123,34 @@
             </p>
           </div>
         </div>
-        <div class="flex-shrink-0 d-none d-md-block">
-          <i
-            class="bi bi-speedometer2 text-primary"
-            style="font-size: 2.5rem"
-          ></i>
+        <div class="flex-shrink-0 d-none d-md-flex align-items-center flex-column">
+          <i class="bi bi-speedometer2 text-primary" style="font-size: 2.5rem"></i>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Walkthrough Promo Banner -->
+  <div id="walkthroughPromoBanner" class="card border-primary border-opacity-25 shadow-sm mb-4" style="background-color: rgba(var(--bs-primary-rgb), 0.05); border-radius: 0.75rem;">
+    <div class="card-body p-4 p-md-4">
+      <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 48px; height: 48px;">
+            <i class="bi bi-compass fs-4"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold mb-1 text-dark">New: Guided walkthroughs</h5>
+            <p class="text-body-secondary mb-0 small">Take a quick step-by-step tour to get the most out of Cenaris — ideal for new users and teams setting up compliance for the first time.</p>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-3 ms-md-4 flex-shrink-0">
+          <button onclick="if(window.CenarisWalkthrough) CenarisWalkthrough.start();" class="btn btn-primary fw-semibold px-4">Explore walkthroughs</button>
+          <button onclick="this.closest('#walkthroughPromoBanner').style.display='none'" class="btn btn-link text-body-secondary text-decoration-none px-0">Not now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Stats Cards -->
   <div class="row mb-4">
@@ -115,7 +208,7 @@
             <div class="small text-body-secondary">View recent organisation-level audit events and changes.</div>
           </div>
           <div>
-            <a href="{{ url_for('main.audit_log') }}" class="btn btn-sm btn-outline-primary">
+            <a href="{{ url_for('main.audit_export') }}" class="btn btn-sm btn-outline-primary">
               <i class="bi bi-journal-text me-1"></i>Open Audit Log
             </a>
           </div>
@@ -128,7 +221,7 @@
   <!-- Compliance Readiness Dashboard -->
   <div class="row mb-4">
     <div class="col-12">
-      <div class="card border-0 shadow">
+      <div class="card border-0 shadow walkthrough-highlight-target" id="walkthrough-compliance-readiness">
         <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
@@ -226,7 +319,7 @@
   <div class="row">
     <!-- Upload Section -->
     <div class="col-lg-8 mb-4">
-      <div class="card border-0 shadow h-100" id="upload-documents">
+      <div class="card border-0 shadow h-100 walkthrough-highlight-target" id="upload-documents" data-walkthrough-target="upload-documents">
         <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-cloud-upload me-2 text-primary"></i>Upload Evidence
@@ -298,7 +391,7 @@
 
     <!-- Recent Documents -->
     <div class="col-lg-4 mb-4">
-      <div class="card border-0 shadow h-100">
+      <div id="wt-dash-recent-docs" class="card border-0 shadow h-100">
         <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
@@ -424,7 +517,10 @@
   </div>
 
 </div>
-{% endblock %} {% block extra_js %}
+{% endblock %}
+
+{% block extra_js %}
+<script>window.WALKTHROUGH_PAGE_KEY = 'tour-dashboard';</script>
 <script>
   // Configuration
   const MAX_FILES = 5;
@@ -445,6 +541,9 @@
   const fileListDisplay = document.getElementById("fileListDisplay");
   const uploadBtn = document.getElementById("uploadBtn");
   const uploadCount = document.getElementById("uploadCount");
+
+
+
 
   (function localizeUtcDateTimes() {
     const nodes = Array.from(document.querySelectorAll('.js-local-datetime'));
@@ -467,7 +566,14 @@
     });
   })();
 
-  // If the user arrives from an "Upload New" link, guide them to open the picker.
+  // Initialize progress bar widths from data-progress-width attributes.
+  // This avoids putting Jinja2 expressions inside CSS style attributes (HTML linter error).
+  document.querySelectorAll('[data-progress-width]').forEach(function(el) {
+    var w = parseInt(el.getAttribute('data-progress-width') || '0', 10);
+    el.style.width = Math.max(0, Math.min(100, w)) + '%';
+  });
+
+
   (function promptUploadPicker() {
     try {
       const params = new URLSearchParams(window.location.search || '');
@@ -543,6 +649,8 @@
       fileInput.click();
     }
   });
+
+
 
   // Prevent default drag behaviors (but not click)
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {

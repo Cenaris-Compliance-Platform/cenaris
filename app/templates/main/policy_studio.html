@@ -5,7 +5,7 @@
   <div class="row mb-4">
     <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
-        <h1 class="h3 fw-bold mb-1">Policy Studio</h1>
+        <h1 id="wt-ps-heading" class="h3 fw-bold mb-1">Policy Studio</h1>
         <p class="text-body-secondary mb-0">Create a full policy from scratch with clean structure and formatting. Uploaded-document context is optional.</p>
       </div>
       <a href="{{ url_for('main.compliance_requirements') }}" class="btn btn-outline-secondary btn-sm">
@@ -14,7 +14,7 @@
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm mb-3">
+  <div id="wt-ps-form" class="card border-0 shadow-sm mb-3">
     <div class="card-body">
       <form id="policyStudioForm" class="row g-3">
         <input type="hidden" id="policyStudioCsrf" value="{{ csrf_token() }}" />
@@ -152,7 +152,7 @@
         </div>
 
         <div class="col-12 d-flex align-items-center gap-2 flex-wrap">
-          <button type="submit" class="btn btn-primary" id="policyStudioGenerateBtn">
+          <button type="submit" class="btn btn-primary" id="wt-ps-generate">
             <i class="bi bi-file-earmark-text me-1"></i>Generate Policy
           </button>
           <button type="button" class="btn btn-outline-primary d-none" id="policyStudioExpandBtn">Expand to Full Draft</button>
@@ -166,7 +166,7 @@
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm d-none" id="policyStudioResultCard">
+  <div id="wt-ps-output" class="card border-0 shadow-sm d-none">
     <div class="card-body">
       <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
         <h5 class="card-title mb-0">Generated Draft</h5>
@@ -191,11 +191,12 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>window.WALKTHROUGH_PAGE_KEY = 'tour-policy-studio';</script>
 <script>
   (function () {
     const form = document.getElementById('policyStudioForm');
     const statusEl = document.getElementById('policyStudioStatus');
-    const resultCard = document.getElementById('policyStudioResultCard');
+    const resultCard = document.getElementById('wt-ps-output');
     const outputEl = document.getElementById('policyStudioOutput');
     const metaEl = document.getElementById('policyStudioMeta');
     const warningsEl = document.getElementById('policyStudioWarnings');
@@ -218,7 +219,7 @@
     const goalEl = document.getElementById('policyStudioGoal');
     const briefEl = document.getElementById('policyStudioBrief');
 
-    const generateBtn = document.getElementById('policyStudioGenerateBtn');
+    const generateBtn = document.getElementById('wt-ps-generate');
     const expandBtn = document.getElementById('policyStudioExpandBtn');
     const wordBtn = document.getElementById('policyStudioWordBtn');
     const copyBtn = document.getElementById('policyStudioCopyBtn');
