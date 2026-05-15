@@ -1107,3 +1107,175 @@ def api_test_webhook(webhook_id: int):
         payload={'test': True, 'timestamp': _utcnow().isoformat()},
     )
     return jsonify({'success': True, 'message': 'Test webhook event dispatched.'})
+
+
+# =====================================
+# Walkthrough API Endpoints
+# =====================================
+
+
+@bp.route('/walkthroughs/state/<walkthrough_key>', methods=['GET'])
+@limiter.limit('30 per minute')
+def get_walkthrough_state(walkthrough_key: str):
+    """Get current walkthrough state for authenticated user."""
+    from app.services.walkthrough_service import walkthrough_service
+    
+    user_id = g.api_user_id
+    org_id = g.api_org_id
+
+    try:
+        state = walkthrough_service.get_or_create_state(org_id, user_id, walkthrough_key)
+        return jsonify({
+            'success': True,
+            'state': {
+                'id': state.id,
+                'walkthrough_key': state.walkthrough_key,
+                'state': state.state,
+                'current_stage': state.current_stage,
+                'total_stages': state.total_stages,
+                'completion_percentage': state.completion_percentage,
+                'eligible': state.eligible,
+                'created_at': state.created_at.isoformat() if state.created_at else None,
+                'first_started_at': state.first_started_at.isoformat() if state.first_started_at else None,
+                'completed_at': state.completed_at.isoformat() if state.completed_at else None,
+                'dismissed_until': state.dismissed_until.isoformat() if state.dismissed_until else None,
+                'permanently_dismissed': state.permanently_dismissed,
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error getting walkthrough state: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/walkthroughs/state/<walkthrough_key>/start', methods=['POST'])
+@limiter.limit('20 per minute')
+def start_walkthrough(walkthrough_key: str):
+    """Start a walkthrough for authenticated user."""
+    from app.services.walkthrough_service import walkthrough_service
+    
+    user_id = g.api_user_id
+    org_id = g.api_org_id
+
+    try:
+        state = walkthrough_service.get_or_create_state(org_id, user_id, walkthrough_key)
+        success = walkthrough_service.start_walkthrough(state.id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Walkthrough started',
+                'state_id': state.id,
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to start walkthrough'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error starting walkthrough: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/walkthroughs/state/<int:state_id>/next-stage', methods=['POST'])
+@limiter.limit('20 per minute')
+def advance_walkthrough_stage(state_id: int):
+    """Move to next stage in walkthrough."""
+    from app.services.walkthrough_service import walkthrough_service
+    
+    try:
+        success = walkthrough_service.next_stage(state_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Advanced to next stage',
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Could not advance stage (may be at last stage)'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error advancing walkthrough stage: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/walkthroughs/state/<int:state_id>/complete', methods=['POST'])
+@limiter.limit('20 per minute')
+def complete_walkthrough(state_id: int):
+    """Mark walkthrough as completed."""
+    from app.services.walkthrough_service import walkthrough_service
+    
+    try:
+        success = walkthrough_service.complete_walkthrough(state_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Walkthrough completed',
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to complete walkthrough'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error completing walkthrough: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/walkthroughs/state/<int:state_id>/dismiss', methods=['POST'])
+@limiter.limit('20 per minute')
+def dismiss_walkthrough(state_id: int):
+    """Snooze walkthrough (user can see it again later)."""
+    from app.services.walkthrough_service import walkthrough_service
+    
+    data = request.get_json() or {}
+    hours = data.get('hours', 24)
+
+    try:
+        success = walkthrough_service.dismiss_walkthrough(state_id, hours=hours)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Walkthrough snoozed for {hours} hours',
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to snooze walkthrough'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error dismissing walkthrough: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/walkthroughs/state/<int:state_id>/permanently-dismiss', methods=['POST'])
+@limiter.limit('20 per minute')
+def permanently_dismiss_walkthrough(state_id: int):
+    """Permanently dismiss walkthrough (user opts out)."""
+    from app.services.walkthrough_service import walkthrough_service
+    
+    try:
+        success = walkthrough_service.permanently_dismiss_walkthrough(state_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Walkthrough permanently dismissed',
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to permanently dismiss walkthrough'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error permanently dismissing walkthrough: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/walkthroughs/eligible', methods=['GET'])
+@limiter.limit('30 per minute')
+def get_eligible_walkthroughs():
+    """Get all eligible walkthroughs for authenticated user."""
+    from app.services.walkthrough_service import walkthrough_service
+    
+    user_id = g.api_user_id
+    org_id = g.api_org_id
+
+    try:
+        walkthroughs = walkthrough_service.get_eligible_walkthroughs_for_user(org_id, user_id)
+        return jsonify({
+            'success': True,
+            'walkthroughs': walkthroughs,
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error getting eligible walkthroughs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+

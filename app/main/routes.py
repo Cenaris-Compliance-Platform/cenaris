@@ -1899,6 +1899,13 @@ def dashboard():
     dashboard_deadlines = _build_dashboard_deadlines(org_id=int(org_id), limit=3)
     dashboard_bridge = _build_dashboard_bridge_stats(org_id=int(org_id))
 
+    # Get eligible walkthroughs for user
+    from app.services.walkthrough_service import walkthrough_service
+    eligible_walkthroughs = walkthrough_service.get_eligible_walkthroughs_for_user(
+        org_id=int(org_id),
+        user_id=current_user.id
+    )
+
     return render_template('main/dashboard.html', 
                          title='Dashboard',
                          recent_documents=recent_documents,
@@ -1908,7 +1915,8 @@ def dashboard():
                          dashboard_summary=dashboard_summary,
                          dashboard_frameworks=dashboard_frameworks,
                          dashboard_deadlines=dashboard_deadlines,
-                         dashboard_bridge=dashboard_bridge)
+                         dashboard_bridge=dashboard_bridge,
+                         eligible_walkthroughs=eligible_walkthroughs)
 
 @bp.route('/upload')
 @login_required
