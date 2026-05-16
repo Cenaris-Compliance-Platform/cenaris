@@ -148,9 +148,13 @@ class MonitoringService:
             self._register_flask_hooks(app)
             logger.debug('[MONITORING] Flask hooks registered')
             
-            # Start system monitoring thread
-            self._start_system_monitoring()
-            logger.debug('[MONITORING] System monitoring started')
+            # Start system monitoring thread (disable on Windows in debug mode to prevent WinError 10038)
+            is_windows_dev = os.name == 'nt' and app.debug
+            if not is_windows_dev:
+                self._start_system_monitoring()
+                logger.debug('[MONITORING] System monitoring started')
+            else:
+                logger.info('[MONITORING] System health thread disabled for Windows local development')
             
             self.enabled = True
             logger.info('[MONITORING] Enhanced monitoring initialized successfully')

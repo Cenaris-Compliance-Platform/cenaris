@@ -223,7 +223,9 @@ def _verify_reset_or_invite_token(token: str) -> dict | None:
 def _mail_configured() -> bool:
     """Check if email is properly configured (ACS, OAuth2, or SMTP)."""
     # 1. Check Azure Communication Services
-    if os.environ.get('ACS_CONNECTION_STRING') and os.environ.get('ACS_SENDER_EMAIL'):
+    acs_conn = os.environ.get('ACS_CONNECTION_STRING') or current_app.config.get('ACS_CONNECTION_STRING')
+    acs_sender = os.environ.get('ACS_SENDER_EMAIL') or current_app.config.get('ACS_SENDER_EMAIL')
+    if acs_conn and acs_sender:
         return True
         
     # 2. Check Microsoft OAuth2
@@ -261,7 +263,7 @@ def _verify_email_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 7) -> 
 
 def _send_email_verification_email(user: User, verify_url: str) -> None:
     if not _mail_configured():
-        current_app.logger.warning('MAIL not configured; verify-email URL: %s', verify_url)
+        current_app.logger.warning('MAIL configuration not found (ACS/OAuth2/SMTP); verify-email URL: %s', verify_url)
         return
 
     subject = 'Verify your email - Cenaris'
@@ -494,7 +496,7 @@ def _clear_ip_failures_on_success(now: datetime) -> None:
 def _send_password_reset_email(user: User, reset_url: str) -> None:
     # If mail isn't configured (common for local dev), we still provide the link via logs.
     if not _mail_configured():
-        current_app.logger.warning('MAIL not configured; password reset URL: %s', reset_url)
+        current_app.logger.warning('MAIL configuration not found (ACS/OAuth2/SMTP); password reset URL: %s', reset_url)
         return
 
     from flask import render_template
