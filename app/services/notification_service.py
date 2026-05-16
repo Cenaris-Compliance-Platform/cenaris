@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from flask import current_app, render_template, url_for
 from flask_mail import Message
 
-from app import db, mail
+from app import db
 from app.models import AdminNotification, Organization, OrganizationMembership, User
-from app.services.microsoft_oauth2_email import create_oauth2_email_service
+from app.services.email_service import email_service
 
 
 class NotificationService:
@@ -258,27 +258,11 @@ class NotificationService:
         return deduped
 
     def _send_email_html(self, to_email: str, subject: str, body: str, html: str) -> bool:
-        oauth2_service = create_oauth2_email_service()
-        if oauth2_service:
-            try:
-                return bool(oauth2_service.send_email(to_email, subject, body, body_html=html))
-            except Exception:
-                current_app.logger.exception('OAuth2 email send failed for %s', to_email)
-
-        has_server = bool(current_app.config.get('MAIL_SERVER'))
-        has_sender = bool(current_app.config.get('MAIL_DEFAULT_SENDER'))
-        has_username = bool(current_app.config.get('MAIL_USERNAME'))
-        has_password = bool(current_app.config.get('MAIL_PASSWORD'))
-        if not (has_server and has_sender and has_username and has_password):
-            current_app.logger.info('MAIL not configured; skipping notification email to %s', to_email)
-            return False
-
+        """Send HTML email via centralized email service."""
         try:
-            msg = Message(subject=subject, recipients=[to_email], body=body, html=html)
-            mail.send(msg)
-            return True
+            return email_service.send_email(to_email, subject, body, html_body=html)
         except Exception:
-            current_app.logger.exception('SMTP email send failed for %s', to_email)
+            current_app.logger.exception('Email send failed for %s', to_email)
             return False
 
 

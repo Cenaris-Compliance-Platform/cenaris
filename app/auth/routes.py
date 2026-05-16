@@ -14,7 +14,7 @@ from app.models import User, Organization, OrganizationMembership, LoginEvent, S
 from app import db, oauth, mail, limiter
 from app.services.logging_service import log_security_event
 from app.services.billing_service import billing_service
-from app.services.microsoft_oauth2_email import create_oauth2_email_service
+from app.services.email_service import email_service
 
 
 _RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS = 60
@@ -287,28 +287,13 @@ def _send_email_verification_email(user: User, verify_url: str) -> None:
 
 
 def _send_email(to_email: str, subject: str, body: str) -> None:
-    """Send email via OAuth2 (if configured) or SMTP fallback."""
-    # Try OAuth2 first (for Microsoft 365 with modern authentication)
-    oauth2_service = create_oauth2_email_service()
-    if oauth2_service:
-        current_app.logger.info('Using OAuth2 for email to %s', to_email)
-        success = oauth2_service.send_email(to_email, subject, body)
-        if success:
-            return
-        else:
-            current_app.logger.warning('OAuth2 email failed, falling back to SMTP')
-    
-    # Fallback to regular SMTP (Flask-Mail)
+    """Send email via centralized email service."""
     try:
-        msg = Message(
-            subject=subject,
-            recipients=[to_email],
-            body=body,
-        )
-        mail.send(msg)
-        current_app.logger.info('Email sent via SMTP to %s', to_email)
+        success = email_service.send_email(to_email, subject, body)
+        if not success:
+            current_app.logger.error('Failed to send email to %s via all providers', to_email)
     except Exception as e:
-        current_app.logger.error('Failed to send email to %s: %s', to_email, e)
+        current_app.logger.error('Exception sending email to %s: %s', to_email, e)
         raise
 
 
@@ -519,29 +504,13 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
 
 
 def _send_email_html(to_email: str, subject: str, body: str, html: str) -> None:
-    """Send HTML email via OAuth2 (if configured) or SMTP fallback."""
-    # Try OAuth2 first (for Microsoft 365 with modern authentication)
-    oauth2_service = create_oauth2_email_service()
-    if oauth2_service:
-        current_app.logger.info('Using OAuth2 for HTML email to %s', to_email)
-        success = oauth2_service.send_email(to_email, subject, body, body_html=html)
-        if success:
-            return
-        else:
-            current_app.logger.warning('OAuth2 email failed, falling back to SMTP')
-    
-    # Fallback to regular SMTP (Flask-Mail)
+    """Send HTML email via centralized email service."""
     try:
-        msg = Message(
-            subject=subject,
-            recipients=[to_email],
-            body=body,
-            html=html,
-        )
-        mail.send(msg)
-        current_app.logger.info('HTML email sent via SMTP to %s', to_email)
+        success = email_service.send_email(to_email, subject, body, html_body=html)
+        if not success:
+            current_app.logger.error('Failed to send HTML email to %s via all providers', to_email)
     except Exception as e:
-        current_app.logger.error('Failed to send HTML email to %s: %s', to_email, e)
+        current_app.logger.error('Exception sending HTML email to %s: %s', to_email, e)
         raise
 
 @bp.route('/login', methods=['GET', 'POST'])

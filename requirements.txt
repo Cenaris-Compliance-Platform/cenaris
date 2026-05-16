@@ -5,6 +5,8 @@ Werkzeug==2.3.7
 gunicorn==21.2.0
 
 # Azure services
+azure-identity==1.15.0
+azure-communication-email==1.0.0
 azure-storage-blob==12.19.0
 azure-storage-file-datalake==12.14.0
 azure-core==1.29.4
