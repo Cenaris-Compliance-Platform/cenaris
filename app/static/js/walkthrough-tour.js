@@ -147,6 +147,7 @@
     shadowEl.style.left = (rect.left + window.scrollX) + 'px';
     shadowEl.style.width = rect.width + 'px';
     shadowEl.style.height = rect.height + 'px';
+    shadowEl.style.opacity = '1';
     const style = window.getComputedStyle(el);
     shadowEl.style.borderRadius = style.borderRadius || '6px';
 
@@ -164,6 +165,14 @@
       currentHighlighted = null;
     }
     if (shadowEl) {
+      shadowEl.style.opacity = '0';
+      // Don't remove it, just hide so it can transition back in if needed
+    }
+  }
+
+  function removeSpotlight() {
+    clearSpotlight();
+    if (shadowEl) {
       shadowEl.remove();
       shadowEl = null;
     }
@@ -173,7 +182,7 @@
   function buildTooltip() {
     if (tooltipEl) return;
     const el = document.createElement('div');
-    el.className = 'wt-tooltip';
+    el.className = 'wt-tooltip is-initial';
     el.id = 'wtTooltip';
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-modal', 'true');
@@ -217,10 +226,21 @@
     const total = tourSteps.length;
     const isLast = stepIdx === total - 1;
 
-    tooltipEl.querySelector('#wtStepLabel').textContent =
-      'Step ' + (stepIdx + 1) + ' of ' + total;
-    tooltipEl.querySelector('#wtTooltipTitle').textContent = step.title || '';
-    tooltipEl.querySelector('#wtTooltipDesc').textContent = step.description || '';
+    const body = tooltipEl.querySelector('.wt-tooltip-body');
+    body.style.transition = 'none';
+    body.style.opacity = '0';
+    body.style.transform = 'translateY(5px)';
+    
+    setTimeout(() => {
+      tooltipEl.querySelector('#wtStepLabel').textContent =
+        'Step ' + (stepIdx + 1) + ' of ' + total;
+      tooltipEl.querySelector('#wtTooltipTitle').textContent = step.title || '';
+      tooltipEl.querySelector('#wtTooltipDesc').textContent = step.description || '';
+      
+      body.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+      body.style.opacity = '1';
+      body.style.transform = 'translateY(0)';
+    }, 150);
 
     // Back button
     const backBtn = tooltipEl.querySelector('#wtBack');
@@ -248,11 +268,23 @@
     const targetEl = targetId ? document.getElementById(targetId) : null;
     const placement = step.placement || 'bottom';
     positionTooltip(targetEl, placement);
+
+    // After first position, allow transitions
+    if (tooltipEl.classList.contains('is-initial')) {
+      requestAnimationFrame(() => {
+        tooltipEl.classList.remove('is-initial');
+      });
+    }
   }
 
   function positionTooltip(targetEl, placement) {
     if (!tooltipEl) return;
-    tooltipEl.style.cssText = '';   // reset
+    // Reset positioning and transform without clearing CSS transitions
+    tooltipEl.style.top = '';
+    tooltipEl.style.left = '';
+    tooltipEl.style.bottom = '';
+    tooltipEl.style.right = '';
+    tooltipEl.style.transform = '';
 
     const arrow = tooltipEl.querySelector('#wtArrow');
     if (arrow) arrow.className = 'wt-arrow';
@@ -405,6 +437,7 @@
 
   function hideTour() {
     clearSpotlight();
+    removeSpotlight();
     hideOverlay();
     if (tooltipEl) {
       tooltipEl.remove();
