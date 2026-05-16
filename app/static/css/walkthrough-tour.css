@@ -40,7 +40,12 @@
   background: transparent;
   /* Use outline instead of box-shadow to prevent GPU rendering glitches on large pages */
   outline: 9999px solid rgba(0, 0, 0, 0.6);
-  transition: all 0.25s ease;
+  transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+              left 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+              width 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+              height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease,
+              border-radius 0.4s ease;
   border-radius: inherit;
 }
 
@@ -65,8 +70,17 @@
     0 2px 8px rgba(0, 0, 0, 0.08);
   padding: 0;
   overflow: hidden;
-  animation: wt-tooltip-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Smoothly slide and fade when moving between steps */
+  transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+              left 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+              opacity 0.2s ease,
+              transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: wt-tooltip-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: all;
+}
+
+.wt-tooltip.is-initial {
+  transition: none !important;
 }
 
 @keyframes wt-tooltip-in {
