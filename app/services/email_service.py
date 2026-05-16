@@ -21,8 +21,16 @@ class EmailService:
         self._oauth2_service = None
 
     def _get_acs_service(self):
-        if self._acs_service is None:
-            self._acs_service = create_acs_email_service()
+        if not self._acs_service:
+            conn_str = os.environ.get('ACS_CONNECTION_STRING')
+            sender = os.environ.get('ACS_SENDER_EMAIL')
+            
+            if not conn_str or not sender:
+                current_app.logger.warning(f"ACS Email missing config: CONN_STR={'SET' if conn_str else 'MISSING'}, SENDER={'SET' if sender else 'MISSING'}")
+                return None
+                
+            from app.services.azure_acs_email import AzureACSEmailService
+            self._acs_service = AzureACSEmailService(conn_str, sender)
         return self._acs_service
 
     def _get_oauth2_service(self):
