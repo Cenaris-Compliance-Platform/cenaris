@@ -221,13 +221,20 @@ def _verify_reset_or_invite_token(token: str) -> dict | None:
 
 
 def _mail_configured() -> bool:
-    """Check if SMTP email is properly configured."""
+    """Check if email is properly configured (ACS, OAuth2, or SMTP)."""
+    # 1. Check Azure Communication Services
+    if os.environ.get('ACS_CONNECTION_STRING') and os.environ.get('ACS_SENDER_EMAIL'):
+        return True
+        
+    # 2. Check Microsoft OAuth2
+    if os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'):
+        return True
+
+    # 3. Check legacy SMTP settings
     has_server = bool(current_app.config.get('MAIL_SERVER'))
     has_sender = bool(current_app.config.get('MAIL_DEFAULT_SENDER'))
-    has_username = bool(current_app.config.get('MAIL_USERNAME'))
-    has_password = bool(current_app.config.get('MAIL_PASSWORD'))
     # All SMTP settings must be present
-    return has_sender and has_server and has_username and has_password
+    return has_sender and has_server
 
 
 def _email_verification_required() -> bool:
