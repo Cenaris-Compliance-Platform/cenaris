@@ -708,8 +708,15 @@ class AIUsageEvent(db.Model):
     latency_ms = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
 
+    # Feedback Integration Columns
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id', ondelete='SET NULL'), nullable=True)
+    feedback_status = db.Column(db.String(80), nullable=True)
+    feedback_confidence = db.Column(db.Float, nullable=True)
+    feedback_reason = db.Column(db.Text, nullable=True)
+
     organization = db.relationship('Organization', lazy='select')
     user = db.relationship('User', lazy='select')
+    document = db.relationship('Document', foreign_keys=[document_id], lazy='select')
 
     __table_args__ = (
         db.Index('ix_ai_usage_events_org_created_at', 'organization_id', 'created_at'),
