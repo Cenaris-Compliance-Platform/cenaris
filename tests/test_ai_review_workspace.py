@@ -273,10 +273,25 @@ def test_ai_review_scoring_profile_api_allows_get_and_update(client, app, seed_o
 
 
 def test_ai_review_feedback_api_persists_usage_event(client, app, db_session, seed_org_user):
-    from app.models import AIUsageEvent
+    from app.models import AIUsageEvent, Document
     from tests.conftest import login
 
     org_id, user_id, _membership_id = seed_org_user
+
+    # Seed a document first to verify document relationship
+    with app.app_context():
+        doc = Document(
+            filename='test-feedback-policy.txt',
+            blob_name='org_1/test-feedback-policy.txt',
+            file_size=200,
+            content_type='text/plain',
+            uploaded_by=int(user_id),
+            organization_id=int(org_id),
+            is_active=True,
+        )
+        db_session.session.add(doc)
+        db_session.session.commit()
+        doc_id = int(doc.id)
 
     resp = login(client)
     assert resp.status_code in {302, 303}
@@ -285,7 +300,7 @@ def test_ai_review_feedback_api_persists_usage_event(client, app, db_session, se
         '/api/ai/demo/feedback',
         json={
             'feedback': 'false_positive',
-            'stored_doc_id': 123,
+            'stored_doc_id': doc_id,
             'status': 'Mature',
             'confidence': 0.88,
             'reason': 'Marked high despite irrelevant content.',
@@ -307,3 +322,8 @@ def test_ai_review_feedback_api_persists_usage_event(client, app, db_session, se
             .first()
         )
         assert event is not None
+        assert event.document_id == doc_id
+        assert event.feedback_status == 'Mature'
+        assert abs(event.feedback_confidence - 0.88) < 1e-5
+        assert event.feedback_reason == 'Marked high despite irrelevant content.'
+        assert event.document.filename == 'test-feedback-policy.txt'

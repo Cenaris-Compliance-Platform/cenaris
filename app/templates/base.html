@@ -160,6 +160,64 @@
         font-weight: 600;
       }
 
+      /* Subtle glow behind AI Review link */
+      .ai-nav-glow {
+        background: rgba(0, 163, 163, 0.02) !important;
+        border: 1px solid rgba(0, 163, 163, 0.2) !important;
+        animation: ambientGlow 6s ease-in-out infinite;
+        transition: all 0.4s ease-in-out !important;
+      }
+      .ai-nav-glow:hover {
+        background: rgba(0, 163, 163, 0.06) !important;
+        animation-play-state: paused;
+        box-shadow: 0 0 20px rgba(0, 163, 163, 0.32), 0 0 8px rgba(0, 102, 204, 0.18) !important;
+        border-color: rgba(0, 163, 163, 0.5) !important;
+      }
+      @keyframes ambientGlow {
+        0% {
+          box-shadow: 0 0 8px rgba(0, 163, 163, 0.12), 0 0 2px rgba(0, 102, 204, 0.05);
+          border-color: rgba(0, 163, 163, 0.2) !important;
+        }
+        50% {
+          box-shadow: 0 0 16px rgba(0, 163, 163, 0.22), 0 0 6px rgba(0, 102, 204, 0.12);
+          border-color: rgba(0, 163, 163, 0.38) !important;
+        }
+        100% {
+          box-shadow: 0 0 8px rgba(0, 163, 163, 0.12), 0 0 2px rgba(0, 102, 204, 0.05);
+          border-color: rgba(0, 163, 163, 0.2) !important;
+        }
+      }
+
+      /* Diagonal superscript beta tag after 'w' */
+      .beta-tag-diagonal {
+        display: inline-block;
+        font-size: 0.52rem;
+        padding: 0.05rem 0.22rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        border-radius: 4px;
+        transform: rotate(-12deg) translateY(-8px) translateX(1px);
+        background-color: #fff9e6;
+        color: #d97706;
+        border: 1px solid #fef3c7;
+        box-shadow: 0 1px 3px rgba(217, 119, 6, 0.1);
+        vertical-align: middle;
+      }
+      [data-bs-theme="dark"] .beta-tag-diagonal {
+        background-color: rgba(217, 119, 6, 0.2) !important;
+        color: #fbbf24 !important;
+        border-color: rgba(217, 119, 6, 0.3) !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .beta-tag-diagonal.disabled {
+        background-color: var(--bs-secondary-bg-subtle) !important;
+        color: var(--bs-secondary-color) !important;
+        border-color: var(--bs-border-color) !important;
+        box-shadow: none !important;
+        transform: rotate(-12deg) translateY(-8px) translateX(1px) !important;
+        opacity: 0.7 !important;
+      }
+
       .btn-primary {
         background-color: var(--primary-color);
         border-color: var(--primary-color);
@@ -548,12 +606,12 @@
             </li>
             <li class="nav-item">
               {% if can_use_ai_review %}
-              <a class="nav-link nav-btn {% if request.endpoint == 'main.ai_demo' %}active{% endif %}" href="{{ url_for('main.ai_demo') }}">
-                <i class="bi bi-stars me-1"></i>AI Review
+              <a class="nav-link nav-btn {% if request.endpoint == 'main.ai_demo' %}active{% endif %} ai-nav-glow" href="{{ url_for('main.ai_demo') }}">
+                <i class="bi bi-stars me-1 text-info"></i>AI Review<span class="beta-tag-diagonal">BETA</span>
               </a>
               {% else %}
               <span class="nav-link nav-btn disabled text-body-secondary" title="Requires Scale plan or above">
-                <i class="bi bi-lock me-1"></i>AI Review
+                <i class="bi bi-lock me-1"></i>AI Review<span class="beta-tag-diagonal disabled">BETA</span>
               </span>
               {% endif %}
             </li>
