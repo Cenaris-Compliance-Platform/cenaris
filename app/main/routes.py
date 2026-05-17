@@ -75,7 +75,9 @@ def _limit_text(text: str, *, max_chars: int) -> str:
     return value[:max_chars]
 
 
-def _log_ai_call(event_name: str, *, org_id: int, mode: str, provider: str, model: str, usage: dict | None, latency_ms: int):
+def _log_ai_call(event_name: str, *, org_id: int, mode: str, provider: str, model: str, usage: dict | None, latency_ms: int,
+                 document_id: int | None = None, feedback_status: str | None = None,
+                 feedback_confidence: float | None = None, feedback_reason: str | None = None):
     usage = usage or {}
     current_app.logger.info(
         '[AI_USAGE] %s',
@@ -90,6 +92,9 @@ def _log_ai_call(event_name: str, *, org_id: int, mode: str, provider: str, mode
                 'completion_tokens': int(usage.get('completion_tokens') or 0),
                 'total_tokens': int(usage.get('total_tokens') or 0),
                 'latency_ms': int(latency_ms),
+                'document_id': document_id,
+                'feedback_status': feedback_status,
+                'feedback_reason': feedback_reason,
             },
             sort_keys=True,
         ),
@@ -109,6 +114,10 @@ def _log_ai_call(event_name: str, *, org_id: int, mode: str, provider: str, mode
                 completion_tokens=int(usage.get('completion_tokens') or 0),
                 total_tokens=int(usage.get('total_tokens') or 0),
                 latency_ms=int(latency_ms or 0),
+                document_id=document_id,
+                feedback_status=feedback_status,
+                feedback_confidence=feedback_confidence,
+                feedback_reason=feedback_reason,
             )
         )
         db.session.commit()
@@ -3233,6 +3242,10 @@ def organization_ai_usage_csv():
         'completion_tokens',
         'total_tokens',
         'latency_ms',
+        'document_id',
+        'feedback_status',
+        'feedback_confidence',
+        'feedback_reason',
     ])
 
     for event in events:
@@ -3247,6 +3260,10 @@ def organization_ai_usage_csv():
             int(event.completion_tokens or 0),
             int(event.total_tokens or 0),
             int(event.latency_ms or 0),
+            event.document_id or '',
+            event.feedback_status or '',
+            f"{event.feedback_confidence:.3f}" if event.feedback_confidence is not None else '',
+            event.feedback_reason or '',
         ])
 
     response = make_response(output.getvalue())
@@ -6904,6 +6921,16 @@ def ai_demo_feedback_api():
     status = _limit_text(str(payload.get('status') or '').strip(), max_chars=80)
     confidence = float(payload.get('confidence') or 0)
     stored_doc_id = payload.get('stored_doc_id')
+    doc_id_int = None
+    if stored_doc_id:
+        try:
+            doc_id_int = int(stored_doc_id)
+            from app.models import Document
+            doc_exists = db.session.query(Document.id).filter_by(id=doc_id_int).first() is not None
+            if not doc_exists:
+                doc_id_int = None
+        except (ValueError, TypeError):
+            pass
 
     event_name = {
         'false_positive': 'ai_review_feedback_false_positive',
@@ -6919,6 +6946,10 @@ def ai_demo_feedback_api():
         model='heuristic-rules',
         usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0},
         latency_ms=0,
+        document_id=doc_id_int,
+        feedback_status=status,
+        feedback_confidence=confidence,
+        feedback_reason=reason,
     )
     current_app.logger.info(
         'AI review feedback org=%s user=%s doc=%s feedback=%s status=%s confidence=%.3f reason=%s',
@@ -8362,7 +8393,12 @@ def system_logs():
                 })
 
     if log_type in ['all', 'ai']:
-        q = AIUsageEvent.query.filter_by(organization_id=int(org_id))
+        from sqlalchemy.orm import joinedload
+        q = (
+            AIUsageEvent.query
+            .filter_by(organization_id=int(org_id))
+            .options(joinedload(AIUsageEvent.user), joinedload(AIUsageEvent.document))
+        )
         if start_time is not None:
             q = q.filter(AIUsageEvent.created_at >= start_time)
         if (user_id_filter or '').strip():
@@ -8386,25 +8422,55 @@ def system_logs():
             except Exception:
                 created_at_local = created_at
 
+            # Extract user metadata safely
+            user_name = None
+            user_email = None
+            if evt.user:
+                try:
+                    user_name = evt.user.display_name()
+                except Exception:
+                    user_name = None
+                user_email = getattr(evt.user, 'email', None)
+
+            # Build a friendly and professional event description
+            desc_label = f"{evt.mode} via {evt.provider}"
+            if evt.mode == 'feedback':
+                derived = evt.event.replace('ai_review_feedback_', '').replace('_', ' ').title()
+                desc_label = f"Feedback: {derived}"
+
+            # Format token usage nicely
+            details_payload = {
+                'mode': evt.mode,
+                'provider': evt.provider,
+                'model': evt.model,
+                'prompt_tokens': int(evt.prompt_tokens or 0),
+                'completion_tokens': int(evt.completion_tokens or 0),
+                'total_tokens': int(evt.total_tokens or 0),
+                'latency_ms': int(evt.latency_ms or 0),
+            }
+
+            # Embed document name and review notes if present
+            if evt.document:
+                details_payload['reviewed_document'] = evt.document.filename
+            
+            if evt.feedback_status is not None:
+                details_payload['analyzed_compliance_status'] = evt.feedback_status
+            if evt.feedback_confidence is not None:
+                details_payload['analyzed_confidence'] = f"{evt.feedback_confidence:.3f}"
+            if evt.feedback_reason:
+                details_payload['reviewer_notes'] = evt.feedback_reason
+
             logs.append({
                 'timestamp': created_at_local.strftime('%Y-%m-%d %H:%M:%S %Z') if created_at_local else None,
                 'log_type': 'ai',
                 'event_type': evt.event,
-                'event_description': f"{evt.mode} via {evt.provider}",
+                'event_description': desc_label,
                 'user_id': evt.user_id,
-                'user_name': None,
-                'user_email': None,
+                'user_name': user_name,
+                'user_email': user_email,
                 'organization_id': org_id,
                 'ip_address': None,
-                'details': {
-                    'mode': evt.mode,
-                    'provider': evt.provider,
-                    'model': evt.model,
-                    'prompt_tokens': int(evt.prompt_tokens or 0),
-                    'completion_tokens': int(evt.completion_tokens or 0),
-                    'total_tokens': int(evt.total_tokens or 0),
-                    'latency_ms': int(evt.latency_ms or 0),
-                }
+                'details': details_payload,
             })
 
     logs.sort(key=lambda item: item.get('timestamp') or '', reverse=True)

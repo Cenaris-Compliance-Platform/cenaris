@@ -209,7 +209,9 @@ def create_app(config_name=None):
     argv = [str(a).strip().lower() for a in (sys.argv or [])]
     is_flask_db_cli = ('db' in argv) and any('flask' in a for a in argv)
     telemetry_disabled = (os.environ.get('DISABLE_APP_TELEMETRY') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
-    skip_telemetry_init = bool(app.config.get('TESTING') or is_flask_db_cli or telemetry_disabled)
+    # CRITICAL: Disable telemetry on Windows local dev to prevent socket crashes (WinError 10038)
+    is_windows_local = os.name == 'nt' and not os.environ.get('ENABLE_WINDOWS_TELEMETRY')
+    skip_telemetry_init = bool(app.config.get('TESTING') or is_flask_db_cli or telemetry_disabled or is_windows_local)
     
     # Initialize telemetry only outside tests to avoid early DB engine binding.
     if not skip_telemetry_init:

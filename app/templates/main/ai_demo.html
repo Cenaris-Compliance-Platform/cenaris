@@ -322,6 +322,29 @@
     </div>
   </div>
 </div>
+
+<!-- Feedback Modal -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="feedbackModalLabel">Submit Review Notes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3">
+        <p class="text-body-secondary small mb-3">Your feedback helps the dev team optimize the AI scoring model. Please explain why you marked this document status.</p>
+        <div class="mb-3">
+          <label for="feedbackReasonInput" class="form-label small fw-semibold">Reviewer Notes (Optional)</label>
+          <textarea class="form-control" id="feedbackReasonInput" rows="3" placeholder="e.g., The AI missed the escalation pathway described on page 3..." style="font-size: 0.9rem;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary px-3" id="submitFeedbackBtn">Submit Feedback</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1053,7 +1076,10 @@
         try {
           const res = await fetch("{{ url_for('main.ai_demo_scoring_profile_api') }}", {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': '{{ csrf_token() }}'
+            },
             body: JSON.stringify(body),
           });
           const payload = await res.json();
@@ -1068,7 +1094,41 @@
       });
     }
 
-    const sendFeedback = async (feedback) => {
+    let pendingFeedbackType = null;
+    const fbModalEl = document.getElementById('feedbackModal');
+    const fbModal = (fbModalEl && window.bootstrap && window.bootstrap.Modal) ? window.bootstrap.Modal.getOrCreateInstance(fbModalEl) : null;
+
+    const openFeedbackDialog = (feedbackType) => {
+      if (!lastResultMeta || !lastResultMeta.stored_doc_id) {
+        statusText.classList.remove('d-none');
+        statusText.textContent = 'Run analysis first, then send feedback.';
+        return;
+      }
+
+      pendingFeedbackType = feedbackType;
+      const titleMap = {
+        'false_positive': 'Report False Positive',
+        'false_negative': 'Report False Negative',
+        'correct': 'Confirm Correct Scoring'
+      };
+      
+      const modalTitle = document.getElementById('feedbackModalLabel');
+      if (modalTitle) {
+        modalTitle.textContent = titleMap[feedbackType] || 'Submit Review Notes';
+      }
+
+      if (fbModal) {
+        fbModal.show();
+      } else {
+        // Fallback to native prompt dialog if bootstrap modal is not available
+        const reason = prompt(`[${titleMap[feedbackType] || 'Submit Review'}] Please enter optional reviewer notes to help improve the model:`);
+        if (reason !== null) {
+          sendFeedback(feedbackType, reason);
+        }
+      }
+    };
+
+    const sendFeedback = async (feedback, reason) => {
       if (!lastResultMeta || !lastResultMeta.stored_doc_id) {
         statusText.classList.remove('d-none');
         statusText.textContent = 'Run analysis first, then send feedback.';
@@ -1079,12 +1139,16 @@
       try {
         const res = await fetch("{{ url_for('main.ai_demo_feedback_api') }}", {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+          },
           body: JSON.stringify({
             feedback: feedback,
             stored_doc_id: lastResultMeta.stored_doc_id,
             status: lastResultMeta.status,
             confidence: lastResultMeta.confidence,
+            reason: reason || '',
           }),
         });
         const payload = await res.json();
@@ -1099,17 +1163,32 @@
 
     if (feedbackFalsePositiveBtn) {
       feedbackFalsePositiveBtn.addEventListener('click', function () {
-        sendFeedback('false_positive');
+        openFeedbackDialog('false_positive');
       });
     }
     if (feedbackFalseNegativeBtn) {
       feedbackFalseNegativeBtn.addEventListener('click', function () {
-        sendFeedback('false_negative');
+        openFeedbackDialog('false_negative');
       });
     }
     if (feedbackCorrectBtn) {
       feedbackCorrectBtn.addEventListener('click', function () {
-        sendFeedback('correct');
+        openFeedbackDialog('correct');
+      });
+    }
+
+    const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+    if (submitFeedbackBtn) {
+      submitFeedbackBtn.addEventListener('click', function () {
+        const reasonInput = document.getElementById('feedbackReasonInput');
+        const reason = reasonInput ? reasonInput.value : '';
+        if (fbModal) {
+          fbModal.hide();
+        }
+        sendFeedback(pendingFeedbackType, reason);
+        if (reasonInput) {
+          reasonInput.value = '';
+        }
       });
     }
 
