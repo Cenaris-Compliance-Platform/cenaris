@@ -1094,8 +1094,10 @@ def _after_organization_insert(mapper, connection, target):
     """
     from sqlalchemy.orm import Session
     
-    # Create a new session to avoid conflicts with the current transaction
-    session = Session(bind=connection)
+    session = Session.object_session(target)
+    if session is None:
+        return
+        
     try:
         from app.services.compliance_setup_service import compliance_setup_service
         
@@ -1103,9 +1105,9 @@ def _after_organization_insert(mapper, connection, target):
         compliance_setup_service.create_org_assessments_from_global_framework(
             org_id=int(target.id),
             user_id=None,
+            commit=False,
+            session=session,
         )
     except Exception:
         # Silently fail—don't block org creation if setup fails
         pass
-    finally:
-        session.close()

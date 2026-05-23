@@ -17,10 +17,11 @@ class ComplianceSetupError(Exception):
 
 class ComplianceSetupService:
     @staticmethod
-    def get_global_ndis_framework() -> ComplianceFrameworkVersion | None:
+    def get_global_ndis_framework(session=None) -> ComplianceFrameworkVersion | None:
         """Fetch the global (organization_id=NULL) NDIS framework."""
+        sess = session or db.session
         return (
-            ComplianceFrameworkVersion.query
+            sess.query(ComplianceFrameworkVersion)
             .filter_by(
                 organization_id=None,
                 scheme='NDIS',
@@ -33,6 +34,8 @@ class ComplianceSetupService:
     def create_org_assessments_from_global_framework(
         org_id: int,
         user_id: int | None = None,
+        commit: bool = True,
+        session = None,
     ) -> int:
         """
         Create OrganizationRequirementAssessment records for an org
@@ -41,6 +44,8 @@ class ComplianceSetupService:
         Args:
             org_id: Organization ID
             user_id: Optional user ID to record as the initializer
+            commit: Whether to commit the transaction (disable during active flushes)
+            session: Optional session override (uses db.session by default)
         
         Returns:
             Number of new assessment records created
@@ -48,7 +53,8 @@ class ComplianceSetupService:
         Raises:
             ComplianceSetupError: If global framework not found or creation fails
         """
-        global_fw = ComplianceSetupService.get_global_ndis_framework()
+        sess = session or db.session
+        global_fw = ComplianceSetupService.get_global_ndis_framework(session=sess)
         
         if not global_fw:
             raise ComplianceSetupError(
@@ -58,7 +64,7 @@ class ComplianceSetupService:
         
         try:
             requirements = (
-                ComplianceRequirement.query
+                sess.query(ComplianceRequirement)
                 .filter_by(framework_version_id=global_fw.id)
                 .all()
             )
@@ -69,7 +75,7 @@ class ComplianceSetupService:
             created = 0
             for req in requirements:
                 existing = (
-                    OrganizationRequirementAssessment.query
+                    sess.query(OrganizationRequirementAssessment)
                     .filter_by(
                         organization_id=int(org_id),
                         requirement_id=int(req.id),
@@ -89,16 +95,18 @@ class ComplianceSetupService:
                         last_assessed_by_user_id=user_id,
                         last_assessed_at=datetime.now(timezone.utc),
                     )
-                    db.session.add(assessment)
+                    sess.add(assessment)
                     created += 1
             
-            db.session.commit()
+            if commit:
+                sess.commit()
             return created
         
         except ComplianceSetupError:
             raise
         except Exception as e:
-            db.session.rollback()
+            if commit:
+                sess.rollback()
             raise ComplianceSetupError(f'Failed to create assessment records: {e}')
 
 
