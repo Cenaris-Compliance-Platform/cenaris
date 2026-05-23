@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; line-height: 1.5; color: #1f2937;">
+    <h2 style="margin-bottom: 8px;">Monthly Notification Summary</h2>
+    <p style="margin-top: 0;">{{ summary.year }}-{{ '%02d'|format(summary.month) }}</p>
+
+    <p><strong>Total events:</strong> {{ summary.total }}</p>
+    <ul>
+      <li><strong>Critical:</strong> {{ summary.severity_counts.get('critical', 0) }}</li>
+      <li><strong>Warning:</strong> {{ summary.severity_counts.get('warning', 0) }}</li>
+      <li><strong>Info:</strong> {{ summary.severity_counts.get('info', 0) }}</li>
+    </ul>
+
+    <h3 style="margin-bottom: 6px;">Top event types</h3>
+    <ul>
+      {% for event, count in summary.top_events %}
+      <li>{{ event }} — {{ count }}</li>
+      {% else %}
+      <li>No events this month.</li>
+      {% endfor %}
+    </ul>
+
+    <h3 style="margin-bottom: 6px;">Recent events</h3>
+    <ul>
+      {% for item in summary.recent %}
+      <li>{{ item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else '' }} — {{ item.title }} ({{ item.severity }})</li>
+      {% else %}
+      <li>No recent events.</li>
+      {% endfor %}
+    </ul>
+  </body>
+</html>

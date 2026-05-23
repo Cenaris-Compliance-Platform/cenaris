@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+      <div>
+        <h1 class="h3 fw-bold mb-1">{{ requirement_plain_title }}</h1>
+        <div class="small text-body-secondary mb-1">Code: {{ requirement_display_code }}</div>
+        <p class="text-body-secondary mb-0">Link evidence documents to this requirement</p>
+      </div>
+      <a href="{{ url_for('main.compliance_requirements') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Requirements
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="alert alert-info mb-3">
+        <div class="fw-semibold mb-1"><i class="bi bi-lightbulb me-1"></i>Easy Mode (Recommended)</div>
+        <ol class="small mb-0 ps-3">
+          <li>Click <strong>Auto-link for me</strong> first.</li>
+          <li>Check if score and status improved.</li>
+          <li>Use manual link only when something is still missing.</li>
+        </ol>
+      </div>
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="small text-body-secondary">Required evidence buckets for this requirement:</div>
+        <div class="d-flex gap-1 flex-wrap">
+          {% for bucket in required_buckets %}
+          <span class="badge {% if bucket in missing_required_buckets %}bg-warning text-dark{% else %}bg-success{% endif %}">
+            {{ bucket|capitalize }}
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+      <form method="POST" action="{{ url_for('main.compliance_requirement_auto_link', requirement_db_id=requirement.id) }}" class="mt-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-magic me-1"></i>Auto-link for me
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-8">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Requirement Details</h5>
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Quality indicator</dt>
+            <dd class="col-sm-8">{{ requirement.quality_indicator_code or '—' }}</dd>
+
+            <dt class="col-sm-4">Outcome</dt>
+            <dd class="col-sm-8">{{ requirement.outcome_code or '—' }}</dd>
+
+            <dt class="col-sm-4">Indicator text</dt>
+            <dd class="col-sm-8">{{ requirement.quality_indicator_text or '—' }}</dd>
+
+            <dt class="col-sm-4">Outcome text</dt>
+            <dd class="col-sm-8">{{ requirement.outcome_text or '—' }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Assessment</h5>
+          <div class="mb-2">
+            <span class="text-body-secondary">Score:</span>
+            <span class="fw-semibold">{{ assessment.computed_score if assessment and assessment.computed_score is not none else '—' }}</span>
+          </div>
+          <div>
+            <span class="text-body-secondary">Flag:</span>
+            {% if assessment and assessment.computed_flag %}
+            {% set flag = assessment.computed_flag|lower|replace('_', ' ') %}
+            {% if flag in ['mature', 'green'] %}
+            <span class="badge bg-primary">{{ assessment.computed_flag }}</span>
+            {% elif flag in ['ok'] %}
+            <span class="badge bg-success">{{ assessment.computed_flag }}</span>
+            {% elif flag in ['high risk gap', 'amber'] %}
+            <span class="badge bg-warning text-dark">{{ assessment.computed_flag }}</span>
+            {% elif flag in ['critical gap', 'red'] %}
+            <span class="badge bg-danger">{{ assessment.computed_flag }}</span>
+            {% else %}
+            <span class="badge bg-secondary">{{ assessment.computed_flag }}</span>
+            {% endif %}
+            {% else %}
+            <span class="text-body-secondary">Not assessed</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3" id="ragExplainCard" data-requirement-id="{{ requirement.requirement_id }}">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="card-title mb-0">NDIS Citation Assistant</h5>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="runRagExplainBtn">
+          <i class="bi bi-search me-1"></i>Explain with NDIS citations
+        </button>
+      </div>
+      <p class="text-body-secondary mb-3">Retrieve official NDIS passages related to this requirement for evidence-grounded review.</p>
+
+      <div class="mb-3">
+        <label for="ragQueryInput" class="form-label">Question (optional)</label>
+        <input
+          id="ragQueryInput"
+          class="form-control"
+          placeholder="e.g., What does NDIS require for incident management evidence?"
+          value="{{ requirement.quality_indicator_text or requirement.outcome_text or '' }}"
+        />
+      </div>
+
+      <div id="ragExplainStatus" class="small text-body-secondary mb-2 d-none"></div>
+
+      <div id="ragExplainResult" class="d-none">
+        <div class="alert alert-light border mb-3" id="ragAnswerText"></div>
+        <h6 class="fw-semibold mb-2">Citations</h6>
+        <div id="ragCitationList" class="d-flex flex-column gap-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h5 class="card-title mb-1">Policy Studio</h5>
+        <p class="text-body-secondary mb-0 small">Use the standalone screen to generate one complete policy from linked requirements, or switch to single-requirement mode in Advanced options.</p>
+      </div>
+      <a
+        href="{{ url_for('main.policy_studio', scope='single', requirement_id=requirement_display_code) }}"
+        class="btn btn-outline-success btn-sm"
+      >
+        <i class="bi bi-file-earmark-text me-1"></i>Open Policy Studio
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <h5 class="card-title mb-1">Manual Reminder</h5>
+          <p class="text-body-secondary mb-0 small">Send a reminder email on a simple cadence for this requirement.</p>
+        </div>
+        {% if reminder and reminder.is_active %}
+        <span class="badge bg-success">Active</span>
+        {% else %}
+        <span class="badge bg-secondary">Inactive</span>
+        {% endif %}
+      </div>
+
+      <form method="POST" action="{{ url_for('main.compliance_requirement_update_reminder', requirement_db_id=requirement.id) }}" class="row g-2 align-items-end mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-md-3">
+          <label for="frequency_days" class="form-label">Frequency (days)</label>
+          <input
+            type="number"
+            min="7"
+            max="365"
+            class="form-control"
+            id="frequency_days"
+            name="frequency_days"
+            value="{{ reminder.frequency_days if reminder else 30 }}"
+            required
+          />
+        </div>
+        <div class="col-md-4">
+          <label for="recipient_email" class="form-label">Recipient email (optional)</label>
+          <input
+            type="email"
+            class="form-control"
+            id="recipient_email"
+            name="recipient_email"
+            value="{{ reminder.recipient_email if reminder else '' }}"
+            placeholder="Defaults to org admins"
+          />
+        </div>
+        <div class="col-md-3">
+          <label for="next_send_at" class="form-label">Next send date</label>
+          <input
+            type="date"
+            class="form-control"
+            id="next_send_at"
+            name="next_send_at"
+            value="{{ reminder.next_send_at|datetime_format('%Y-%m-%d') if reminder and reminder.next_send_at else '' }}"
+          />
+        </div>
+        <div class="col-md-2 d-grid">
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+
+      {% if reminder and reminder.is_active %}
+      <form method="POST" action="{{ url_for('main.compliance_requirement_disable_reminder', requirement_db_id=requirement.id) }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn btn-outline-danger btn-sm">Disable reminder</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="alert alert-light border mb-3">
+        <div class="fw-semibold mb-1"><i class="bi bi-lightbulb me-1"></i>How to improve low score or not-linked evidence</div>
+        <ol class="small text-body-secondary mb-0 ps-3">
+          <li>Use <strong>NDIS Citation Assistant</strong> above to understand what this requirement expects.</li>
+          <li>If you already have a matching file, select it below and click <strong>Link</strong>.</li>
+          <li>If you do not have a suitable file, update/create the document offline, upload it, then come back and link it.</li>
+          <li>After linking better evidence, refresh this page to see updated score/flag status.</li>
+        </ol>
+      </div>
+      <h5 class="card-title">Link Evidence</h5>
+      <form method="POST" action="{{ url_for('main.compliance_requirement_link_evidence', requirement_db_id=requirement.id) }}" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <input type="hidden" name="evidence_bucket" id="evidence_bucket_hidden" value="auto" />
+        <div class="col-md-5">
+          <label for="document_id" class="form-label">Document</label>
+          <select class="form-select" name="document_id" id="document_id" required>
+            <option value="">Select document</option>
+            {% for doc in available_documents %}
+            <option value="{{ doc.id }}" {% if doc.id in linked_doc_ids %}disabled{% endif %}>{{ doc.filename }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label for="rationale_note" class="form-label">Note</label>
+          <input type="text" class="form-control" id="rationale_note" name="rationale_note" maxlength="500" placeholder="Optional (e.g. why this file proves the requirement)" />
+        </div>
+        <div class="col-md-2 d-grid">
+          <button type="submit" class="btn btn-primary">Link (Auto)</button>
+        </div>
+
+        <div class="col-12 mt-2">
+          <button
+            class="btn btn-sm btn-outline-secondary"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#advancedBucketOptions"
+            aria-expanded="false"
+            aria-controls="advancedBucketOptions"
+          >
+            Advanced: choose bucket manually
+          </button>
+          <div class="collapse mt-2" id="advancedBucketOptions">
+            <div class="border rounded p-2 bg-body-tertiary">
+              <label for="evidence_bucket_advanced" class="form-label small mb-1">Evidence bucket (manual override)</label>
+              <select class="form-select form-select-sm" id="evidence_bucket_advanced">
+                <option value="auto" selected>Auto (recommended)</option>
+                <option value="system">System</option>
+                <option value="implementation">Implementation</option>
+                <option value="workforce">Workforce</option>
+                <option value="participant">Participant</option>
+              </select>
+              <div class="small text-body-secondary mt-1">Leave on <strong>Auto</strong> unless you want to force a specific bucket.</div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-body-tertiary border-bottom">
+      <h5 class="card-title mb-0">Linked Evidence</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Document</th>
+            <th>Bucket</th>
+            <th>Note</th>
+            <th>Linked</th>
+            <th>Expiry</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for link in linked_evidence %}
+          <tr>
+            <td>{{ link.document.filename if link.document else ('Document #' ~ link.document_id) }}</td>
+            <td><span class="badge bg-body-tertiary text-body border">{{ link.evidence_bucket }}</span></td>
+            <td>{{ link.rationale_note or '—' }}</td>
+            <td>{{ link.linked_at | datetime_format('%b %d, %Y %I:%M %p') if link.linked_at else '—' }}</td>
+            <td>
+              <div class="small text-body-secondary mb-1">
+                {{ link.expires_at | datetime_format('%b %d, %Y') if link.expires_at else 'No expiry set' }}
+              </div>
+              <form method="POST" action="{{ url_for('main.compliance_requirement_update_expiry', requirement_db_id=requirement.id, link_id=link.id) }}" class="d-flex flex-wrap gap-1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="date" name="expires_at" class="form-control form-control-sm" value="{{ link.expires_at|datetime_format('%Y-%m-%d') if link.expires_at else '' }}" />
+                <input type="text" name="expiry_note" class="form-control form-control-sm" placeholder="Note" value="{{ link.expiry_note or '' }}" />
+                <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+              </form>
+            </td>
+            <td class="text-end">
+              <form method="POST" action="{{ url_for('main.compliance_requirement_unlink_evidence', requirement_db_id=requirement.id, link_id=link.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button type="submit" class="btn btn-sm btn-outline-danger">Unlink</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center py-4 text-body-secondary">No evidence linked yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const card = document.getElementById('ragExplainCard');
+    const runBtn = document.getElementById('runRagExplainBtn');
+    const queryInput = document.getElementById('ragQueryInput');
+    const statusEl = document.getElementById('ragExplainStatus');
+    const resultEl = document.getElementById('ragExplainResult');
+    const answerEl = document.getElementById('ragAnswerText');
+    const citationListEl = document.getElementById('ragCitationList');
+    const csrfToken = "{{ csrf_token() }}";
+
+    if (!card || !runBtn || !queryInput || !statusEl || !resultEl || !answerEl || !citationListEl) {
+      return;
+    }
+
+    const requirementId = (card.dataset.requirementId || '').trim();
+
+    const setStatus = (message, isError) => {
+      statusEl.textContent = message || '';
+      statusEl.classList.remove('d-none', 'text-danger', 'text-body-secondary');
+      statusEl.classList.add(isError ? 'text-danger' : 'text-body-secondary');
+    };
+
+    const clearCitations = () => {
+      citationListEl.innerHTML = '';
+    };
+
+    const parseJsonOrThrow = async (response) => {
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      if (contentType.includes('application/json')) {
+        return response.json();
+      }
+      const bodyText = await response.text();
+      if (bodyText && bodyText.trim().startsWith('<')) {
+        throw new Error('Request was blocked. Refresh the page and try again.');
+      }
+      throw new Error(bodyText || 'Unexpected server response.');
+    };
+
+    runBtn.addEventListener('click', async function () {
+      const query = (queryInput.value || '').trim();
+      if (!query && !requirementId) {
+        setStatus('Please enter a question before searching.', true);
+        return;
+      }
+
+      runBtn.disabled = true;
+      setStatus('Retrieving NDIS citations…', false);
+      resultEl.classList.add('d-none');
+      clearCitations();
+
+      try {
+        const response = await fetch("{{ url_for('main.rag_query_api') }}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+          },
+          body: JSON.stringify({
+            query: query,
+            requirement_id: requirementId,
+            top_k: 3,
+          }),
+        });
+
+        const payload = await parseJsonOrThrow(response);
+        if (!response.ok || !payload.success) {
+          throw new Error((payload && payload.error) || 'RAG query failed.');
+        }
+
+        answerEl.textContent = payload.answer || '';
+
+        const citations = Array.isArray(payload.citations) ? payload.citations : [];
+        citations.forEach((citation) => {
+          const item = document.createElement('div');
+          item.className = 'border rounded p-2 bg-body-tertiary';
+
+          const title = document.createElement('div');
+          title.className = 'small fw-semibold mb-1';
+          const pageText = citation.page_number ? `Page ${citation.page_number}` : 'Page n/a';
+          title.textContent = `${citation.source_id || 'ndis-source'} · ${pageText} · score ${citation.score ?? '0'}`;
+
+          const body = document.createElement('div');
+          body.className = 'small text-body-secondary';
+          body.textContent = citation.text || '';
+
+          item.appendChild(title);
+          item.appendChild(body);
+          citationListEl.appendChild(item);
+        });
+
+        resultEl.classList.remove('d-none');
+        setStatus(citations.length ? 'Citations retrieved.' : 'No citations found for this query.', false);
+      } catch (err) {
+        setStatus(err.message || 'Failed to retrieve citations.', true);
+      } finally {
+        runBtn.disabled = false;
+      }
+    });
+
+    const advancedBucketSelect = document.getElementById('evidence_bucket_advanced');
+    const hiddenBucketInput = document.getElementById('evidence_bucket_hidden');
+    const advancedBucketWrap = document.getElementById('advancedBucketOptions');
+
+    if (advancedBucketSelect && hiddenBucketInput) {
+      const syncBucket = function () {
+        hiddenBucketInput.value = (advancedBucketSelect.value || 'auto').trim().toLowerCase() || 'auto';
+      };
+
+      advancedBucketSelect.addEventListener('change', syncBucket);
+      syncBucket();
+
+      if (advancedBucketWrap) {
+        advancedBucketWrap.addEventListener('hidden.bs.collapse', function () {
+          advancedBucketSelect.value = 'auto';
+          syncBucket();
+        });
+      }
+    }
+  })();
+</script>
+{% endblock %}

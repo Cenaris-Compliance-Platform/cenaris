@@ -1,0 +1,582 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+  .workboard-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .compact-help-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+  }
+
+  .doc-link-table tbody tr {
+    border-top: 2px solid var(--bs-border-color);
+  }
+
+  .doc-link-table tbody tr:first-child {
+    border-top: 1px solid var(--bs-border-color);
+  }
+
+  .doc-link-row td {
+    padding-top: 0.95rem;
+    padding-bottom: 0.95rem;
+    vertical-align: top;
+  }
+
+  .link-req-cell {
+    min-width: 420px;
+  }
+
+  .link-code-chip {
+    line-height: 1.25;
+    font-size: 0.82rem;
+  }
+
+  .advanced-help-text {
+    font-size: 0.84rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .muted-microcopy {
+    font-size: 0.82rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .workboard-kpi {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.85rem;
+    background: var(--bs-body-bg);
+    height: 100%;
+  }
+
+  .bucket-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.2rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+  }
+
+  .bucket-dot.ok {
+    background: rgba(var(--bs-success-rgb), 0.14);
+    border-color: rgba(var(--bs-success-rgb), 0.45);
+    color: var(--bs-success-text-emphasis);
+  }
+
+  .bucket-dot.missing {
+    background: rgba(var(--bs-secondary-rgb), 0.12);
+    color: var(--bs-secondary-color);
+  }
+
+  .workboard-note {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.85rem;
+    background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.08), rgba(var(--bs-info-rgb), 0.06));
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12 d-flex justify-content-between align-items-start flex-wrap gap-2">
+      <div>
+        <div class="workboard-title-wrap mb-1">
+          <h1 id="wt-req-heading" class="h3 fw-bold mb-0">Requirements Workboard</h1>
+          <button
+            class="btn btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center compact-help-btn"
+            type="button"
+            id="requirementsHelpBtn"
+            aria-expanded="false"
+            aria-controls="requirementsUsageHelp"
+            title="How to use this page"
+          >
+            <i class="bi bi-info-lg"></i>
+          </button>
+        </div>
+        <p class="text-body-secondary mb-0">Track requirement health, evidence coverage, and review due state in one place.</p>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <form method="POST" action="{{ url_for('main.compliance_requirements_auto_link') }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-magic me-1"></i>Auto-link From Analyzed Docs
+          </button>
+        </form>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center px-3">
+          <i class="bi bi-speedometer2 me-1"></i>Back to Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex align-items-center justify-content-end flex-wrap gap-2 mb-3">
+    <div class="text-end">
+      <button
+        class="btn btn-sm btn-outline-secondary"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#advancedPlanningPanel"
+        aria-expanded="false"
+        aria-controls="advancedPlanningPanel"
+      >
+        Show Advanced Planning (Optional)
+      </button>
+      <div class="advanced-help-text mt-1">Monthly snapshot and planning queues.</div>
+    </div>
+  </div>
+
+  <div class="collapse mb-3" id="requirementsUsageHelp">
+    <div class="workboard-note p-3">
+      <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Simple way to use this page</div>
+      <div class="small text-body-secondary">Use auto-link first, then review only flagged rows.</div>
+      <div class="small text-body-secondary mt-2">Legend: <strong>S</strong> System, <strong>I</strong> Implementation, <strong>W</strong> Workforce, <strong>P</strong> Participant.</div>
+    </div>
+  </div>
+
+  <div id="wt-req-filters" class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-body-tertiary border-bottom d-flex justify-content-between align-items-center">
+      <h5 class="card-title mb-0"><i class="bi bi-link-45deg me-2 text-primary"></i>Simple Document Link View</h5>
+      <span class="muted-microcopy">Uploaded file to requirement links</span>
+    </div>
+    <div class="px-3 pt-2 muted-microcopy">Tip: hover/click a code for the link reason.</div>
+    <div class="px-3 pb-2 pt-2 border-bottom">
+      <div class="row g-2 align-items-center">
+        <div class="col-md-8">
+          <input
+            type="search"
+            id="docLinkSearch"
+            class="form-control form-control-sm"
+            placeholder="Search by document name or requirement code..."
+            aria-label="Search linked documents"
+          />
+        </div>
+        <div class="col-md-4 text-md-end">
+          <div class="form-check d-inline-flex align-items-center gap-2">
+            <input class="form-check-input mt-0" type="checkbox" id="showUnlinkedOnly" />
+            <label class="form-check-label small" for="showUnlinkedOnly">Show unlinked only</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 doc-link-table" id="docLinkTable">
+        <thead>
+          <tr>
+            <th>Document</th>
+            <th>Linked Requirements</th>
+            <th>Last Linked</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in document_link_overview %}
+          <tr class="doc-link-row" data-doc-link-row data-doc-label="{{ (item.filename or '')|lower }}" data-linked-count="{{ item.linked_count }}" data-req-codes="{{ item.requirements_preview|map(attribute='code')|join(' ')|lower }}">
+            <td>
+              <div class="fw-semibold">{{ item.filename }}</div>
+              <div class="small text-body-secondary">Uploaded {{ item.uploaded_at | datetime_format('%b %d, %Y') if item.uploaded_at else '—' }}</div>
+            </td>
+            <td class="link-req-cell">
+              <div class="small fw-semibold mb-1">{{ item.linked_count }} linked</div>
+              {% if item.requirements_preview %}
+              <div class="d-flex flex-wrap gap-1">
+                {% for req in item.requirements_preview %}
+                <button
+                  type="button"
+                  class="btn btn-sm btn-light border py-0 px-2 link-code-chip"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="hover focus click"
+                  data-bs-title="{{ req.code }}"
+                  data-bs-content="{{ req.reason }}"
+                >
+                  {{ req.code }}
+                </button>
+                {% endfor %}
+              </div>
+              {% else %}
+              <span class="small text-body-secondary">No requirement links yet.</span>
+              {% endif %}
+            </td>
+            <td class="small text-body-secondary">
+              {{ item.last_linked_at | datetime_format('%b %d, %Y %I:%M %p') if item.last_linked_at else '—' }}
+            </td>
+            <td class="text-end">
+              {% if item.linked_count == 0 %}
+              <form method="POST" action="{{ url_for('main.compliance_requirements_auto_link_document', document_id=item.document_id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button type="submit" class="btn btn-sm btn-primary">Auto-link</button>
+              </form>
+              {% endif %}
+              <a href="{{ url_for('main.document_details', doc_id=item.document_id) }}" class="btn btn-sm btn-outline-primary{% if item.linked_count == 0 %} ms-1{% endif %}">Open Document</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-center py-3 text-body-secondary">No uploaded documents found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-sm-6 col-lg-3">
+      <div class="workboard-kpi p-3">
+        <div class="text-body-secondary small">Total Requirements</div>
+        <div class="h4 fw-bold mb-0">{{ summary.total_requirements }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="workboard-kpi p-3">
+        <div class="text-body-secondary small">Fully Linked</div>
+        <div class="h4 fw-bold mb-0 text-success">{{ summary.fully_linked_requirements }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="workboard-kpi p-3">
+        <div class="text-body-secondary small">Overdue Reviews</div>
+        <div class="h4 fw-bold mb-0 text-danger">{{ summary.overdue_reviews }}</div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="workboard-kpi p-3">
+        <div class="text-body-secondary small">At Risk</div>
+        <div class="h4 fw-bold mb-0 text-warning">{{ summary.at_risk_requirements }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="advancedPlanningPanel" class="collapse">
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-body-tertiary border-bottom">
+      <h5 class="card-title mb-0"><i class="bi bi-calendar2-week me-2 text-primary"></i>Monthly Operations Snapshot</h5>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <div class="workboard-kpi p-3">
+            <div class="text-body-secondary small">Uploads (last 30 days)</div>
+            <div class="h5 fw-bold mb-0">{{ monthly_snapshot.uploads_30d }}</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="workboard-kpi p-3">
+            <div class="text-body-secondary small">Assessments updated (last 30 days)</div>
+            <div class="h5 fw-bold mb-0">{{ monthly_snapshot.assessments_30d }}</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="workboard-kpi p-3">
+            <div class="text-body-secondary small">Evidence links created (last 30 days)</div>
+            <div class="h5 fw-bold mb-0">{{ monthly_snapshot.links_30d }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="border rounded p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="fw-semibold">Owner Action Queue</div>
+              <span class="badge bg-warning text-dark">{{ owner_action_queue|length }} items</span>
+            </div>
+            {% if owner_action_queue %}
+            <div class="d-flex flex-column gap-2">
+              {% for item in owner_action_queue %}
+              <div class="border rounded p-2 small">
+                <div class="d-flex justify-content-between gap-2">
+                  <div>
+                    <div class="fw-semibold">{{ item.plain_title or item.requirement_id }}</div>
+                    <div class="text-body-secondary">{{ item.display_code or item.requirement_id }} ({{ item.module_name }})</div>
+                  </div>
+                  <span class="badge bg-body-tertiary text-body border">{{ item.owner_role }}</span>
+                </div>
+                <div class="text-body-secondary mt-1">{{ item.reason }}</div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                  <span class="text-body-secondary">{{ item.due_label }}</span>
+                  <a href="{{ item.action_url }}" class="btn btn-sm btn-outline-primary">Open</a>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="small text-body-secondary">No urgent owner actions right now.</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="border rounded p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="fw-semibold">Upcoming Review Queue</div>
+              <span class="badge bg-info text-dark">{{ upcoming_review_queue|length }} upcoming</span>
+            </div>
+            {% if upcoming_review_queue %}
+            <div class="d-flex flex-column gap-2">
+              {% for item in upcoming_review_queue %}
+              <div class="border rounded p-2 small">
+                <div class="d-flex justify-content-between gap-2">
+                  <div>
+                    <div class="fw-semibold">{{ item.plain_title or item.requirement_id }}</div>
+                    <div class="text-body-secondary">{{ item.display_code or item.requirement_id }} ({{ item.module_name }})</div>
+                  </div>
+                  <span class="badge bg-body-tertiary text-body border">{{ item.owner_role }}</span>
+                </div>
+                <div class="text-body-secondary mt-1">{{ item.due_label }} • Coverage {{ item.coverage_pct }}%</div>
+                <div class="text-end mt-2">
+                  <a href="{{ item.action_url }}" class="btn btn-sm btn-outline-primary">Open</a>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="small text-body-secondary">No scheduled reviews due in the next 45 days.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <div class="muted-microcopy">Requirement assessment table is optional.</div>
+    <button
+      class="btn btn-outline-secondary btn-sm"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#requirementWorkboardPanel"
+      aria-expanded="{{ 'true' if show_requirements_panel else 'false' }}"
+      aria-controls="requirementWorkboardPanel"
+    >
+      Open Requirement Details
+    </button>
+  </div>
+
+  <div id="requirementWorkboardPanel" class="collapse {% if show_requirements_panel %}show{% endif %}">
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form method="GET" class="row g-2 align-items-end">
+        <input type="hidden" name="show_requirements_panel" value="1" />
+        <div class="col-lg-3">
+          <label for="q" class="form-label">Search</label>
+          <input id="q" name="q" value="{{ q or '' }}" class="form-control" placeholder="Requirement, module, owner" />
+        </div>
+        <div class="col-lg-2">
+          <label for="status" class="form-label">Status</label>
+          <select id="status" name="status" class="form-select">
+            <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+            <option value="Critical gap" {% if status_filter == 'Critical gap' %}selected{% endif %}>Critical gap</option>
+            <option value="High risk gap" {% if status_filter == 'High risk gap' %}selected{% endif %}>High risk gap</option>
+            <option value="OK" {% if status_filter == 'OK' %}selected{% endif %}>OK</option>
+            <option value="Mature" {% if status_filter == 'Mature' %}selected{% endif %}>Mature</option>
+          </select>
+        </div>
+        <div class="col-lg-2">
+          <label for="module" class="form-label">Module</label>
+          <select id="module" name="module" class="form-select">
+            <option value="" {% if not module_filter %}selected{% endif %}>All</option>
+            {% for module_name in module_options %}
+            <option value="{{ module_name }}" {% if module_filter == module_name %}selected{% endif %}>{{ module_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-2">
+          <label for="bucket" class="form-label">Bucket</label>
+          <select id="bucket" name="bucket" class="form-select">
+            <option value="" {% if not bucket_filter %}selected{% endif %}>All</option>
+            <option value="system" {% if bucket_filter == 'system' %}selected{% endif %}>System</option>
+            <option value="implementation" {% if bucket_filter == 'implementation' %}selected{% endif %}>Implementation</option>
+            <option value="workforce" {% if bucket_filter == 'workforce' %}selected{% endif %}>Workforce</option>
+            <option value="participant" {% if bucket_filter == 'participant' %}selected{% endif %}>Participant</option>
+          </select>
+        </div>
+        <div class="col-lg-2">
+          <label for="due" class="form-label">Due State</label>
+          <select id="due" name="due" class="form-select">
+            <option value="" {% if not due_filter %}selected{% endif %}>All</option>
+            <option value="overdue" {% if due_filter == 'overdue' %}selected{% endif %}>Overdue</option>
+            <option value="30d" {% if due_filter == '30d' %}selected{% endif %}>Due in 30d</option>
+            <option value="unscheduled" {% if due_filter == 'unscheduled' %}selected{% endif %}>Unscheduled</option>
+          </select>
+        </div>
+        <div class="col-lg-1 d-grid">
+          <button type="submit" class="btn btn-primary">Apply</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="wt-req-table" class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Requirement</th>
+            <th>Owner</th>
+            <th>Evidence Coverage</th>
+            <th>Review Due</th>
+            <th>Status</th>
+            <th id="wt-req-status" class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          {% set req = row.requirement %}
+          {% set assessment = row.assessment %}
+          <tr>
+            <td>
+              <div class="fw-semibold">{{ row.plain_title or req.requirement_id }}</div>
+              <div class="small text-body-secondary">{{ row.display_code or req.requirement_id }}</div>
+              <div class="small text-body-secondary">{{ row.module_name }}</div>
+              {% if req.quality_indicator_text %}
+              <div class="small text-body-secondary">{{ req.quality_indicator_text[:100] }}{% if req.quality_indicator_text|length > 100 %}…{% endif %}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-body-tertiary text-body border">{{ row.owner_role }}</span>
+            </td>
+            <td>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="progress flex-grow-1" style="height: 8px; min-width: 120px;">
+                  <div class="progress-bar" role="progressbar" style="width: {{ row.bucket_coverage_pct }}%;" aria-valuenow="{{ row.bucket_coverage_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <span class="small fw-semibold">{{ row.bucket_coverage_pct }}%</span>
+              </div>
+              <div class="d-flex flex-wrap gap-1">
+                <span class="bucket-dot {% if row.bucket_counts.system > 0 %}ok{% else %}missing{% endif %}">S</span>
+                <span class="bucket-dot {% if row.bucket_counts.implementation > 0 %}ok{% else %}missing{% endif %}">I</span>
+                {% if 'workforce' in row.required_buckets %}
+                <span class="bucket-dot {% if row.bucket_counts.workforce > 0 %}ok{% else %}missing{% endif %}">W</span>
+                {% endif %}
+                {% if 'participant' in row.required_buckets %}
+                <span class="bucket-dot {% if row.bucket_counts.participant > 0 %}ok{% else %}missing{% endif %}">P</span>
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              <span class="badge bg-{{ row.due.tone }}{% if row.due.tone == 'warning' %} text-dark{% endif %}">{{ row.due.label }}</span>
+              {% if req.review_frequency %}
+              <div class="small text-body-secondary mt-1">Frequency: {{ req.review_frequency }}</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if assessment and assessment.computed_flag %}
+              {% set flag = assessment.computed_flag|lower|replace('_', ' ') %}
+              {% if flag in ['mature', 'green'] %}
+              <span class="badge bg-primary">{{ assessment.computed_flag }}</span>
+              {% elif flag in ['ok'] %}
+              <span class="badge bg-success">{{ assessment.computed_flag }}</span>
+              {% elif flag in ['high risk gap', 'amber'] %}
+              <span class="badge bg-warning text-dark">{{ assessment.computed_flag }}</span>
+              {% elif flag in ['critical gap', 'red'] %}
+              <span class="badge bg-danger">{{ assessment.computed_flag }}</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ assessment.computed_flag }}</span>
+              {% endif %}
+              {% else %}
+              <span class="badge bg-secondary">Not assessed</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a id="wt-req-link-btn" href="{{ url_for('main.compliance_requirement_detail', requirement_db_id=req.id) }}" class="btn btn-sm btn-outline-primary">Open</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center py-4 text-body-secondary">
+              <div class="fw-semibold mb-1">No matching requirements found</div>
+              <div class="small">Try resetting filters or broadening your search.</div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pagination.pages > 1 %}
+    <div class="card-footer bg-body-tertiary border-top">
+      <nav aria-label="Requirements pagination">
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.prev_num, q=q, status=status_filter, module=module_filter, bucket=bucket_filter, due=due_filter, show_requirements_panel=1) if pagination.has_prev else '#' }}">Previous</a>
+          </li>
+          <li class="page-item disabled">
+            <span class="page-link">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+          </li>
+          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('main.compliance_requirements', page=pagination.next_num, q=q, status=status_filter, module=module_filter, bucket=bucket_filter, due=due_filter, show_requirements_panel=1) if pagination.has_next else '#' }}">Next</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>window.WALKTHROUGH_PAGE_KEY = 'tour-requirements';</script>
+<script>
+  (function () {
+    const helpPanel = document.getElementById('requirementsUsageHelp');
+    const helpBtn = document.getElementById('requirementsHelpBtn');
+    if (helpPanel && helpBtn && window.bootstrap && window.bootstrap.Collapse) {
+      const collapse = window.bootstrap.Collapse.getOrCreateInstance(helpPanel, { toggle: false });
+      helpBtn.addEventListener('click', function () {
+        collapse.toggle();
+      });
+    }
+
+    const popoverEls = document.querySelectorAll('[data-bs-toggle="popover"]');
+    popoverEls.forEach(function (el) {
+      if (window.bootstrap && window.bootstrap.Popover) {
+        new window.bootstrap.Popover(el, {
+          container: 'body',
+          html: false,
+          placement: 'top',
+        });
+      }
+    });
+
+    const searchInput = document.getElementById('docLinkSearch');
+    const showUnlinkedOnly = document.getElementById('showUnlinkedOnly');
+    const rows = Array.from(document.querySelectorAll('[data-doc-link-row]'));
+
+    function refreshDocLinkRows() {
+      const query = ((searchInput && searchInput.value) || '').trim().toLowerCase();
+      const unlinkedOnly = Boolean(showUnlinkedOnly && showUnlinkedOnly.checked);
+
+      rows.forEach(function (row) {
+        const linkedCount = Number(row.getAttribute('data-linked-count') || '0');
+        const docLabel = (row.getAttribute('data-doc-label') || '').toLowerCase();
+        const reqCodes = (row.getAttribute('data-req-codes') || '').toLowerCase();
+        const searchable = (docLabel + ' ' + reqCodes).trim();
+
+        const queryOk = !query || searchable.indexOf(query) >= 0;
+        const linkOk = !unlinkedOnly || linkedCount === 0;
+        row.classList.toggle('d-none', !(queryOk && linkOk));
+      });
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', refreshDocLinkRows);
+    }
+    if (showUnlinkedOnly) {
+      showUnlinkedOnly.addEventListener('change', refreshDocLinkRows);
+    }
+  })();
+</script>
+{% endblock %}

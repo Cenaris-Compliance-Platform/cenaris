@@ -4,6 +4,7 @@ import time
 from flask import g
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import event
 from app import db
 
 
@@ -102,12 +103,28 @@ class Organization(db.Model):
     contact_number = db.Column(db.String(40))
     address = db.Column(db.String(255))
     industry = db.Column(db.String(60))
+    enabled_modules_list = db.Column(db.Text, nullable=True)
     billing_email = db.Column(db.String(120))
     billing_address = db.Column(db.String(255))
     billing_details = db.Column(db.Text)
+    monthly_report_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    monthly_report_recipient_email = db.Column(db.String(120), nullable=True)
     logo_blob_name = db.Column(db.String(255))
     logo_content_type = db.Column(db.String(100))
     subscription_tier = db.Column(db.String(20), default='Starter')
+    billing_plan_code = db.Column(db.String(40), nullable=True)
+    billing_status = db.Column(db.String(40), nullable=True)
+    stripe_customer_id = db.Column(db.String(80), nullable=True)
+    stripe_subscription_id = db.Column(db.String(80), nullable=True)
+    billing_current_period_start = db.Column(db.DateTime, nullable=True)
+    billing_current_period_end = db.Column(db.DateTime, nullable=True)
+    billing_trial_ends_at = db.Column(db.DateTime, nullable=True)
+    billing_cancel_at_period_end = db.Column(db.Boolean, nullable=False, default=False)
+    billing_internal_override = db.Column(db.Boolean, nullable=False, default=False)
+    billing_override_reason = db.Column(db.String(255), nullable=True)
+    billing_demo_override_until = db.Column(db.DateTime, nullable=True)
+    billing_last_event_id = db.Column(db.String(80), nullable=True)
+    billing_last_event_at = db.Column(db.DateTime, nullable=True)
 
     # Compliance + privacy acknowledgements
     operates_in_australia = db.Column(db.Boolean, nullable=True)
@@ -282,15 +299,652 @@ class Document(db.Model):
     blob_name = db.Column(db.String(255))
     file_size = db.Column(db.Integer)
     content_type = db.Column(db.String(50))
+    extracted_text = db.Column(db.Text, nullable=True)
+    search_text = db.Column(db.Text, nullable=True)
+    ai_status = db.Column(db.String(50), nullable=True)
+    ai_confidence = db.Column(db.Float, nullable=True)
+    ai_focus_area = db.Column(db.String(80), nullable=True)
+    ai_question = db.Column(db.Text, nullable=True)
+    ai_summary = db.Column(db.Text, nullable=True)
+    ai_provider = db.Column(db.String(50), nullable=True)
+    ai_model = db.Column(db.String(120), nullable=True)
+    ai_retrieval_mode = db.Column(db.String(20), nullable=True)
+    ai_analysis_at = db.Column(db.DateTime, nullable=True)
     uploaded_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
 
     uploader = db.relationship('User', foreign_keys=[uploaded_by], lazy='select')
+    tags = db.relationship(
+        'DocumentTag',
+        secondary='document_tag_map',
+        lazy='selectin',
+        back_populates='documents',
+    )
 
     __table_args__ = (
         db.Index('ix_documents_org_active_uploaded_at', 'organization_id', 'is_active', 'uploaded_at'),
+    )
+
+
+class DocumentTag(db.Model):
+    __tablename__ = 'document_tags'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    name = db.Column(db.String(64), nullable=False)
+    normalized_name = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    documents = db.relationship(
+        'Document',
+        secondary='document_tag_map',
+        lazy='selectin',
+        back_populates='tags',
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'normalized_name', name='uq_document_tags_org_normalized_name'),
+        db.Index('ix_document_tags_org_name', 'organization_id', 'name'),
+    )
+
+
+class DocumentTagMap(db.Model):
+    __tablename__ = 'document_tag_map'
+
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id', ondelete='CASCADE'), primary_key=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey('document_tags.id', ondelete='CASCADE'), primary_key=True)
+    linked_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_document_tag_map_tag_id', 'tag_id'),
+    )
+
+
+class ComplianceFrameworkVersion(db.Model):
+    __tablename__ = 'compliance_framework_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+    jurisdiction = db.Column(db.String(20), nullable=False, default='AU')
+    scheme = db.Column(db.String(50), nullable=False, default='NDIS')
+    source_authority = db.Column(db.String(255), nullable=True)
+    source_document = db.Column(db.String(255), nullable=True)
+    source_url = db.Column(db.String(500), nullable=True)
+    version_label = db.Column(db.String(50), nullable=False, default='v1.0')
+    imported_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    imported_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    checksum = db.Column(db.String(64), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    imported_by = db.relationship('User', foreign_keys=[imported_by_user_id], lazy='select')
+    requirements = db.relationship(
+        'ComplianceRequirement',
+        backref='framework_version',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'organization_id',
+            'scheme',
+            'version_label',
+            name='uq_compliance_framework_org_scheme_version',
+        ),
+        db.Index('ix_compliance_framework_versions_org_active', 'organization_id', 'is_active'),
+    )
+
+
+class ComplianceRequirement(db.Model):
+    __tablename__ = 'compliance_requirements'
+
+    id = db.Column(db.Integer, primary_key=True)
+    framework_version_id = db.Column(db.Integer, db.ForeignKey('compliance_framework_versions.id'), nullable=False)
+
+    requirement_id = db.Column(db.String(120), nullable=False)
+    module_type = db.Column(db.String(40), nullable=True)
+    module_name = db.Column(db.String(255), nullable=True)
+    standard_name = db.Column(db.String(255), nullable=True)
+    outcome_code = db.Column(db.String(120), nullable=True)
+    outcome_text = db.Column(db.Text, nullable=True)
+    quality_indicator_code = db.Column(db.String(120), nullable=True)
+    quality_indicator_text = db.Column(db.Text, nullable=True)
+
+    applies_to_all_providers = db.Column(db.Boolean, default=False, nullable=False)
+    registration_group_numbers = db.Column(db.String(255), nullable=True)
+    registration_group_names = db.Column(db.Text, nullable=True)
+    registration_group_source_url = db.Column(db.String(500), nullable=True)
+
+    audit_type = db.Column(db.String(50), nullable=True)
+    high_risk_flag = db.Column(db.Boolean, default=False, nullable=False)
+    stage_1_applies = db.Column(db.Boolean, default=False, nullable=False)
+    stage_2_applies = db.Column(db.Boolean, default=False, nullable=False)
+    audit_test_methods = db.Column(db.Text, nullable=True)
+    sampling_required = db.Column(db.Boolean, default=False, nullable=False)
+    sampling_subject = db.Column(db.String(255), nullable=True)
+
+    system_evidence_required = db.Column(db.Text, nullable=True)
+    implementation_evidence_required = db.Column(db.Text, nullable=True)
+    workforce_evidence_required = db.Column(db.Text, nullable=True)
+    participant_evidence_required = db.Column(db.Text, nullable=True)
+
+    requires_workforce_evidence = db.Column(db.Boolean, default=False, nullable=False)
+    requires_participant_evidence = db.Column(db.Boolean, default=False, nullable=False)
+    minimum_evidence_score_2 = db.Column(db.Text, nullable=True)
+    best_practice_evidence_score_3 = db.Column(db.Text, nullable=True)
+    common_nonconformity_patterns = db.Column(db.Text, nullable=True)
+    gap_rule_1 = db.Column(db.Text, nullable=True)
+    gap_rule_2 = db.Column(db.Text, nullable=True)
+    gap_rule_3 = db.Column(db.Text, nullable=True)
+    nc_severity_default = db.Column(db.String(50), nullable=True)
+    evidence_owner_role = db.Column(db.String(120), nullable=True)
+    review_frequency = db.Column(db.String(120), nullable=True)
+    system_of_record = db.Column(db.String(255), nullable=True)
+    audit_export_label = db.Column(db.String(255), nullable=True)
+    source_version = db.Column(db.String(50), nullable=True)
+    source_last_reviewed_date = db.Column(db.Date, nullable=True)
+    change_trigger = db.Column(db.String(255), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    org_assessments = db.relationship(
+        'OrganizationRequirementAssessment',
+        backref='requirement',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+    evidence_links = db.relationship(
+        'RequirementEvidenceLink',
+        backref='requirement',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('framework_version_id', 'requirement_id', name='uq_compliance_requirement_per_framework'),
+        db.Index('ix_compliance_requirements_requirement_id', 'requirement_id'),
+        db.Index('ix_compliance_requirements_quality_indicator_code', 'quality_indicator_code'),
+    )
+
+
+class OrganizationRequirementAssessment(db.Model):
+    __tablename__ = 'organization_requirement_assessments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    requirement_id = db.Column(db.Integer, db.ForeignKey('compliance_requirements.id'), nullable=False)
+
+    evidence_status_system = db.Column(db.String(20), nullable=False, default='Not assessed')
+    evidence_status_implementation = db.Column(db.String(20), nullable=False, default='Not assessed')
+    evidence_status_workforce = db.Column(db.String(20), nullable=False, default='Not assessed')
+    evidence_status_participant = db.Column(db.String(20), nullable=False, default='Not assessed')
+    best_practice_evidence_present = db.Column(db.Boolean, default=False, nullable=False)
+
+    computed_score = db.Column(db.Integer, nullable=True)
+    computed_flag = db.Column(db.String(30), nullable=True)
+
+    last_assessed_at = db.Column(db.DateTime, nullable=True)
+    last_assessed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        onupdate=datetime.now(timezone.utc),
+    )
+
+    last_assessed_by = db.relationship('User', foreign_keys=[last_assessed_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'requirement_id', name='uq_org_requirement_assessment'),
+        db.Index('ix_org_requirement_assessments_org', 'organization_id'),
+        db.Index('ix_org_requirement_assessments_flag', 'computed_flag'),
+    )
+
+
+class RequirementEvidenceLink(db.Model):
+    __tablename__ = 'requirement_evidence_links'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    requirement_id = db.Column(db.Integer, db.ForeignKey('compliance_requirements.id'), nullable=False)
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=False)
+
+    evidence_bucket = db.Column(db.String(30), nullable=False)
+    rationale_note = db.Column(db.Text, nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    expires_at_set_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    expires_at_set_at = db.Column(db.DateTime, nullable=True)
+    expiry_note = db.Column(db.String(255), nullable=True)
+    linked_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    linked_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    linked_by = db.relationship('User', foreign_keys=[linked_by_user_id], lazy='select')
+    expires_at_set_by = db.relationship('User', foreign_keys=[expires_at_set_by_user_id], lazy='select')
+    document = db.relationship('Document', foreign_keys=[document_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'organization_id',
+            'requirement_id',
+            'document_id',
+            'evidence_bucket',
+            name='uq_requirement_evidence_link',
+        ),
+        db.Index('ix_requirement_evidence_links_org_requirement', 'organization_id', 'requirement_id'),
+        db.Index('ix_requirement_evidence_links_document', 'document_id'),
+        db.Index('ix_requirement_evidence_links_expires_at', 'expires_at'),
+    )
+
+
+class RequirementReminder(db.Model):
+    __tablename__ = 'requirement_reminders'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    requirement_id = db.Column(db.Integer, db.ForeignKey('compliance_requirements.id'), nullable=False)
+    frequency_days = db.Column(db.Integer, nullable=False, default=30)
+    next_send_at = db.Column(db.DateTime, nullable=True)
+    last_sent_at = db.Column(db.DateTime, nullable=True)
+    recipient_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    recipient_email = db.Column(db.String(160), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        onupdate=datetime.now(timezone.utc),
+    )
+
+    requirement = db.relationship('ComplianceRequirement', lazy='select')
+    recipient_user = db.relationship('User', foreign_keys=[recipient_user_id], lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'requirement_id', name='uq_requirement_reminders_org_requirement'),
+        db.Index('ix_requirement_reminders_org', 'organization_id'),
+        db.Index('ix_requirement_reminders_next_send', 'next_send_at'),
+        db.Index('ix_requirement_reminders_active', 'organization_id', 'is_active'),
+    )
+
+
+class PolicyDraft(db.Model):
+    __tablename__ = 'policy_drafts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    title = db.Column(db.String(200), nullable=False)
+    policy_type = db.Column(db.String(160), nullable=True)
+    source_mode = db.Column(db.String(20), nullable=True)
+    scope_mode = db.Column(db.String(20), nullable=True)
+    requirement_code = db.Column(db.String(120), nullable=True)
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=True)
+    last_version_number = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        onupdate=datetime.now(timezone.utc),
+    )
+
+    organization = db.relationship('Organization', lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+    document = db.relationship('Document', foreign_keys=[document_id], lazy='select')
+    versions = db.relationship('PolicyDraftVersion', backref='draft', lazy='dynamic', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.Index('ix_policy_drafts_org', 'organization_id'),
+        db.Index('ix_policy_drafts_created', 'created_at'),
+    )
+
+
+class PolicyDraftVersion(db.Model):
+    __tablename__ = 'policy_draft_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    policy_draft_id = db.Column(db.Integer, db.ForeignKey('policy_drafts.id'), nullable=False)
+    version_number = db.Column(db.Integer, nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    draft_text = db.Column(db.Text, nullable=False)
+    draft_mode = db.Column(db.String(40), nullable=True)
+    output_mode = db.Column(db.String(40), nullable=True)
+    policy_tone = db.Column(db.String(120), nullable=True)
+    policy_audience = db.Column(db.String(120), nullable=True)
+    policy_strictness = db.Column(db.String(120), nullable=True)
+    org_profile = db.Column(db.String(120), nullable=True)
+    context_goal = db.Column(db.String(500), nullable=True)
+    context_brief = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('policy_draft_id', 'version_number', name='uq_policy_draft_version_number'),
+        db.Index('ix_policy_draft_versions_draft', 'policy_draft_id'),
+        db.Index('ix_policy_draft_versions_created', 'created_at'),
+    )
+
+
+class AuditEvent(db.Model):
+    __tablename__ = 'audit_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    event_type = db.Column(db.String(80), nullable=False)
+    entity_type = db.Column(db.String(80), nullable=True)
+    entity_id = db.Column(db.String(120), nullable=True)
+    message = db.Column(db.String(255), nullable=True)
+    payload_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    actor = db.relationship('User', foreign_keys=[actor_user_id], lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_audit_events_org_created', 'organization_id', 'created_at'),
+        db.Index('ix_audit_events_type', 'event_type'),
+        db.Index('ix_audit_events_entity', 'entity_type', 'entity_id'),
+    )
+
+
+class DemoAnalysisResult(db.Model):
+    """
+    Persisted record of every AI demo analysis run.
+    Uploaded file content is NOT stored — only metadata and the AI output.
+    """
+    __tablename__ = 'demo_analysis_results'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Input metadata (no file content stored)
+    filename = db.Column(db.String(255), nullable=True)
+    question = db.Column(db.Text, nullable=True)
+
+    # AI outputs
+    status = db.Column(db.String(50), nullable=True)      # Mature / OK / High risk gap / Critical gap
+    confidence = db.Column(db.Float, nullable=True)       # 0.0–1.0
+    analysis_mode = db.Column(db.String(20), default='balanced', nullable=False)
+    summary = db.Column(db.Text, nullable=True)
+    snippet_count = db.Column(db.Integer, default=0, nullable=False)
+    citation_count = db.Column(db.Integer, default=0, nullable=False)
+
+    # Engine metadata
+    provider = db.Column(db.String(50), nullable=True)    # openrouter / deterministic
+    model_used = db.Column(db.String(120), nullable=True)
+    retrieval_mode = db.Column(db.String(20), nullable=True)  # hybrid / lexical
+
+    organization = db.relationship('Organization', lazy='select')
+    user = db.relationship('User', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_demo_analysis_org_created', 'organization_id', 'created_at'),
+        db.Index('ix_demo_analysis_user_created', 'user_id', 'created_at'),
+    )
+
+
+class AIUsageEvent(db.Model):
+    __tablename__ = 'ai_usage_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    event = db.Column(db.String(40), nullable=False)
+    mode = db.Column(db.String(20), nullable=False)
+    provider = db.Column(db.String(40), nullable=False)
+    model = db.Column(db.String(120), nullable=False)
+    prompt_tokens = db.Column(db.Integer, nullable=False, default=0)
+    completion_tokens = db.Column(db.Integer, nullable=False, default=0)
+    total_tokens = db.Column(db.Integer, nullable=False, default=0)
+    latency_ms = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    # Feedback Integration Columns
+    document_id = db.Column(db.Integer, db.ForeignKey('documents.id', ondelete='SET NULL'), nullable=True)
+    feedback_status = db.Column(db.String(80), nullable=True)
+    feedback_confidence = db.Column(db.Float, nullable=True)
+    feedback_reason = db.Column(db.Text, nullable=True)
+
+    organization = db.relationship('Organization', lazy='select')
+    user = db.relationship('User', lazy='select')
+    document = db.relationship('Document', foreign_keys=[document_id], lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_ai_usage_events_org_created_at', 'organization_id', 'created_at'),
+        db.Index('ix_ai_usage_events_event_created_at', 'event', 'created_at'),
+    )
+
+
+class APIKey(db.Model):
+    __tablename__ = 'api_keys'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    name = db.Column(db.String(120), nullable=False)
+    key_prefix = db.Column(db.String(20), nullable=False)
+    key_hash = db.Column(db.String(64), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('key_hash', name='uq_api_keys_hash'),
+        db.Index('ix_api_keys_org_active', 'organization_id', 'is_active'),
+        db.Index('ix_api_keys_prefix', 'key_prefix'),
+    )
+
+
+class WebhookEndpoint(db.Model):
+    __tablename__ = 'webhook_endpoints'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    name = db.Column(db.String(120), nullable=False)
+    target_url = db.Column(db.String(500), nullable=False)
+    events_csv = db.Column(db.Text, nullable=False, default='*')
+    secret = db.Column(db.String(128), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    created_by = db.relationship('User', foreign_keys=[created_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_webhook_endpoints_org_active', 'organization_id', 'is_active'),
+    )
+
+
+class WebhookDelivery(db.Model):
+    __tablename__ = 'webhook_deliveries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    webhook_endpoint_id = db.Column(db.Integer, db.ForeignKey('webhook_endpoints.id'), nullable=False)
+    event_type = db.Column(db.String(80), nullable=False)
+    payload_json = db.Column(db.Text, nullable=False)
+    success = db.Column(db.Boolean, default=False, nullable=False)
+    status_code = db.Column(db.Integer, nullable=True)
+    response_excerpt = db.Column(db.String(500), nullable=True)
+    attempted_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    endpoint = db.relationship('WebhookEndpoint', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_webhook_deliveries_endpoint_attempted_at', 'webhook_endpoint_id', 'attempted_at'),
+        db.Index('ix_webhook_deliveries_event_attempted_at', 'event_type', 'attempted_at'),
+    )
+
+
+class AdminNotification(db.Model):
+    __tablename__ = 'admin_notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    read_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    event_type = db.Column(db.String(60), nullable=False)
+    title = db.Column(db.String(160), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    severity = db.Column(db.String(20), nullable=False, default='info')
+    link_url = db.Column(db.String(255), nullable=True)
+    payload_json = db.Column(db.Text, nullable=True)
+
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+    read_at = db.Column(db.DateTime, nullable=True)
+    email_sent_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+    actor = db.relationship('User', foreign_keys=[actor_user_id], lazy='select')
+    read_by = db.relationship('User', foreign_keys=[read_by_user_id], lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_admin_notifications_org_created_at', 'organization_id', 'created_at'),
+        db.Index('ix_admin_notifications_org_read_created_at', 'organization_id', 'is_read', 'created_at'),
+        db.Index('ix_admin_notifications_event_type', 'event_type'),
+    )
+
+
+class StripeBillingWebhookEvent(db.Model):
+    __tablename__ = 'stripe_billing_webhook_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.String(80), nullable=False)
+    event_type = db.Column(db.String(80), nullable=False)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True)
+    processed_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+
+    organization = db.relationship('Organization', lazy='select')
+
+    __table_args__ = (
+        db.UniqueConstraint('event_id', name='uq_stripe_billing_webhook_event_id'),
+        db.Index('ix_stripe_billing_webhook_events_org_processed', 'organization_id', 'processed_at'),
+    )
+
+
+class OrganizationAISettings(db.Model):
+    __tablename__ = 'organization_ai_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False, unique=True)
+    policy_draft_use_llm = db.Column(db.Boolean, nullable=False, default=False)
+    max_query_chars = db.Column(db.Integer, nullable=False, default=1200)
+    max_top_k = db.Column(db.Integer, nullable=False, default=5)
+    max_citation_text_chars = db.Column(db.Integer, nullable=False, default=600)
+    max_answer_chars = db.Column(db.Integer, nullable=False, default=2000)
+    max_policy_draft_chars = db.Column(db.Integer, nullable=False, default=6000)
+    rag_rate_limit = db.Column(db.String(40), nullable=False, default='20 per minute')
+    policy_rate_limit = db.Column(db.String(40), nullable=False, default='10 per minute')
+    walkthroughs_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        onupdate=datetime.now(timezone.utc),
+    )
+    updated_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    organization = db.relationship('Organization', lazy='select')
+    updated_by = db.relationship('User', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_org_ai_settings_org_id', 'organization_id'),
+    )
+
+
+class WalkthroughState(db.Model):
+    """Tracks user progress through guided walkthroughs (onboarding, feature discovery, etc.)"""
+    __tablename__ = 'walkthrough_states'
+
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    walkthrough_key = db.Column(db.String(100), nullable=False)  # e.g., 'getting-started', 'strengthen-evidence'
+    
+    # State tracking
+    state = db.Column(db.String(20), nullable=False, default='not_started')  # not_started, in_progress, completed, dismissed
+    current_stage = db.Column(db.Integer, nullable=False, default=0)  # 0-indexed stage number
+    eligible = db.Column(db.Boolean, nullable=False, default=True)  # Whether user meets eligibility criteria
+    auto_triggered = db.Column(db.Boolean, nullable=False, default=False)  # Auto-triggered vs manual
+    manual_triggered = db.Column(db.Boolean, nullable=False, default=False)  # User manually started
+    
+    # Dismissal tracking
+    dismissed_until = db.Column(db.DateTime, nullable=True)  # Show again after this time (e.g., 24h snooze)
+    permanently_dismissed = db.Column(db.Boolean, nullable=False, default=False)  # User opted out permanently
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    first_started_at = db.Column(db.DateTime, nullable=True)  # When user first clicked "Start"
+    completed_at = db.Column(db.DateTime, nullable=True)  # When user reached final stage
+    last_interacted_at = db.Column(db.DateTime, nullable=True)  # Last stage viewed/completed
+    
+    # Progress tracking
+    completion_percentage = db.Column(db.Integer, nullable=False, default=0)  # 0-100
+    stages_completed = db.Column(db.Integer, nullable=False, default=0)  # Number of stages completed
+    total_stages = db.Column(db.Integer, nullable=False, default=0)  # Total stages in walkthrough
+    
+    # Metadata (JSON for extensibility) - renamed from 'metadata' to avoid SQLAlchemy reserved word
+    walkthrough_metadata = db.Column(db.JSON, nullable=True)  # e.g., {"custom_field": "value", "engagement_level": "high"}
+    
+    # Relationships
+    organization = db.relationship('Organization', lazy='select')
+    user = db.relationship('User', lazy='select')
+    stages = db.relationship('WalkthroughStage', lazy='select', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('organization_id', 'user_id', 'walkthrough_key', name='uq_walkthrough_state_org_user_key'),
+        db.Index('ix_walkthrough_state_org_user', 'organization_id', 'user_id'),
+        db.Index('ix_walkthrough_state_org_state', 'organization_id', 'state'),
+        db.Index('ix_walkthrough_state_user_eligible', 'user_id', 'eligible'),
+    )
+
+
+class WalkthroughStage(db.Model):
+    """Individual stages within a walkthrough (used as templates; actual progress tracked in WalkthroughState.current_stage)"""
+    __tablename__ = 'walkthrough_stages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    walkthrough_state_id = db.Column(db.Integer, db.ForeignKey('walkthrough_states.id', ondelete='CASCADE'), nullable=False)
+    
+    # Stage content
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    target_element = db.Column(db.String(500), nullable=True)  # CSS selector for DOM targeting (e.g., ".sidebar-menu", "#dashboard-widget")
+    stage_order = db.Column(db.Integer, nullable=False)  # 0-indexed order within walkthrough
+    
+    # Content and metadata
+    content = db.Column(db.Text, nullable=False)  # Markdown or HTML content for stage display
+    cta_text = db.Column(db.String(100), nullable=True)  # Call-to-action button text (e.g., "Next", "Start Collection")
+    cta_action = db.Column(db.String(200), nullable=True)  # Action to trigger (e.g., "navigate:/upload", "highlight:#element")
+    icon = db.Column(db.String(100), nullable=True)  # Icon name or emoji (e.g., "upload", "✅")
+    
+    # Completion criteria
+    completion_criteria = db.Column(db.String(200), nullable=True)  # e.g., "manual", "auto_after_3_seconds", "element_click"
+    auto_advance_seconds = db.Column(db.Integer, nullable=True)  # Auto-advance after N seconds if completion_criteria='auto'
+    
+    # Tracking
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
+    
+    # Relationships
+    walkthrough_state = db.relationship('WalkthroughState', lazy='select')
+
+    __table_args__ = (
+        db.Index('ix_walkthrough_stage_state_order', 'walkthrough_state_id', 'stage_order'),
     )
 
 
@@ -425,3 +1079,35 @@ class SuspiciousIP(db.Model):
     __table_args__ = (
         db.Index('ix_suspicious_ips_blocked_until', 'blocked_until'),
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Event Listeners
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@event.listens_for(Organization, 'after_insert')
+def _after_organization_insert(mapper, connection, target):
+    """
+    Auto-create assessment records when a new organization is created.
+    This ensures all orgs have assessments linked to the global NDIS framework.
+    """
+    from sqlalchemy.orm import Session
+    
+    session = Session.object_session(target)
+    if session is None:
+        return
+        
+    try:
+        from app.services.compliance_setup_service import compliance_setup_service
+        
+        # Silently skip if global framework doesn't exist yet (e.g., during migrations)
+        compliance_setup_service.create_org_assessments_from_global_framework(
+            org_id=int(target.id),
+            user_id=None,
+            commit=False,
+            session=session,
+        )
+    except Exception:
+        # Silently fail—don't block org creation if setup fails
+        pass

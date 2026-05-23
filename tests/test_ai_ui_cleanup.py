@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+
+def test_dashboard_nav_shows_ai_review_but_hides_legacy_ai_links(client, app, seed_org_user):
+    from tests.conftest import login
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    dashboard_resp = client.get('/dashboard', follow_redirects=True)
+    assert dashboard_resp.status_code == 200
+    assert b'Evidence Repository' in dashboard_resp.data
+    assert b'AI Review' in dashboard_resp.data
+    assert b'Requirements' in dashboard_resp.data
+    assert b'Gap Analysis' not in dashboard_resp.data
+    assert b'Audit Export' not in dashboard_resp.data
+    assert b'AI Evidence' not in dashboard_resp.data
+    assert b'AI Demo' not in dashboard_resp.data
+
+
+def test_legacy_ai_evidence_routes_redirect_to_primary_document_flow(client, app, db_session, seed_org_user):
+    from app.models import Document
+    from tests.conftest import login
+
+    org_id, user_id, _membership_id = seed_org_user
+
+    with app.app_context():
+        document = Document(
+            filename='legacy-ai-evidence.pdf',
+            blob_name='org_1/legacy-ai-evidence.pdf',
+            file_size=512,
+            content_type='application/pdf',
+            uploaded_by=int(user_id),
+            organization_id=int(org_id),
+            is_active=True,
+        )
+        db_session.session.add(document)
+        db_session.session.commit()
+        doc_id = int(document.id)
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    list_resp = client.get('/ai-evidence', follow_redirects=False)
+    assert list_resp.status_code in {302, 303}
+    assert list_resp.headers.get('Location', '').endswith('/evidence-repository')
+
+    detail_resp = client.get(f'/ai-evidence/{doc_id}', follow_redirects=False)
+    assert detail_resp.status_code in {302, 303}
+    assert detail_resp.headers.get('Location', '').endswith(f'/document/{doc_id}/details')
+
+
+def test_legacy_compliance_screens_redirect_to_ai_review_except_requirements(client, app, seed_org_user):
+    from tests.conftest import login
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    gap_resp = client.get('/gap-analysis', follow_redirects=False)
+    assert gap_resp.status_code in {302, 303}
+    assert gap_resp.headers.get('Location', '').endswith('/ai-demo')
+
+    req_resp = client.get('/compliance-requirements', follow_redirects=False)
+    assert req_resp.status_code == 200
+    assert b'Requirements' in req_resp.data
+
+    export_resp = client.get('/audit-export', follow_redirects=False)
+    assert export_resp.status_code in {302, 303}
+    assert export_resp.headers.get('Location', '').endswith('/ai-demo')
+
+
+def test_ai_review_shows_saved_analysis_controls_for_analyzed_docs(client, app, db_session, seed_org_user):
+    from app.models import Document
+    from tests.conftest import login
+
+    org_id, user_id, _membership_id = seed_org_user
+
+    with app.app_context():
+        document = Document(
+            filename='analyzed-plan.pdf',
+            blob_name='org_1/analyzed-plan.pdf',
+            file_size=2048,
+            content_type='application/pdf',
+            uploaded_by=int(user_id),
+            organization_id=int(org_id),
+            is_active=True,
+            ai_status='OK',
+            ai_confidence=0.86,
+            ai_question='Is this evidence sufficient for incident management?',
+            ai_summary='Document includes incident workflow, owner role, and review checkpoints.',
+            ai_analysis_at=datetime.now(timezone.utc),
+        )
+        db_session.session.add(document)
+        db_session.session.commit()
+
+    resp = login(client)
+    assert resp.status_code in {302, 303}
+
+    page = client.get('/ai-demo')
+    assert page.status_code == 200
+    assert b'(Analyzed)' in page.data
+    assert b'Show Last Saved Result' in page.data
+    assert b'Reanalyze Document' in page.data
+    assert b'How can I improve this document?' in page.data

@@ -7,15 +7,69 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h1 class="h2 fw-bold mb-1">Evidence Repository</h1>
+                    <h1 id="wt-repo-header" class="h2 fw-bold mb-1">Evidence Repository</h1>
                     <p class="text-body-secondary mb-0">Manage and view your uploaded compliance documents</p>
                 </div>
                 <div class="d-flex gap-2">
-                    <button onclick="document.getElementById('quickUploadInput').click()" class="btn btn-outline-primary">
-                        <i class="bi bi-plus-lg me-2"></i>Upload New
+                    <a id="wt-repo-ai-btn" href="{{ url_for('main.ai_demo') }}" class="btn btn-primary d-inline-flex align-items-center justify-content-center">
+                        <i class="bi bi-stars me-2"></i>Open AI Review
+                    </a>
+                    <button id="wt-repo-upload-btn" onclick="document.getElementById('quickUploadInput').click()" class="btn btn-outline-primary d-inline-flex align-items-center justify-content-center">
+                        <i class="bi bi-plus-lg me-2"></i>Bulk Upload
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div id="wt-repo-filters" class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-lg-3">
+                    <label class="form-label" for="q">Search</label>
+                    <input id="q" name="q" type="search" class="form-control" value="{{ q or '' }}" placeholder="Filename, type, tag" />
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="tag">Tag</label>
+                    <select id="tag" name="tag" class="form-select">
+                        <option value="">All tags</option>
+                        {% for tag in available_tags %}
+                        <option value="{{ tag.name }}" {% if selected_tag == tag.name %}selected{% endif %}>{{ tag.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="file_type">Type</label>
+                    <select id="file_type" name="file_type" class="form-select">
+                        <option value="">All</option>
+                        <option value="pdf" {% if file_type == 'pdf' %}selected{% endif %}>PDF</option>
+                        <option value="word" {% if file_type == 'word' %}selected{% endif %}>Word</option>
+                        <option value="image" {% if file_type == 'image' %}selected{% endif %}>Image</option>
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="sort">Sort</label>
+                    <select id="sort" name="sort" class="form-select">
+                        <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest first</option>
+                        <option value="oldest" {% if sort_by == 'oldest' %}selected{% endif %}>Oldest first</option>
+                        <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Name A-Z</option>
+                        <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Name Z-A</option>
+                        <option value="recent_review" {% if sort_by == 'recent_review' %}selected{% endif %}>Recently reviewed</option>
+                    </select>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="date_from">Date from</label>
+                    <input id="date_from" name="date_from" type="date" class="form-control" value="{{ date_from or '' }}" />
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="date_to">Date to</label>
+                    <input id="date_to" name="date_to" type="date" class="form-control" value="{{ date_to or '' }}" />
+                </div>
+                <div class="col-lg-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1 d-inline-flex align-items-center justify-content-center">Apply Filters</button>
+                    <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-outline-secondary d-inline-flex align-items-center justify-content-center">Reset</a>
+                </div>
+            </form>
         </div>
     </div>
     
@@ -31,12 +85,19 @@
                         </h5>
                         {% if documents %}
                             <div class="d-flex gap-2">
-                                <div class="input-group input-group-sm" style="max-width: 260px;">
-                                    <span class="input-group-text">
-                                        <i class="bi bi-search"></i>
-                                    </span>
-                                    <input type="search" class="form-control" id="docSearch" placeholder="Search documents" aria-label="Search documents" />
-                                </div>
+                                <form method="POST" action="{{ url_for('main.delete_selected_documents') }}" id="bulkDeleteForm" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                    <input type="hidden" name="confirmation_text" id="bulkDeleteConfirmationText" value="" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center" id="bulkDeleteBtn" disabled>
+                                        <i class="bi bi-trash me-1"></i>Delete Selected
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('main.download_documents_zip') }}" id="bulkZipForm" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center justify-content-center" id="bulkDownloadBtn" disabled>
+                                        <i class="bi bi-file-earmark-zip me-1"></i>Download Selected (ZIP)
+                                    </button>
+                                </form>
                                 <button class="btn btn-sm btn-outline-secondary" onclick="toggleView()">
                                     <i class="bi bi-grid-3x3-gap" id="viewToggleIcon"></i>
                                 </button>
@@ -47,19 +108,25 @@
                 <div class="card-body">
                     {% if documents %}
                         <!-- Table View (Default) -->
-                        <div id="tableView">
+                        <div id="wt-repo-table">
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle">
                                     <thead>
                                         <tr>
+                                            <th scope="col" class="border-0" style="width: 44px;">
+                                                <input type="checkbox" class="form-check-input" id="selectAllDocs" />
+                                            </th>
                                             <th scope="col" class="border-0">
                                                 <i class="bi bi-file-earmark me-1"></i>Document
                                             </th>
                                             <th scope="col" class="border-0">
-                                                <i class="bi bi-hdd me-1"></i>Size
+                                                <i class="bi bi-calendar me-1"></i>Upload Date
+                                            </th>
+                                            <th id="wt-repo-ai-col" scope="col" class="border-0">
+                                                <i class="bi bi-clipboard-data me-1"></i>Review
                                             </th>
                                             <th scope="col" class="border-0">
-                                                <i class="bi bi-calendar me-1"></i>Upload Date
+                                                <i class="bi bi-tags me-1"></i>Tags
                                             </th>
                                             <th scope="col" class="border-0">
                                                 <i class="bi bi-gear me-1"></i>Actions
@@ -69,6 +136,9 @@
                                     <tbody>
                                         {% for document in documents %}
                                             <tr>
+                                                <td>
+                                                    <input type="checkbox" class="form-check-input doc-select" value="{{ document.id }}" />
+                                                </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
                                                         <div class="flex-shrink-0 me-3">
@@ -95,13 +165,33 @@
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="badge bg-body-tertiary text-body border">
-                                                        {{ document.file_size | file_size_format }}
-                                                    </span>
+                                                    <div class="js-local-datetime" data-utc-datetime="{{ document.uploaded_at.strftime('%Y-%m-%dT%H:%M:%SZ') if document.uploaded_at else '' }}">
+                                                        {{ document.uploaded_at | datetime_format('%b %d, %Y at %I:%M %p') }}
+                                                    </div>
                                                 </td>
                                                 <td>
-                                                    <div>{{ document.uploaded_at | datetime_format('%b %d, %Y') }}</div>
-                                                    <small class="text-body-secondary">{{ document.uploaded_at | datetime_format('%I:%M %p') }}</small>
+                                                    {% if document.ai_status %}
+                                                        <div class="d-flex flex-column gap-1">
+                                                            <span class="badge {% if document.ai_status == 'Mature' %}bg-primary{% elif document.ai_status == 'OK' %}bg-success{% elif document.ai_status == 'High risk gap' %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ document.ai_status }}</span>
+                                                            <small class="text-body-secondary">
+                                                                {{ document.ai_focus_area or 'General Compliance Evidence' }}
+                                                                {% if document.ai_confidence is not none %}• {{ (document.ai_confidence * 100)|round(0)|int }}%{% endif %}
+                                                            </small>
+                                                        </div>
+                                                    {% else %}
+                                                        <small class="text-body-secondary">Not analysed yet</small>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if document.tags %}
+                                                        <div class="d-flex flex-wrap gap-1">
+                                                            {% for tag in document.tags %}
+                                                            <span class="badge bg-body-tertiary text-body border">{{ tag.name }}</span>
+                                                            {% endfor %}
+                                                        </div>
+                                                    {% else %}
+                                                        <small class="text-body-secondary">No tags</small>
+                                                    {% endif %}
                                                 </td>
                                                 <td>
                                                     <div class="dropdown">
@@ -110,6 +200,17 @@
                                                             <i class="bi bi-three-dots"></i>
                                                         </button>
                                                         <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item" href="{{ url_for('main.ai_demo', doc_ids=document.id, active_doc_id=document.id, autostart=1) }}">
+                                                                    <i class="bi bi-cpu me-2"></i>Analyze in AI Workspace
+                                                                </a>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item" target="_blank" href="{{ url_for('main.preview_document', doc_id=document.id) }}">
+                                                                    <i class="bi bi-eye me-2"></i>Preview
+                                                                </a>
+                                                            </li>
                                                             <li>
                                                                 <a class="dropdown-item" href="{{ url_for('main.download_document', doc_id=document.id) }}">
                                                                     <i class="bi bi-download me-2"></i>Download
@@ -156,17 +257,35 @@
                                                     {{ document.filename }}
                                                 </h6>
                                                 <p class="card-text">
-                                                    <small class="text-body-secondary">
-                                                        {{ document.file_size | file_size_format }} • 
-                                                        {{ document.uploaded_at | datetime_format('%b %d, %Y') }}
+                                                    <small class="text-body-secondary js-local-datetime" data-utc-datetime="{{ document.uploaded_at.strftime('%Y-%m-%dT%H:%M:%SZ') if document.uploaded_at else '' }}">
+                                                        {{ document.uploaded_at | datetime_format('%b %d, %Y at %I:%M %p') }}
                                                     </small>
                                                 </p>
+                                                <div class="mb-3">
+                                                    {% if document.ai_status %}
+                                                        <div class="badge {% if document.ai_status == 'Mature' %}bg-primary{% elif document.ai_status == 'OK' %}bg-success{% elif document.ai_status == 'High risk gap' %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ document.ai_status }}</div>
+                                                        <div class="small text-body-secondary mt-2">{{ document.ai_focus_area or 'General Compliance Evidence' }}</div>
+                                                    {% else %}
+                                                        <div class="small text-body-secondary">Not analysed yet</div>
+                                                    {% endif %}
+                                                </div>
                                                 <div class="dropdown">
                                                     <button class="btn btn-sm btn-outline-primary dropdown-toggle" 
                                                             type="button" data-bs-toggle="dropdown" data-doc-actions-dropdown>
                                                         Actions
                                                     </button>
                                                     <ul class="dropdown-menu">
+                                                        <li>
+                                                            <a class="dropdown-item" href="{{ url_for('main.ai_demo', doc_ids=document.id, active_doc_id=document.id, autostart=1) }}">
+                                                                <i class="bi bi-cpu me-2"></i>Analyze in AI Workspace
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item" target="_blank" href="{{ url_for('main.preview_document', doc_id=document.id) }}">
+                                                                <i class="bi bi-eye me-2"></i>Preview
+                                                            </a>
+                                                        </li>
                                                         <li>
                                                             <a class="dropdown-item" href="{{ url_for('main.download_document', doc_id=document.id) }}">
                                                                 <i class="bi bi-download me-2"></i>Download
@@ -255,57 +374,37 @@
 <!-- Hidden Upload Form -->
 <form id="quickUploadForm" action="{{ url_for('upload.upload_file') }}" method="post" enctype="multipart/form-data" style="display: none;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-    <input type="file" id="quickUploadInput" name="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onchange="if(this.files.length > 0) document.getElementById('quickUploadForm').submit();" />
+    <input type="file" id="quickUploadInput" name="files" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" />
 </form>
 
 {% endblock %}
 
 {% block extra_js %}
+<script>window.WALKTHROUGH_PAGE_KEY = 'tour-repository';</script>
 <script>
     let isGridView = false;
 
-    function applySearchFilter(queryRaw) {
-        const q = (queryRaw || '').toLowerCase().trim();
-
-        // Table view rows
-        document.querySelectorAll('#tableView tbody tr').forEach((row) => {
-            const nameEl = row.querySelector('[data-doc-filename]');
-            const name = (nameEl?.textContent || '').toLowerCase();
-            row.style.display = (!q || name.includes(q)) ? '' : 'none';
-        });
-
-        // Grid view cards
-        document.querySelectorAll('#gridView [data-doc-card]').forEach((card) => {
-            const titleEl = card.querySelector('.card-title');
-            const name = (titleEl?.textContent || '').toLowerCase();
-            card.style.display = (!q || name.includes(q)) ? '' : 'none';
-        });
-    }
-    
     function toggleView() {
-        const tableView = document.getElementById('tableView');
+        const tableView = document.getElementById('wt-repo-table');
         const gridView = document.getElementById('gridView');
         const toggleIcon = document.getElementById('viewToggleIcon');
-        
+
         if (isGridView) {
-            // Switch to table view
             tableView.style.display = 'block';
             gridView.style.display = 'none';
             toggleIcon.className = 'bi bi-grid-3x3-gap';
             isGridView = false;
         } else {
-            // Switch to grid view
             tableView.style.display = 'none';
             gridView.style.display = 'block';
             toggleIcon.className = 'bi bi-list';
             isGridView = true;
         }
     }
-    
+
     function confirmDelete(docId, filename) {
         const csrfToken = "{{ csrf_token() }}";
         const deleteAction = "{{ url_for('main.delete_document', doc_id=0) }}".replace('/0/', `/${docId}/`);
-        // Create Bootstrap modal for confirmation
         const modalHtml = `
             <div class="modal fade" id="deleteModal" tabindex="-1">
                 <div class="modal-dialog">
@@ -340,31 +439,348 @@
                 </div>
             </div>
         `;
-        
-        // Remove existing modal if any
+
         const existingModal = document.getElementById('deleteModal');
         if (existingModal) {
             existingModal.remove();
         }
-        
-        // Add modal to body
+
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
-        // Show modal
+
         const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
         modal.show();
-        
-        // Clean up after modal is hidden
+
         document.getElementById('deleteModal').addEventListener('hidden.bs.modal', function() {
             this.remove();
         });
     }
 
-    // Prevent dropdown menus from being clipped inside scroll/overflow containers.
+    function localizeUtcDateTimes() {
+        const nodes = Array.from(document.querySelectorAll('.js-local-datetime'));
+        nodes.forEach((node) => {
+            const raw = (node.getAttribute('data-utc-datetime') || '').trim();
+            if (!raw) {
+                return;
+            }
+            const dt = new Date(raw);
+            if (Number.isNaN(dt.getTime())) {
+                return;
+            }
+            node.textContent = dt.toLocaleString([], {
+                year: 'numeric',
+                month: 'short',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        });
+    }
+
+    function buildProgressModal({ id, title, subtitle, rows, busyLabel }) {
+        const rowHtml = rows.map((row, idx) => `
+            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2" data-progress-row="${idx}">
+                <div class="small text-truncate pe-2">${row}</div>
+                <span class="badge text-bg-secondary" data-progress-status="${idx}">Pending</span>
+            </div>
+        `).join('');
+        return `
+            <div class="modal fade" id="${id}" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">${title}</h5>
+                        </div>
+                        <div class="modal-body">
+                            <p class="small text-body-secondary mb-3">${subtitle}</p>
+                            <div id="${id}Rows" style="max-height: 280px; overflow-y: auto;">${rowHtml}</div>
+                            <div class="small text-body-secondary mt-2" id="${id}Summary">${busyLabel}</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" id="${id}Done" disabled>Done</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function setProgressStatus(modalId, index, status, tone) {
+        const badge = document.querySelector(`#${modalId} [data-progress-status="${index}"]`);
+        if (!badge) {
+            return;
+        }
+        badge.className = 'badge';
+        if (tone === 'ok') {
+            badge.classList.add('text-bg-success');
+        } else if (tone === 'err') {
+            badge.classList.add('text-bg-danger');
+        } else if (tone === 'run') {
+            badge.classList.add('text-bg-primary');
+        } else {
+            badge.classList.add('text-bg-secondary');
+        }
+        badge.textContent = status;
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
-        const searchInput = document.getElementById('docSearch');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => applySearchFilter(e.target.value));
+        localizeUtcDateTimes();
+
+        const bulkDeleteForm = document.getElementById('bulkDeleteForm');
+        const bulkDeleteButton = document.getElementById('bulkDeleteBtn');
+        const bulkDeleteConfirmationText = document.getElementById('bulkDeleteConfirmationText');
+        const bulkForm = document.getElementById('bulkZipForm');
+        const bulkButton = document.getElementById('bulkDownloadBtn');
+        const selectAll = document.getElementById('selectAllDocs');
+        const rowChecks = Array.from(document.querySelectorAll('.doc-select'));
+        const quickUploadInput = document.getElementById('quickUploadInput');
+        const csrfToken = "{{ csrf_token() }}";
+
+        function syncSelectedDocIds(form, selected) {
+            if (!form) {
+                return;
+            }
+            form.querySelectorAll('input[name="doc_ids"]').forEach((node) => node.remove());
+            selected.forEach((checkbox) => {
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'doc_ids';
+                hidden.value = checkbox.value;
+                form.appendChild(hidden);
+            });
+        }
+
+        function refreshBulkState() {
+            const selected = rowChecks.filter((c) => c.checked);
+            if (bulkDeleteButton) {
+                bulkDeleteButton.disabled = selected.length === 0;
+            }
+            if (bulkButton) {
+                bulkButton.disabled = selected.length === 0;
+            }
+            if (selectAll) {
+                selectAll.checked = rowChecks.length > 0 && selected.length === rowChecks.length;
+            }
+
+            syncSelectedDocIds(bulkDeleteForm, selected);
+            syncSelectedDocIds(bulkForm, selected);
+        }
+
+        function showBulkDeleteModal(selected) {
+            const selectedCount = selected.length;
+            const allSelectedNames = selected
+                .map((checkbox) => checkbox.closest('tr, [data-doc-card]'))
+                .map((node) => node ? node.querySelector('[data-doc-filename], .card-title') : null)
+                .map((node) => node ? node.textContent.trim() : '')
+                .filter(Boolean);
+            const selectedNames = allSelectedNames.slice(0, 5);
+            const extraCount = Math.max(0, selectedCount - selectedNames.length);
+            const modalHtml = `
+                <div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                                    Confirm Bulk Delete
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="mb-2">You are about to permanently delete <strong>${selectedCount}</strong> document(s).</p>
+                                <div class="alert alert-warning small mb-3">
+                                    <div class="fw-semibold mb-1">Selected documents</div>
+                                    <div>${selectedNames.join('<br>')}${extraCount > 0 ? `<br>and ${extraCount} more...` : ''}</div>
+                                </div>
+                                <label for="bulkDeleteConfirmInput" class="form-label">Type <strong>DELETE</strong> to confirm</label>
+                                <input id="bulkDeleteConfirmInput" type="text" class="form-control" autocomplete="off" />
+                                <p class="text-body-secondary small mt-2 mb-0">This action cannot be undone.</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-danger" id="confirmBulkDeleteSubmit" disabled>
+                                    <i class="bi bi-trash me-1"></i>Delete Documents
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const existingModal = document.getElementById('bulkDeleteModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            const modalElement = document.getElementById('bulkDeleteModal');
+            const modal = new bootstrap.Modal(modalElement);
+            const confirmInput = document.getElementById('bulkDeleteConfirmInput');
+            const confirmButton = document.getElementById('confirmBulkDeleteSubmit');
+
+            confirmInput.addEventListener('input', () => {
+                confirmButton.disabled = confirmInput.value.trim() !== 'DELETE';
+            });
+            confirmButton.addEventListener('click', async () => {
+                if (bulkDeleteConfirmationText) {
+                    bulkDeleteConfirmationText.value = confirmInput.value.trim();
+                }
+                modal.hide();
+
+                const modalId = 'bulkDeleteProgressModal';
+                const existingProgress = document.getElementById(modalId);
+                if (existingProgress) {
+                    existingProgress.remove();
+                }
+                document.body.insertAdjacentHTML('beforeend', buildProgressModal({
+                    id: modalId,
+                    title: 'Deleting Documents',
+                    subtitle: 'Deleting selected documents one by one.',
+                    rows: allSelectedNames.length > 0 ? allSelectedNames : selected.map((_, idx) => `Document ${idx + 1}`),
+                    busyLabel: 'Delete in progress...',
+                }));
+
+                const progressElement = document.getElementById(modalId);
+                const progressSummary = document.getElementById(`${modalId}Summary`);
+                const doneButton = document.getElementById(`${modalId}Done`);
+                const progressModal = new bootstrap.Modal(progressElement);
+                progressModal.show();
+
+                let successCount = 0;
+                for (let i = 0; i < selected.length; i += 1) {
+                    const checkbox = selected[i];
+                    setProgressStatus(modalId, i, 'Deleting...', 'run');
+                    try {
+                        const response = await fetch(`{{ url_for('main.delete_document_json', doc_id=0) }}`.replace('/0/delete-json', `/${checkbox.value}/delete-json`), {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                                'X-Requested-With': 'fetch',
+                            },
+                            body: new URLSearchParams({
+                                csrf_token: csrfToken,
+                            }).toString(),
+                        });
+                        const payload = await response.json();
+                        if (response.ok && payload && payload.success) {
+                            successCount += 1;
+                            setProgressStatus(modalId, i, 'Deleted', 'ok');
+                        } else {
+                            setProgressStatus(modalId, i, 'Failed', 'err');
+                        }
+                    } catch (_e) {
+                        setProgressStatus(modalId, i, 'Failed', 'err');
+                    }
+                }
+
+                if (progressSummary) {
+                    progressSummary.textContent = `Completed. Deleted ${successCount} of ${selected.length} document(s).`;
+                }
+                if (doneButton) {
+                    doneButton.disabled = false;
+                    doneButton.addEventListener('click', () => {
+                        window.location.reload();
+                    });
+                }
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                this.remove();
+            });
+            modal.show();
+        }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', () => {
+                rowChecks.forEach((c) => {
+                    c.checked = selectAll.checked;
+                });
+                refreshBulkState();
+            });
+        }
+
+        rowChecks.forEach((checkbox) => {
+            checkbox.addEventListener('change', refreshBulkState);
+        });
+        refreshBulkState();
+
+        if (bulkDeleteForm) {
+            bulkDeleteForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const selected = rowChecks.filter((c) => c.checked);
+                if (selected.length === 0) {
+                    return;
+                }
+                if (bulkDeleteConfirmationText) {
+                    bulkDeleteConfirmationText.value = '';
+                }
+                showBulkDeleteModal(selected);
+            });
+        }
+
+        if (quickUploadInput) {
+            quickUploadInput.addEventListener('change', async () => {
+                const files = Array.from(quickUploadInput.files || []);
+                if (files.length === 0) {
+                    return;
+                }
+
+                const modalId = 'bulkUploadProgressModal';
+                const existingProgress = document.getElementById(modalId);
+                if (existingProgress) {
+                    existingProgress.remove();
+                }
+                document.body.insertAdjacentHTML('beforeend', buildProgressModal({
+                    id: modalId,
+                    title: 'Uploading Documents',
+                    subtitle: 'Uploading files one by one.',
+                    rows: files.map((f) => f.name),
+                    busyLabel: 'Upload in progress...',
+                }));
+
+                const progressElement = document.getElementById(modalId);
+                const progressSummary = document.getElementById(`${modalId}Summary`);
+                const doneButton = document.getElementById(`${modalId}Done`);
+                const progressModal = new bootstrap.Modal(progressElement);
+                progressModal.show();
+
+                let successCount = 0;
+                for (let i = 0; i < files.length; i += 1) {
+                    const file = files[i];
+                    setProgressStatus(modalId, i, 'Uploading...', 'run');
+                    const body = new FormData();
+                    body.append('csrf_token', csrfToken);
+                    body.append('file', file);
+                    try {
+                        const response = await fetch('{{ url_for('upload.upload_single_file_ajax') }}', {
+                            method: 'POST',
+                            body,
+                            headers: {
+                                'X-Requested-With': 'fetch',
+                            },
+                        });
+                        const payload = await response.json();
+                        if (response.ok && payload && payload.success) {
+                            successCount += 1;
+                            setProgressStatus(modalId, i, 'Uploaded', 'ok');
+                        } else {
+                            setProgressStatus(modalId, i, 'Failed', 'err');
+                        }
+                    } catch (_e) {
+                        setProgressStatus(modalId, i, 'Failed', 'err');
+                    }
+                }
+
+                if (progressSummary) {
+                    progressSummary.textContent = `Completed. Uploaded ${successCount} of ${files.length} file(s).`;
+                }
+                if (doneButton) {
+                    doneButton.disabled = false;
+                    doneButton.addEventListener('click', () => {
+                        window.location.reload();
+                    });
+                }
+                quickUploadInput.value = '';
+            });
         }
 
         document.querySelectorAll('[data-doc-actions-dropdown]').forEach((toggle) => {

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import Dict, List, Optional
 from flask import Flask
-from flask_mail import Mail, Message
+from app.services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,6 @@ class AlertService:
     
     def __init__(self):
         self.app = None
-        self.mail = None
         self.enabled = False
         
         # Rate limiting: track when each alert type was last sent
@@ -55,10 +54,9 @@ class AlertService:
         # Thread lock for thread-safe operations
         self._lock = threading.Lock()
     
-    def init_app(self, app: Flask, mail: Mail):
-        """Initialize alert service with Flask app and Mail instance"""
+    def init_app(self, app: Flask):
+        """Initialize alert service with Flask app"""
         self.app = app
-        self.mail = mail
         
         # Get alert configuration
         self.enabled = app.config.get('ALERTS_ENABLED', False)
@@ -100,33 +98,33 @@ class AlertService:
             return True
     
     def _send_email_alert(self, subject: str, body: str, html_body: Optional[str] = None):
-        """Send alert email to all recipients"""
+        """Send alert email to all recipients via centralized email service"""
         if not self.enabled or not self.alert_emails:
             return
         
-        try:
-            msg = Message(
-                subject=f"[Cenaris Alert] {subject}",
-                recipients=self.alert_emails,
-                body=body,
-                html=html_body
-            )
-            
-            # Send in background thread to avoid blocking
-            def send_async():
-                try:
-                    with self.app.app_context():
-                        self.mail.send(msg)
-                    logger.info(f'[ALERTS] Email sent: {subject}')
-                except Exception as e:
-                    logger.error(f'[ALERTS] Failed to send email: {e}')
-            
-            thread = threading.Thread(target=send_async)
-            thread.daemon = True
-            thread.start()
-            
-        except Exception as e:
-            logger.error(f'[ALERTS] Error preparing email: {e}')
+        # Send to all recipients
+        for to_email in self.alert_emails:
+            try:
+                # Send in background thread to avoid blocking
+                def send_async(email_addr):
+                    try:
+                        with self.app.app_context():
+                            email_service.send_email(
+                                to_email=email_addr,
+                                subject=f"[Cenaris Alert] {subject}",
+                                body=body,
+                                html_body=html_body
+                            )
+                        logger.info(f'[ALERTS] Email alert sent to {email_addr}: {subject}')
+                    except Exception as e:
+                        logger.error(f'[ALERTS] Failed to send email alert to {email_addr}: {e}')
+                
+                thread = threading.Thread(target=send_async, args=(to_email,))
+                thread.daemon = True
+                thread.start()
+                
+            except Exception as e:
+                logger.error(f'[ALERTS] Error preparing email alert for {to_email}: {e}')
     
     def alert_critical_error(self, error: Exception, context: Optional[Dict] = None):
         """

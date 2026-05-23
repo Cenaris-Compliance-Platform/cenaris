@@ -72,17 +72,15 @@ class AzureDataLakeService:
             if connection_string and DataLakeServiceClient:
                 # Use connection string directly
                 self.service_client = DataLakeServiceClient.from_connection_string(connection_string)
-                # Use print during startup to avoid threading issues
-                print("[INFO] Azure Data Lake client initialized successfully")
+                logger.info('Azure Data Lake client initialized successfully')
             if connection_string and BlobServiceClient:
                 self.blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-                print("[INFO] Azure Blob client (for fallback) initialized successfully")
+                logger.info('Azure Blob client (for fallback) initialized successfully')
             else:
-                print("[WARNING] No Azure connection string found - using mock mode")
+                logger.warning('No Azure connection string found - using mock mode')
                 self.service_client = None
         except Exception as e:
-            # Use print during startup to avoid threading issues
-            print(f"[WARNING] Failed to initialize Azure Data Lake client: {e}")
+            logger.warning(f'Failed to initialize Azure Data Lake client: {e}')
             self.service_client = None
             self.blob_service_client = None
 

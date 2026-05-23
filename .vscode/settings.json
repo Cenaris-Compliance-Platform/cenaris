@@ -1,2 +1,8 @@
 {
+    "chat.tools.terminal.autoApprove": {
+        "/^python -m pytest -q tests/test_requirement_evidence_linking\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

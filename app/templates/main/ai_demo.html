@@ -1,0 +1,1202 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+  .ai-review-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .ai-review-help-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+  }
+
+  .ai-options-toggle {
+    font-size: 0.9rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <div class="ai-review-title-wrap mb-1">
+            <h1 id="wt-ai-heading" class="h3 fw-bold mb-0">AI Review</h1>
+            <button
+              class="btn btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center ai-review-help-btn"
+              type="button"
+              id="aiReviewHelpBtn"
+              aria-expanded="false"
+              aria-controls="aiReviewHelpPanel"
+              title="AI Review help"
+            >
+              <i class="bi bi-info-lg"></i>
+            </button>
+          </div>
+          <p class="text-body-secondary mb-0">Review repository documents in one dedicated AI experience.</p>
+        </div>
+        <div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="aiReviewHelpPanel" class="collapse mb-3">
+    <div class="alert alert-light border d-flex flex-column gap-1" role="alert">
+      <div class="fw-semibold"><i class="bi bi-info-circle me-1"></i>AI Review guidance</div>
+      <div class="small">Use this for decision support, not final audit/legal decisions.</div>
+      <div class="small"><strong>NDIS corpus:</strong> {{ 'Loaded' if has_ndis_corpus else 'Missing (doc-only mode)' }}</div>
+      <div class="small">Reuse saves time for the same document + question.</div>
+    </div>
+  </div>
+
+  {% if selected_documents %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+          <div class="fw-semibold mb-1">Selected repository documents</div>
+          <div class="small text-body-secondary">Choose a document below to analyze.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-folder2-open me-1"></i>Back to Repository
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <div class="fw-semibold mb-1">No repository documents available</div>
+          <div class="small text-body-secondary">Upload from Dashboard/Repository first, then open AI Review.</div>
+        </div>
+        <a href="{{ url_for('main.dashboard', _anchor='upload-documents', open_upload=1) }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-upload me-1"></i>Upload Documents
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <form id="aiDemoForm" class="row g-3" data-skip-loading="1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-md-5">
+          <label for="storedDocId" class="form-label">Repository document</label>
+          <select id="storedDocId" name="stored_doc_id" class="form-select" {% if not selected_documents %}disabled{% endif %}>
+            {% for document in selected_documents %}
+            {% set meta = selected_document_meta.get(document.id|string) %}
+            <option value="{{ document.id }}" {% if active_doc_id and active_doc_id == document.id %}selected{% elif not active_doc_id and loop.first %}selected{% endif %}>{{ document.filename }}{% if meta and meta.analyzed %} (Analyzed){% endif %}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Pick one document.</div>
+        </div>
+        <div class="col-md-7">
+          <label for="demoQuestion" class="form-label">Question to AI</label>
+          <textarea id="demoQuestion" name="question" class="form-control" rows="3" placeholder="e.g., What evidence gaps should I fix first?"></textarea>
+        </div>
+
+        <div class="col-12">
+          <button
+            class="btn btn-sm btn-outline-secondary ai-options-toggle"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#aiReviewOptions"
+            aria-expanded="false"
+            aria-controls="aiReviewOptions"
+          >
+            More options
+          </button>
+        </div>
+
+        <div class="col-12 collapse" id="aiReviewOptions">
+          <div class="border rounded p-3 bg-body-tertiary">
+            <div class="row g-3">
+              <div class="col-md-8">
+                <label for="demoQuestionPreset" class="form-label small mb-1">Common questions</label>
+                <select id="demoQuestionPreset" class="form-select form-select-sm">
+                  <option value="">Select a sample question...</option>
+                  <option value="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident reporting readiness</option>
+                  <option value="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Evidence and gap summary</option>
+                  <option value="Does this policy clearly assign control owners, review cadence, and monitoring responsibilities?">Governance and ownership check</option>
+                  <option value="How well does this document support audit readiness, and what are the top 3 remediation actions?">Audit readiness and actions</option>
+                  <option value="Which sections of this document align with participant rights, safeguarding, and quality management obligations?">Participant rights and safeguarding alignment</option>
+                </select>
+                <div class="mt-2 d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="Does this document define incident reporting timelines, escalation pathways, and participant communication requirements?">Incident</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="What key compliance evidence is present, and what critical gaps remain against NDIS practice standards?">Gaps</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm demo-question-chip" data-question="How well does this document support audit readiness, and what are the top 3 remediation actions?">Actions</button>
+                </div>
+                <!-- /#wt-ai-doc-list -->
+              </div>
+              <div class="col-md-4">
+                <label for="docTypeSelect" class="form-label small mb-1">Document type <span class="text-body-secondary">(for scoring)</span></label>
+                <select id="docTypeSelect" name="doc_type" class="form-select form-select-sm">
+                  <option value="auto" selected>🔍 Auto-detect</option>
+                  <option value="policy">📋 Policy / Procedure</option>
+                  <option value="clinical">🩺 Clinical Reference / Tool</option>
+                  <option value="record">📝 Implementation Record</option>
+                  <option value="agreement">🤝 Service Agreement / Consent</option>
+                  <option value="training">🎓 Training Material</option>
+                </select>
+                <div class="form-text mt-1">Picks the right scoring rubric for your document.</div>
+                <div class="mt-2">
+                  <div class="small text-body-secondary mb-1">Mode: <strong>Balanced</strong></div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="1" id="reuseLastResult" name="reuse_last" checked>
+                    <label class="form-check-label small" for="reuseLastResult">Reuse previous result</label>
+                  </div>
+                </div>
+                {% if can_manage_ai %}
+                <div class="mt-3 border rounded p-2 bg-white">
+                  <div class="small fw-semibold mb-2">Scoring profile (org)</div>
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label form-label-sm mb-1" for="profileMature">Mature min</label>
+                      <input type="number" step="0.01" min="0.5" max="0.95" class="form-control form-control-sm" id="profileMature" value="0.75">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm mb-1" for="profileOk">OK min</label>
+                      <input type="number" step="0.01" min="0.35" max="0.9" class="form-control form-control-sm" id="profileOk" value="0.55">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm mb-1" for="profileRisk">Risk min</label>
+                      <input type="number" step="0.01" min="0.10" max="0.7" class="form-control form-control-sm" id="profileRisk" value="0.30">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm mb-1" for="profileAnchors">Anchor hits</label>
+                      <input type="number" step="1" min="2" max="8" class="form-control form-control-sm" id="profileAnchors" value="4">
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="saveScoringProfileBtn">Save profile</button>
+                  <div class="small text-body-secondary mt-1" id="scoringProfileStatus"></div>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        <input type="hidden" name="mode" value="balanced" />
+        <div class="col-12 d-none" id="storedAnalysisHint">
+          <div class="alert alert-info border mb-0 py-2 px-3 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <div class="small" id="storedAnalysisHintText"></div>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="showStoredAnalysisBtn">Show Last Saved Result</button>
+          </div>
+        </div>
+        <div id="wt-ai-generate" class="col-12 d-flex gap-2 align-items-center">
+          <button id="runDemoBtn" type="submit" class="btn btn-primary" {% if not selected_documents %}disabled{% endif %}>
+            <span id="runDemoLabel">Analyze Document</span>
+          </button>
+          <span id="demoStatusText" class="small text-body-secondary d-none"></span>
+        </div>
+        <div class="col-12 d-none" id="demoProgressWrap">
+          <div class="progress" role="progressbar" aria-label="AI analysis progress" aria-valuemin="0" aria-valuemax="100">
+            <div id="demoProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">0%</div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="wt-ai-results">
+    <div id="demoResultPlaceholder" class="card border border-secondary border-opacity-25 shadow-sm text-center py-5 text-body-secondary" style="border-style: dashed !important;">
+      <i class="bi bi-robot fs-1 mb-3 opacity-50"></i>
+      <h5 class="fw-semibold">Ready for Analysis</h5>
+      <p class="mb-0 small">Select a document and run the AI analysis to see your compliance score and gaps here.</p>
+    </div>
+    <div id="demoResultCard" class="card border-0 shadow-sm d-none">
+      <div class="card-body">
+      <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+          <h5 class="card-title mb-0">Analysis Result</h5>
+          <a id="downloadDocxBtn" class="btn btn-sm btn-outline-primary d-none" href="#">
+            <i class="bi bi-file-earmark-word me-1"></i>Download DOCX
+          </a>
+        </div>
+        <div class="small text-body-secondary mb-3" id="resultSourceMeta"></div>
+        <div class="row g-2 align-items-stretch">
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100 bg-body-tertiary">
+              <div class="text-body-secondary small mb-1">Proposed Status</div>
+              <div id="resultStatusBadge" class="badge bg-secondary fs-5 px-3 py-2">-</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100 bg-body-tertiary">
+              <div class="text-body-secondary small mb-1">Confidence</div>
+              <div id="resultConfidence" class="fw-semibold fs-4">-</div>
+              <div id="resultConfidenceBreakdown" class="small text-body-secondary mt-1"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="small text-body-secondary mb-2" id="resultDiagnostics"></div>
+      <div class="border rounded p-2 bg-body-tertiary small mb-3" id="scoreWhyPanel">
+        <div class="fw-semibold mb-1">Why this score (and what blocks a higher score)</div>
+        <ul class="mb-0" id="scoreWhyList"></ul>
+      </div>
+
+      <div class="d-flex gap-2 mb-3">
+        <button type="button" class="btn btn-outline-danger btn-sm" id="feedbackFalsePositiveBtn">Mark False Positive</button>
+        <button type="button" class="btn btn-outline-warning btn-sm" id="feedbackFalseNegativeBtn">Mark False Negative</button>
+        <button type="button" class="btn btn-outline-success btn-sm" id="feedbackCorrectBtn">Mark Correct</button>
+      </div>
+
+      <div class="mb-3">
+        <h6 class="fw-semibold mb-2">Analysis Summary</h6>
+        <div id="resultSummaryText" class="small text-body-secondary border rounded p-3 bg-body-tertiary"></div>
+      </div>
+
+      <div id="resultWarnings" class="d-flex flex-column gap-2 mb-3"></div>
+
+      <div class="mb-3">
+        <h6 class="fw-semibold mb-2">Checklist Summary</h6>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th style="min-width: 220px;">Requirement / Area</th>
+                <th style="min-width: 120px;">Status</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="demoChecklistTable"></tbody>
+          </table>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Clear</div>
+              <ul id="demoChecklistClear" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Partial</div>
+              <ul id="demoChecklistPartial" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-3 bg-body-tertiary h-100">
+              <div class="fw-semibold mb-2">Gap</div>
+              <ul id="demoChecklistGap" class="small text-body-secondary mb-0"></ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 d-none" id="improvementGuideWrap">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="showImprovementGuideBtn">How can I improve this document?</button>
+          <div class="border rounded p-3 bg-body-tertiary mt-2 d-none" id="improvementGuidePanel">
+            <div class="fw-semibold mb-2">Improvement Guidance</div>
+            <ul class="small text-body-secondary mb-0" id="improvementGuideList"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <details class="border rounded p-3 bg-body-tertiary">
+            <summary class="fw-semibold">Document Evidence Highlights</summary>
+            <div id="resultSnippets" class="d-flex flex-column gap-2 mt-3"></div>
+          </details>
+        </div>
+        <div class="col-md-6">
+          <details class="border rounded p-3 bg-body-tertiary">
+            <summary class="fw-semibold">NDIS Citations (RAG)</summary>
+            <div id="resultCitations" class="d-flex flex-column gap-2 mt-3"></div>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback Modal -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="feedbackModalLabel">Submit Review Notes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body py-3">
+        <p class="text-body-secondary small mb-3">Your feedback helps the dev team optimize the AI scoring model. Please explain why you marked this document status.</p>
+        <div class="mb-3">
+          <label for="feedbackReasonInput" class="form-label small fw-semibold">Reviewer Notes (Optional)</label>
+          <textarea class="form-control" id="feedbackReasonInput" rows="3" placeholder="e.g., The AI missed the escalation pathway described on page 3..." style="font-size: 0.9rem;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary px-3" id="submitFeedbackBtn">Submit Feedback</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>window.WALKTHROUGH_PAGE_KEY = 'tour-ai-review';</script>
+<script>
+  (function () {
+    const helpPanel = document.getElementById('aiReviewHelpPanel');
+    const helpBtn = document.getElementById('aiReviewHelpBtn');
+    if (helpPanel && helpBtn && window.bootstrap && window.bootstrap.Collapse) {
+      const collapse = window.bootstrap.Collapse.getOrCreateInstance(helpPanel, { toggle: false });
+      helpBtn.addEventListener('click', function () {
+        collapse.toggle();
+      });
+    }
+
+    const form = document.getElementById('aiDemoForm');
+    const button = document.getElementById('runDemoBtn');
+    const buttonLabel = document.getElementById('runDemoLabel');
+    const statusText = document.getElementById('demoStatusText');
+    const questionInput = document.getElementById('demoQuestion');
+    const questionPreset = document.getElementById('demoQuestionPreset');
+    const questionChips = document.querySelectorAll('.demo-question-chip');
+    const resultCard = document.getElementById('demoResultCard');
+    const statusBadge = document.getElementById('resultStatusBadge');
+    const confidenceEl = document.getElementById('resultConfidence');
+    const confidenceBreakdownEl = document.getElementById('resultConfidenceBreakdown');
+    const warningsEl = document.getElementById('resultWarnings');
+    const snippetsEl = document.getElementById('resultSnippets');
+    const citationsEl = document.getElementById('resultCitations');
+    const checklistTable = document.getElementById('demoChecklistTable');
+    const checklistClear = document.getElementById('demoChecklistClear');
+    const checklistPartial = document.getElementById('demoChecklistPartial');
+    const checklistGap = document.getElementById('demoChecklistGap');
+    const resultDiagnosticsEl = document.getElementById('resultDiagnostics');
+    const scoreWhyList = document.getElementById('scoreWhyList');
+    const resultSourceMetaEl = document.getElementById('resultSourceMeta');
+    const resultSummaryEl = document.getElementById('resultSummaryText');
+    const downloadDocxBtn = document.getElementById('downloadDocxBtn');
+    const improvementGuideWrap = document.getElementById('improvementGuideWrap');
+    const showImprovementGuideBtn = document.getElementById('showImprovementGuideBtn');
+    const improvementGuidePanel = document.getElementById('improvementGuidePanel');
+    const improvementGuideList = document.getElementById('improvementGuideList');
+    const progressWrap = document.getElementById('demoProgressWrap');
+    const progressBar = document.getElementById('demoProgressBar');
+    const storedDocSelect = document.getElementById('storedDocId');
+    const reuseLastResult = document.getElementById('reuseLastResult');
+    const storedAnalysisHint = document.getElementById('storedAnalysisHint');
+    const storedAnalysisHintText = document.getElementById('storedAnalysisHintText');
+    const showStoredAnalysisBtn = document.getElementById('showStoredAnalysisBtn');
+    const profileMature = document.getElementById('profileMature');
+    const profileOk = document.getElementById('profileOk');
+    const profileRisk = document.getElementById('profileRisk');
+    const profileAnchors = document.getElementById('profileAnchors');
+    const saveScoringProfileBtn = document.getElementById('saveScoringProfileBtn');
+    const scoringProfileStatus = document.getElementById('scoringProfileStatus');
+    const feedbackFalsePositiveBtn = document.getElementById('feedbackFalsePositiveBtn');
+    const feedbackFalseNegativeBtn = document.getElementById('feedbackFalseNegativeBtn');
+    const feedbackCorrectBtn = document.getElementById('feedbackCorrectBtn');
+    const analysisByDoc = {{ selected_document_meta|tojson }};
+    const AUTO_START = {{ 'true' if autostart else 'false' }};
+    const ACTIVE_DOC_ID = {{ active_doc_id if active_doc_id else 'null' }};
+    let progressTimer = null;
+    let progressValue = 0;
+    let requestInFlight = false;
+    let requestWatchdogTimer = null;
+    let lastResultMeta = null;
+
+    if (!form) {
+      return;
+    }
+
+    if (storedDocSelect) {
+      if (ACTIVE_DOC_ID && String(ACTIVE_DOC_ID).trim()) {
+        storedDocSelect.value = String(ACTIVE_DOC_ID).trim();
+      }
+    }
+
+    const getSelectedDocMeta = () => {
+      if (!storedDocSelect) {
+        return null;
+      }
+      const key = String(storedDocSelect.value || '').trim();
+      return analysisByDoc[key] || null;
+    };
+
+    const getIdleButtonLabel = () => {
+      const meta = getSelectedDocMeta();
+      if (meta && meta.analyzed) {
+        return 'Reanalyze Document';
+      }
+      return 'Analyze Document';
+    };
+
+    const getRunningButtonLabel = () => {
+      const meta = getSelectedDocMeta();
+      if (meta && meta.analyzed) {
+        return 'Reanalyzing...';
+      }
+      return 'Analyzing...';
+    };
+
+    const renderIdleButton = () => {
+      const label = getIdleButtonLabel();
+      if (buttonLabel) {
+        buttonLabel.textContent = label;
+      } else if (button) {
+        button.textContent = label;
+      }
+    };
+
+    const renderLoadingButton = () => {
+      const label = getRunningButtonLabel();
+      if (buttonLabel) {
+        buttonLabel.textContent = label;
+      } else if (button) {
+        button.textContent = label;
+      }
+    };
+
+    renderIdleButton();
+
+    const formatAnalysisTime = (rawValue) => {
+      const value = String(rawValue || '').trim();
+      if (!value) {
+        return '';
+      }
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) {
+        return '';
+      }
+      return dt.toLocaleString();
+    };
+
+    const clearResultBlocks = () => {
+      document.getElementById('demoResultPlaceholder').classList.remove('d-none');
+      resultCard.classList.add('d-none');
+      warningsEl.innerHTML = '';
+      snippetsEl.innerHTML = '';
+      citationsEl.innerHTML = '';
+      checklistTable.innerHTML = '';
+      checklistClear.innerHTML = '';
+      checklistPartial.innerHTML = '';
+      checklistGap.innerHTML = '';
+      if (resultSummaryEl) {
+        resultSummaryEl.textContent = '';
+      }
+      if (resultDiagnosticsEl) {
+        resultDiagnosticsEl.textContent = '';
+      }
+      if (scoreWhyList) {
+        scoreWhyList.innerHTML = '';
+      }
+      if (resultSourceMetaEl) {
+        resultSourceMetaEl.textContent = '';
+      }
+      if (downloadDocxBtn) {
+        downloadDocxBtn.classList.add('d-none');
+        downloadDocxBtn.setAttribute('href', '#');
+      }
+      if (improvementGuideWrap) {
+        improvementGuideWrap.classList.add('d-none');
+      }
+      if (improvementGuidePanel) {
+        improvementGuidePanel.classList.add('d-none');
+      }
+      if (improvementGuideList) {
+        improvementGuideList.innerHTML = '';
+      }
+    };
+
+    const appendListItems = (listEl, listItems) => {
+      listEl.innerHTML = '';
+      if (!listItems || listItems.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'None.';
+        listEl.appendChild(li);
+        return;
+      }
+      listItems.forEach(function (item) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        listEl.appendChild(li);
+      });
+    };
+
+    const setRunning = (running, text) => {
+      requestInFlight = !!running;
+      button.disabled = !!running;
+      button.classList.remove('loading');
+      button.classList.toggle('disabled', !!running);
+      if (running) {
+        renderLoadingButton();
+      } else {
+        renderIdleButton();
+      }
+      button.setAttribute('aria-busy', running ? 'true' : 'false');
+      statusText.classList.remove('d-none');
+      statusText.textContent = text || '';
+    };
+
+    const forceResetUi = (statusMessage) => {
+      if (requestWatchdogTimer) {
+        clearTimeout(requestWatchdogTimer);
+        requestWatchdogTimer = null;
+      }
+      requestInFlight = false;
+      button.disabled = false;
+      button.classList.remove('loading');
+      button.classList.remove('disabled');
+      renderIdleButton();
+      button.setAttribute('aria-busy', 'false');
+      if (statusMessage) {
+        statusText.classList.remove('d-none');
+        statusText.textContent = statusMessage;
+      }
+      finishProgress();
+    };
+
+    const startProgress = () => {
+      if (!progressWrap || !progressBar) {
+        return;
+      }
+      progressValue = 8;
+      progressWrap.classList.remove('d-none');
+      progressBar.style.width = `${progressValue}%`;
+      progressBar.textContent = `${progressValue}%`;
+      progressBar.setAttribute('aria-valuenow', String(progressValue));
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
+      progressTimer = setInterval(function () {
+        progressValue = Math.min(progressValue + 7, 90);
+        progressBar.style.width = `${progressValue}%`;
+        progressBar.textContent = `${progressValue}%`;
+        progressBar.setAttribute('aria-valuenow', String(progressValue));
+      }, 300);
+    };
+
+    const finishProgress = () => {
+      if (!progressWrap || !progressBar) {
+        return;
+      }
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      progressValue = 100;
+      progressBar.style.width = '100%';
+      progressBar.textContent = '100%';
+      progressBar.setAttribute('aria-valuenow', '100');
+      window.setTimeout(function () {
+        progressWrap.classList.add('d-none');
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.setAttribute('aria-valuenow', '0');
+      }, 450);
+    };
+
+    const renderBadge = (status) => {
+      statusBadge.className = 'badge';
+      const normalized = (status || '').toLowerCase();
+      if (normalized === 'mature') {
+        statusBadge.classList.add('bg-primary');
+      } else if (normalized === 'ok') {
+        statusBadge.classList.add('bg-success');
+      } else if (normalized === 'high risk gap') {
+        statusBadge.classList.add('bg-warning', 'text-dark');
+      } else if (normalized === 'critical gap') {
+        statusBadge.classList.add('bg-danger');
+      } else {
+        statusBadge.classList.add('bg-secondary');
+      }
+      statusBadge.textContent = status || 'Unknown';
+    };
+
+    const asCard = (text, options) => {
+      const div = document.createElement('div');
+      div.className = 'border rounded p-2';
+
+      const topRow = document.createElement('div');
+      topRow.className = 'd-flex justify-content-between align-items-start gap-2';
+
+      const textEl = document.createElement('div');
+      textEl.className = 'small';
+      textEl.textContent = text || '-';
+      topRow.appendChild(textEl);
+
+      const scoreValue = options && typeof options.score !== 'undefined' ? Number(options.score) : null;
+      if (scoreValue !== null && !Number.isNaN(scoreValue)) {
+        const scoreBadge = document.createElement('span');
+        scoreBadge.className = 'badge bg-dark-subtle text-dark-emphasis border';
+        scoreBadge.textContent = `Score ${scoreValue}`;
+        topRow.appendChild(scoreBadge);
+      }
+
+      div.appendChild(topRow);
+
+      if (options && options.meta) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'text-body-secondary small mt-2';
+        metaEl.textContent = options.meta;
+        div.appendChild(metaEl);
+      }
+
+      return div;
+    };
+
+    const renderImprovementGuide = (payload) => {
+      if (!improvementGuideWrap || !improvementGuideList) {
+        return;
+      }
+
+      const checklist = (payload.checklist || {});
+      const items = Array.isArray(checklist.items) ? checklist.items : [];
+      const actions = [];
+
+      items.forEach(function (item) {
+        const status = String(item.status || '').toLowerCase();
+        if (!['gap', 'partial'].includes(status)) {
+          return;
+        }
+        const label = String(item.label || 'this area').trim();
+        const note = String(item.note || '').trim();
+        if (note) {
+          actions.push(`Strengthen ${label}: ${note}`);
+        } else {
+          actions.push(`Add clearer evidence for ${label}.`);
+        }
+      });
+
+      const overallStatus = String(payload.status || '').toLowerCase();
+      if (actions.length === 0 && ['ok', 'mature'].includes(overallStatus)) {
+        actions.push('Maintain current evidence quality and keep review dates up to date.');
+        actions.push('Add one implementation example and one recent review record to keep audit readiness strong.');
+      }
+
+      if (actions.length === 0) {
+        actions.push('Add explicit policy scope, owner responsibility, and review frequency in the document.');
+        actions.push('Attach implementation proof such as logs, checklists, or completed records.');
+      }
+
+      improvementGuideList.innerHTML = '';
+      actions.slice(0, 6).forEach(function (actionText) {
+        const li = document.createElement('li');
+        li.textContent = actionText;
+        improvementGuideList.appendChild(li);
+      });
+
+      improvementGuideWrap.classList.remove('d-none');
+      if (improvementGuidePanel) {
+        improvementGuidePanel.classList.add('d-none');
+      }
+    };
+
+    const renderPayload = (payload) => {
+      lastResultMeta = {
+        stored_doc_id: Number(((payload.meta || {}).stored_doc_id) || (storedDocSelect && storedDocSelect.value) || 0),
+        status: String(payload.status || ''),
+        confidence: Number(payload.confidence || 0),
+      };
+      renderBadge(payload.status);
+      confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
+      const confidenceBreakdown = ((payload.meta || {}).confidence_breakdown) || ((payload.scoring_diagnostics || {}).confidence_breakdown) || {};
+      const coverageConf = Number(confidenceBreakdown.coverage_confidence || 0);
+      const evidenceConf = Number(confidenceBreakdown.evidence_confidence || 0);
+      if (confidenceBreakdownEl) {
+        confidenceBreakdownEl.textContent = `Coverage ${(coverageConf * 100).toFixed(0)}% | Evidence ${(evidenceConf * 100).toFixed(0)}%`;
+      }
+      const provider = ((payload.meta || {}).provider) || 'deterministic';
+      const model = ((payload.meta || {}).model) || '-';
+      const source = ((payload.meta || {}).source) || 'repository';
+      const filename = ((payload.meta || {}).filename) || 'Untitled document';
+      const cachedResult = Boolean((payload.meta || {}).cached_result);
+      const usedQuestion = ((payload.meta || {}).question || '').trim();
+      const analyzedAtText = formatAnalysisTime((payload.meta || {}).analysis_at);
+      const rubricLabel = ((payload.meta || {}).rubric_label || '').trim();
+      const extractionMeta = (payload.meta || {}).extraction_diagnostics || {};
+      const extractionQuality = String(extractionMeta.quality || '').trim();
+      resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${rubricLabel ? ` | Rubric: ${rubricLabel}` : ''}${extractionQuality ? ` | Extraction: ${extractionQuality}` : ''}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
+      const diagnostics = payload.scoring_diagnostics || {};
+      const whyLines = [];
+      if (typeof diagnostics.domain_anchor_hits !== 'undefined') {
+        whyLines.push(`Domain anchors matched: ${Number(diagnostics.domain_anchor_hits || 0)}`);
+      }
+      if (typeof diagnostics.snippet_count !== 'undefined') {
+        whyLines.push(`Evidence snippets found: ${Number(diagnostics.snippet_count || 0)}`);
+      }
+      if (typeof diagnostics.citation_count !== 'undefined') {
+        whyLines.push(`NDIS citations found: ${Number(diagnostics.citation_count || 0)}`);
+      }
+      if (diagnostics.looks_like_template) {
+        whyLines.push('Template-like structure detected, so score was constrained.');
+      }
+      if (diagnostics.looks_like_irrelevant) {
+        whyLines.push('Content looks irrelevant (resume/invoice style), so score was capped.');
+      }
+      const blockerReasons = Array.isArray(diagnostics.blocking_reasons) ? diagnostics.blocking_reasons : [];
+      blockerReasons.forEach(function (line) {
+        if (line && !whyLines.includes(line)) {
+          whyLines.push(line);
+        }
+      });
+      const extractionInfo = diagnostics.extraction || {};
+      const extractionWarnings = Array.isArray(extractionInfo.warnings) ? extractionInfo.warnings : [];
+      extractionWarnings.forEach(function (line) {
+        if (line && !whyLines.includes(line)) {
+          whyLines.push(line);
+        }
+      });
+      const diagWarnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
+      diagWarnings.forEach(function (line) {
+        if (line && !whyLines.includes(line)) {
+          whyLines.push(line);
+        }
+      });
+      if (scoreWhyList) {
+        scoreWhyList.innerHTML = '';
+        (whyLines.length ? whyLines : ['No extra diagnostics available for this run.']).forEach(function (line) {
+          const li = document.createElement('li');
+          li.textContent = line;
+          scoreWhyList.appendChild(li);
+        });
+      }
+      if (resultSourceMetaEl) {
+        resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}${usedQuestion ? ` | Question: ${usedQuestion}` : ''}`;
+      }
+      if (downloadDocxBtn && storedDocSelect && (storedDocSelect.value || '').trim()) {
+        const href = `{{ url_for('main.download_ai_summary_docx', doc_id=0) }}`.replace('/0/download-ai-summary-docx', `/${storedDocSelect.value}/download-ai-summary-docx`);
+        downloadDocxBtn.setAttribute('href', href);
+        downloadDocxBtn.classList.remove('d-none');
+      }
+      if (resultSummaryEl) {
+        const summaryText = String(payload.summary || '').trim();
+        resultSummaryEl.textContent = summaryText || 'No summary available.';
+      }
+
+      const checklist = (payload.checklist || {});
+      const items = checklist.items || [];
+      items.forEach(function (item) {
+        const row = document.createElement('tr');
+
+        const labelCell = document.createElement('td');
+        labelCell.textContent = item.label || '-';
+        row.appendChild(labelCell);
+
+        const statusCell = document.createElement('td');
+        const badge = document.createElement('span');
+        const status = item.status || 'Gap';
+        badge.className = 'badge';
+        if (status === 'Clear') {
+          badge.classList.add('bg-success');
+        } else if (status === 'Partial') {
+          badge.classList.add('bg-warning', 'text-dark');
+        } else {
+          badge.classList.add('bg-danger');
+        }
+        badge.textContent = status;
+        statusCell.appendChild(badge);
+        row.appendChild(statusCell);
+
+        const noteCell = document.createElement('td');
+        noteCell.textContent = item.note || '-';
+        row.appendChild(noteCell);
+
+        checklistTable.appendChild(row);
+      });
+
+      appendListItems(checklistClear, (checklist.summary || {}).clear || []);
+      appendListItems(checklistPartial, (checklist.summary || {}).partial || []);
+      appendListItems(checklistGap, (checklist.summary || {}).gap || []);
+
+      const warningItems = payload.warning_items || [];
+      if (warningItems.length > 0) {
+        warningItems.forEach(function (item) {
+          const warning = document.createElement('div');
+          warning.className = 'alert alert-warning py-2 px-3 mb-0 small';
+          const sourceLabel = ((item && item.source) || 'system').toUpperCase();
+          const message = (item && item.message) || '';
+          warning.textContent = `[${sourceLabel}] ${message}`;
+          warningsEl.appendChild(warning);
+        });
+      } else {
+        warningsEl.innerHTML = '';
+      }
+
+      const snippets = payload.snippets || [];
+      if (snippets.length === 0) {
+        snippetsEl.appendChild(asCard('No strong evidence snippets found in this file.', { score: 0 }));
+      } else {
+        snippets.forEach(function (item) {
+          snippetsEl.appendChild(asCard(item.text, { score: item.score }));
+        });
+      }
+
+      const citations = payload.citations || [];
+      if (citations.length === 0) {
+        citationsEl.appendChild(asCard('No NDIS citations retrieved.', { score: 0 }));
+      } else {
+        citations.forEach(function (item) {
+          const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'}`;
+          citationsEl.appendChild(asCard(item.text, { score: item.score || 0, meta: meta }));
+        });
+      }
+
+      renderImprovementGuide(payload);
+      document.getElementById('demoResultPlaceholder').classList.add('d-none');
+      resultCard.classList.remove('d-none');
+    };
+
+    const showStoredHint = (meta) => {
+      if (!storedAnalysisHint || !storedAnalysisHintText) {
+        return;
+      }
+      if (!meta || !meta.analyzed) {
+        storedAnalysisHint.classList.add('d-none');
+        storedAnalysisHintText.textContent = '';
+        return;
+      }
+      const whenText = formatAnalysisTime(meta.analysis_at);
+      const status = String(meta.status || 'Unknown').trim() || 'Unknown';
+      const confidence = `${(Number(meta.confidence || 0) * 100).toFixed(0)}%`;
+      storedAnalysisHintText.textContent = `Last saved analysis: ${status} (${confidence})${whenText ? `, ${whenText}` : ''}.`;
+      storedAnalysisHint.classList.remove('d-none');
+    };
+
+    const renderStoredAnalysis = () => {
+      const meta = getSelectedDocMeta();
+      if (!meta || !meta.analyzed) {
+        return;
+      }
+      clearResultBlocks();
+      renderPayload({
+        status: meta.status || 'Unknown',
+        confidence: Number(meta.confidence || 0),
+        summary: meta.summary || '',
+        checklist: meta.checklist || { items: [], summary: { clear: [], partial: [], gap: [] } },
+        snippets: [],
+        citations: [],
+        warning_items: [
+          {
+            source: 'cache',
+            message: 'Showing the last saved analysis. Click Reanalyze Document for a fresh run.',
+          },
+        ],
+        meta: {
+          provider: meta.provider || 'stored',
+          model: meta.model || 'stored',
+          source: 'repository',
+          filename: meta.filename || '',
+          cached_result: true,
+          question: meta.question || '',
+          analysis_at: meta.analysis_at || '',
+        },
+      });
+      statusText.classList.remove('d-none');
+      statusText.textContent = 'Showing last saved analysis.';
+    };
+
+    const onDocumentSelectionChanged = (opts) => {
+      const options = opts || {};
+      const meta = getSelectedDocMeta();
+      renderIdleButton();
+      showStoredHint(meta);
+
+      if (meta && meta.analyzed) {
+        if (reuseLastResult) {
+          reuseLastResult.checked = false;
+        }
+        if (questionInput && !String(questionInput.value || '').trim() && String(meta.question || '').trim()) {
+          questionInput.value = String(meta.question || '').trim();
+        }
+        if (options.showStored !== false) {
+          renderStoredAnalysis();
+        }
+      } else {
+        if (reuseLastResult) {
+          reuseLastResult.checked = true;
+        }
+        clearResultBlocks();
+      }
+    };
+
+    if (questionPreset && questionInput) {
+      questionPreset.addEventListener('change', function () {
+        const selected = (questionPreset.value || '').trim();
+        if (!selected) {
+          return;
+        }
+        questionInput.value = selected;
+        questionInput.focus();
+      });
+    }
+
+    if (questionChips && questionInput) {
+      questionChips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          const selected = (chip.getAttribute('data-question') || '').trim();
+          if (!selected) {
+            return;
+          }
+          questionInput.value = selected;
+          if (questionPreset) {
+            questionPreset.value = selected;
+          }
+          questionInput.focus();
+        });
+      });
+    }
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (requestInFlight) {
+        return;
+      }
+      clearResultBlocks();
+
+      if (!storedDocSelect || !storedDocSelect.value) {
+        setRunning(false, 'Choose a repository document first.');
+        return;
+      }
+
+      const formData = new FormData(form);
+      setRunning(true, 'Analyzing document...');
+      startProgress();
+      requestWatchdogTimer = window.setTimeout(function () {
+        forceResetUi('Analysis timed out. Please retry.');
+      }, 120000);
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(function () {
+          controller.abort('timeout');
+        }, 110000);
+
+        const response = await fetch("{{ url_for('main.ai_demo_analyze_api') }}", {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+        window.clearTimeout(timeoutId);
+        let payload = null;
+        let rawText = '';
+        try {
+          rawText = await response.text();
+          payload = rawText ? JSON.parse(rawText) : null;
+        } catch (_e) {
+          payload = null;
+        }
+
+        if (!response.ok || !payload || !payload.success) {
+          const backendError = (payload && payload.error) ? String(payload.error) : '';
+          const statusHint = `Analysis request failed (${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`;
+          throw new Error(backendError || statusHint || 'Analysis failed');
+        }
+
+        renderPayload(payload);
+        resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setRunning(false, 'Done.');
+      } catch (error) {
+        const fallbackMessage = (error && error.name === 'AbortError')
+          ? 'Analysis timed out. Please retry.'
+          : (error.message || 'Analysis failed.');
+        setRunning(false, fallbackMessage);
+      } finally {
+        forceResetUi();
+      }
+    });
+
+    if (AUTO_START && storedDocSelect && (storedDocSelect.value || '').trim()) {
+      window.setTimeout(function () {
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+      }, 200);
+    }
+
+    if (storedDocSelect) {
+      storedDocSelect.addEventListener('change', function () {
+        onDocumentSelectionChanged({ showStored: true });
+      });
+    }
+
+    if (showStoredAnalysisBtn) {
+      showStoredAnalysisBtn.addEventListener('click', function () {
+        renderStoredAnalysis();
+      });
+    }
+
+    if (showImprovementGuideBtn && improvementGuidePanel) {
+      showImprovementGuideBtn.addEventListener('click', function () {
+        improvementGuidePanel.classList.toggle('d-none');
+      });
+    }
+
+    onDocumentSelectionChanged({ showStored: true });
+
+    const applyProfileToInputs = (profile) => {
+      if (!profile) {
+        return;
+      }
+      if (profileMature) profileMature.value = Number(profile.mature_min_score || 0.75).toFixed(2);
+      if (profileOk) profileOk.value = Number(profile.ok_min_score || 0.55).toFixed(2);
+      if (profileRisk) profileRisk.value = Number(profile.high_risk_min_score || 0.30).toFixed(2);
+      if (profileAnchors) profileAnchors.value = String(parseInt(profile.mature_min_anchor_hits || 4, 10));
+    };
+
+    const loadScoringProfile = async () => {
+      if (!profileMature && !profileOk && !profileRisk && !profileAnchors) {
+        return;
+      }
+      try {
+        const res = await fetch("{{ url_for('main.ai_demo_scoring_profile_api') }}");
+        const payload = await res.json();
+        if (!res.ok || !payload || !payload.success) {
+          return;
+        }
+        applyProfileToInputs(payload.profile || payload.defaults || null);
+      } catch (_e) {
+      }
+    };
+
+    if (saveScoringProfileBtn) {
+      saveScoringProfileBtn.addEventListener('click', async function () {
+        const body = {
+          mature_min_score: Number(profileMature ? profileMature.value : 0.75),
+          ok_min_score: Number(profileOk ? profileOk.value : 0.55),
+          high_risk_min_score: Number(profileRisk ? profileRisk.value : 0.30),
+          mature_min_anchor_hits: Number(profileAnchors ? profileAnchors.value : 4),
+        };
+        scoringProfileStatus.textContent = 'Saving...';
+        try {
+          const res = await fetch("{{ url_for('main.ai_demo_scoring_profile_api') }}", {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify(body),
+          });
+          const payload = await res.json();
+          if (!res.ok || !payload || !payload.success) {
+            throw new Error((payload && payload.error) || 'Save failed');
+          }
+          applyProfileToInputs(payload.profile || null);
+          scoringProfileStatus.textContent = 'Scoring profile saved.';
+        } catch (e) {
+          scoringProfileStatus.textContent = (e && e.message) ? e.message : 'Save failed.';
+        }
+      });
+    }
+
+    let pendingFeedbackType = null;
+    const fbModalEl = document.getElementById('feedbackModal');
+    const fbModal = (fbModalEl && window.bootstrap && window.bootstrap.Modal) ? window.bootstrap.Modal.getOrCreateInstance(fbModalEl) : null;
+
+    const openFeedbackDialog = (feedbackType) => {
+      if (!lastResultMeta || !lastResultMeta.stored_doc_id) {
+        statusText.classList.remove('d-none');
+        statusText.textContent = 'Run analysis first, then send feedback.';
+        return;
+      }
+
+      pendingFeedbackType = feedbackType;
+      const titleMap = {
+        'false_positive': 'Report False Positive',
+        'false_negative': 'Report False Negative',
+        'correct': 'Confirm Correct Scoring'
+      };
+      
+      const modalTitle = document.getElementById('feedbackModalLabel');
+      if (modalTitle) {
+        modalTitle.textContent = titleMap[feedbackType] || 'Submit Review Notes';
+      }
+
+      if (fbModal) {
+        fbModal.show();
+      } else {
+        // Fallback to native prompt dialog if bootstrap modal is not available
+        const reason = prompt(`[${titleMap[feedbackType] || 'Submit Review'}] Please enter optional reviewer notes to help improve the model:`);
+        if (reason !== null) {
+          sendFeedback(feedbackType, reason);
+        }
+      }
+    };
+
+    const sendFeedback = async (feedback, reason) => {
+      if (!lastResultMeta || !lastResultMeta.stored_doc_id) {
+        statusText.classList.remove('d-none');
+        statusText.textContent = 'Run analysis first, then send feedback.';
+        return;
+      }
+      statusText.classList.remove('d-none');
+      statusText.textContent = 'Saving feedback...';
+      try {
+        const res = await fetch("{{ url_for('main.ai_demo_feedback_api') }}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+          },
+          body: JSON.stringify({
+            feedback: feedback,
+            stored_doc_id: lastResultMeta.stored_doc_id,
+            status: lastResultMeta.status,
+            confidence: lastResultMeta.confidence,
+            reason: reason || '',
+          }),
+        });
+        const payload = await res.json();
+        if (!res.ok || !payload || !payload.success) {
+          throw new Error((payload && payload.error) || 'Feedback failed');
+        }
+        statusText.textContent = 'Feedback saved. Thanks.';
+      } catch (e) {
+        statusText.textContent = (e && e.message) ? e.message : 'Feedback failed.';
+      }
+    };
+
+    if (feedbackFalsePositiveBtn) {
+      feedbackFalsePositiveBtn.addEventListener('click', function () {
+        openFeedbackDialog('false_positive');
+      });
+    }
+    if (feedbackFalseNegativeBtn) {
+      feedbackFalseNegativeBtn.addEventListener('click', function () {
+        openFeedbackDialog('false_negative');
+      });
+    }
+    if (feedbackCorrectBtn) {
+      feedbackCorrectBtn.addEventListener('click', function () {
+        openFeedbackDialog('correct');
+      });
+    }
+
+    const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+    if (submitFeedbackBtn) {
+      submitFeedbackBtn.addEventListener('click', function () {
+        const reasonInput = document.getElementById('feedbackReasonInput');
+        const reason = reasonInput ? reasonInput.value : '';
+        if (fbModal) {
+          fbModal.hide();
+        }
+        sendFeedback(pendingFeedbackType, reason);
+        if (reasonInput) {
+          reasonInput.value = '';
+        }
+      });
+    }
+
+    loadScoringProfile();
+
+    window.addEventListener('pagehide', function () {
+      forceResetUi();
+    });
+  })();
+</script>
+{% endblock %}

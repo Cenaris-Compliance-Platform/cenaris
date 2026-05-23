@@ -1,8 +1,21 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
-from wtforms import HiddenField, SelectField, StringField, SubmitField
+from wtforms import BooleanField, HiddenField, IntegerField, SelectField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Email, Length, Optional
+from wtforms import widgets
 
+
+class MultiCheckboxField(SelectMultipleField):
+    widget = widgets.ListWidget(prefix_label=False)
+    option_widget = widgets.CheckboxInput()
+
+class OrganizationModulesForm(FlaskForm):
+    form_name = HiddenField(default='modules')
+    enabled_modules = MultiCheckboxField(
+        'Registration Modules',
+        choices=[]
+    )
+    submit = SubmitField('Save Modules', render_kw={'class': 'btn btn-primary'})
 
 class OrganizationProfileSettingsForm(FlaskForm):
     form_name = HiddenField(default='profile')
@@ -119,6 +132,98 @@ class OrganizationBillingForm(FlaskForm):
                 ok = False
 
         return ok
+
+
+class OrganizationMonthlyReportForm(FlaskForm):
+    form_name = HiddenField(default='monthly_reports')
+
+    monthly_report_enabled = BooleanField(
+        'Enable monthly report delivery',
+        render_kw={'class': 'form-check-input'},
+    )
+
+    monthly_report_recipient_email = StringField(
+        'Monthly report recipient email',
+        validators=[Optional(), Email(), Length(max=120)],
+        render_kw={
+            'class': 'form-control form-control-lg',
+            'placeholder': 'reports@company.com',
+            'autocomplete': 'email',
+        },
+    )
+
+    submit = SubmitField(
+        'Save Monthly Report Settings',
+        render_kw={'class': 'btn btn-primary btn-lg'},
+    )
+
+    def validate(self, extra_validators=None):
+        ok = super().validate(extra_validators=extra_validators)
+
+        enabled = bool(self.monthly_report_enabled.data)
+        recipient = (self.monthly_report_recipient_email.data or '').strip()
+        if enabled and not recipient:
+            self.monthly_report_recipient_email.errors.append(
+                'Recipient email is required when monthly report delivery is enabled.'
+            )
+            ok = False
+
+        return ok
+
+
+class OrganizationBillingAccessForm(FlaskForm):
+    form_name = HiddenField(default='billing_access')
+
+    billing_plan_code = SelectField(
+        'Plan',
+        choices=[
+            ('starter', 'Starter'),
+            ('team', 'Team'),
+            ('scale', 'Scale'),
+            ('enterprise', 'Enterprise'),
+        ],
+        validators=[DataRequired()],
+        render_kw={'class': 'form-select'},
+        default='starter',
+    )
+
+    billing_status = SelectField(
+        'Billing Status',
+        choices=[
+            ('inactive', 'Inactive'),
+            ('active', 'Active'),
+            ('trialing', 'Trialing'),
+            ('past_due', 'Past Due'),
+            ('canceled', 'Canceled'),
+        ],
+        validators=[DataRequired()],
+        render_kw={'class': 'form-select'},
+        default='active',
+    )
+
+    billing_internal_override = BooleanField(
+        'Internal override (org-wide)',
+        render_kw={'class': 'form-check-input'},
+    )
+
+    billing_demo_override_enabled = BooleanField(
+        'Demo override enabled (no auto-expiry)',
+        render_kw={'class': 'form-check-input'},
+    )
+
+    billing_override_reason = StringField(
+        'Override reason',
+        validators=[Optional(), Length(max=255)],
+        render_kw={
+            'class': 'form-control',
+            'placeholder': 'Reason for internal/demo override (optional)',
+        },
+    )
+
+    submit = SubmitField(
+        'Save Billing Access',
+        render_kw={'class': 'btn btn-warning'},
+    )
 
 
 class UserAvatarForm(FlaskForm):
@@ -297,6 +402,13 @@ class PendingInviteRevokeForm(FlaskForm):
     )
 
 
+class InitializeComplianceDataForm(FlaskForm):
+    submit = SubmitField(
+        'Initialize NDIS Data',
+        render_kw={'class': 'btn btn-outline-success'},
+    )
+
+
 class CreateDepartmentForm(FlaskForm):
     name = StringField(
         'Department name',
@@ -346,6 +458,89 @@ class EditDepartmentForm(FlaskForm):
         validators=[DataRequired()],
         render_kw={'class': 'form-select'},
     )
+
+
+class OrganizationAISettingsForm(FlaskForm):
+    policy_draft_use_llm = BooleanField('Enable LLM policy drafting')
+
+    max_query_chars = IntegerField(
+        'Max query chars',
+        validators=[DataRequired()],
+        render_kw={'class': 'form-control', 'min': 100, 'max': 5000},
+    )
+    max_top_k = IntegerField(
+        'Max top_k',
+        validators=[DataRequired()],
+        render_kw={'class': 'form-control', 'min': 1, 'max': 20},
+    )
+    max_citation_text_chars = IntegerField(
+        'Max citation chars',
+        validators=[DataRequired()],
+        render_kw={'class': 'form-control', 'min': 100, 'max': 5000},
+    )
+    max_answer_chars = IntegerField(
+        'Max RAG answer chars',
+        validators=[DataRequired()],
+        render_kw={'class': 'form-control', 'min': 200, 'max': 10000},
+    )
+    max_policy_draft_chars = IntegerField(
+        'Max policy draft chars',
+        validators=[DataRequired()],
+        render_kw={'class': 'form-control', 'min': 500, 'max': 20000},
+    )
+    rag_rate_limit = StringField(
+        'RAG rate limit',
+        validators=[DataRequired(), Length(max=40)],
+        render_kw={'class': 'form-control', 'placeholder': 'e.g. 20 per minute'},
+    )
+    policy_rate_limit = StringField(
+        'Policy rate limit',
+        validators=[DataRequired(), Length(max=40)],
+        render_kw={'class': 'form-control', 'placeholder': 'e.g. 10 per minute'},
+    )
+
+    submit = SubmitField(
+        'Save AI Controls',
+        render_kw={'class': 'btn btn-primary'},
+    )
+
+    def validate(self, extra_validators=None):
+        ok = super().validate(extra_validators=extra_validators)
+
+        def _bounded(field, minimum: int, maximum: int, label: str):
+            nonlocal ok
+            val = field.data
+            if val is None or int(val) < minimum or int(val) > maximum:
+                field.errors.append(f'{label} must be between {minimum} and {maximum}.')
+                ok = False
+
+        _bounded(self.max_query_chars, 100, 5000, 'Max query chars')
+        _bounded(self.max_top_k, 1, 20, 'Max top_k')
+        _bounded(self.max_citation_text_chars, 100, 5000, 'Max citation chars')
+        _bounded(self.max_answer_chars, 200, 10000, 'Max RAG answer chars')
+        _bounded(self.max_policy_draft_chars, 500, 20000, 'Max policy draft chars')
+        return ok
+
+
+class OrganizationAIUsageRetentionForm(FlaskForm):
+    days = IntegerField(
+        'Retention (days)',
+        validators=[DataRequired()],
+        render_kw={'class': 'form-control', 'min': 1, 'max': 3650},
+    )
+    dry_run = BooleanField('Dry run only (recommended first)', default=True)
+    submit = SubmitField(
+        'Run Retention',
+        render_kw={'class': 'btn btn-outline-warning'},
+    )
+
+    def validate(self, extra_validators=None):
+        ok = super().validate(extra_validators=extra_validators)
+        val = self.days.data
+        if val is None or int(val) < 1 or int(val) > 3650:
+            self.days.errors.append('Retention days must be between 1 and 3650.')
+            ok = False
+        return ok
 
 
 class DeleteDepartmentForm(FlaskForm):

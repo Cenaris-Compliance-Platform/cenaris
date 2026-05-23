@@ -2,6 +2,79 @@
 
 {% block extra_css %}
 <style>
+  .walkthrough-launcher {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.18);
+    background:
+      linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.11), rgba(var(--bs-info-rgb), 0.06)),
+      var(--bs-body-bg);
+  }
+
+  .walkthrough-launcher::after {
+    content: "";
+    position: absolute;
+    inset: auto -3rem -3rem auto;
+    width: 10rem;
+    height: 10rem;
+    border-radius: 999px;
+    background: rgba(var(--bs-primary-rgb), 0.08);
+    pointer-events: none;
+  }
+
+  .walkthrough-launcher .card-body {
+    position: relative;
+    z-index: 1;
+  }
+
+  .walkthrough-pill {
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+  }
+
+  .walkthrough-step {
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    border-radius: 0.85rem;
+  }
+
+  .walkthrough-step.is-active {
+    border-color: rgba(var(--bs-primary-rgb), 0.45);
+    background: rgba(var(--bs-primary-rgb), 0.08);
+  }
+
+  .walkthrough-step.is-complete {
+    border-color: rgba(var(--bs-success-rgb), 0.35);
+    background: rgba(var(--bs-success-rgb), 0.08);
+  }
+
+  .walkthrough-progress {
+    height: 0.7rem;
+    border-radius: 999px;
+    background: var(--bs-tertiary-bg);
+  }
+
+  .walkthrough-highlight-target {
+    scroll-margin-top: 100px;
+    transition: box-shadow 0.3s ease;
+  }
+
+  @keyframes walkthroughSpotlight {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--bs-primary-rgb), 0); }
+    25%  { box-shadow: 0 0 0 6px rgba(var(--bs-primary-rgb), 0.35); }
+    75%  { box-shadow: 0 0 0 6px rgba(var(--bs-primary-rgb), 0.35); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--bs-primary-rgb), 0); }
+  }
+
+  .walkthrough-spotlight-active {
+    animation: walkthroughSpotlight 2s ease forwards;
+    border-radius: 0.5rem;
+  }
+
   /* Upload drop-zone: theme-aware (light/dark) */
   #dropZone.upload-dropzone {
     border: 2px dashed var(--bs-border-color);
@@ -34,13 +107,15 @@
             <img
               src="{{ url_for('main.organization_logo', v=(current_user.organization.logo_blob_name or '') ) }}"
               alt="{{ (current_user.organization.name or '') }} logo"
-              class="rounded shadow-sm"
+              class="rounded shadow-sm org-dashboard-logo"
               style="width: 72px; height: 72px; object-fit: contain; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); padding: 6px;"
+              data-fallback-src="{{ url_for('static', filename='images/Logo_NoBackground.png') }}"
+              onerror="this.onerror=null;this.src=this.dataset.fallbackSrc;"
             />
           </div>
           {% endif %}
           <div>
-            <h1 class="h2 fw-bold mb-1">
+            <h1 id="wt-dash-heading" class="h2 fw-bold mb-1">
               Welcome back, {{ current_user.email.split('@')[0].title() }}
             </h1>
             <p class="text-body-secondary mb-0">
@@ -48,19 +123,38 @@
             </p>
           </div>
         </div>
-        <div class="flex-shrink-0 d-none d-md-block">
-          <i
-            class="bi bi-speedometer2 text-primary"
-            style="font-size: 2.5rem"
-          ></i>
+        <div class="flex-shrink-0 d-none d-md-flex align-items-center flex-column">
+          <i class="bi bi-speedometer2 text-primary" style="font-size: 2.5rem"></i>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Walkthrough Promo Banner -->
+  <div id="walkthroughPromoBanner" class="card border-primary border-opacity-25 shadow-sm mb-4" style="background-color: rgba(var(--bs-primary-rgb), 0.05); border-radius: 0.75rem;">
+    <div class="card-body p-4 p-md-4">
+      <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 48px; height: 48px;">
+            <i class="bi bi-compass fs-4"></i>
+          </div>
+          <div>
+            <h5 class="fw-bold mb-1 text-dark">New: Guided walkthroughs</h5>
+            <p class="text-body-secondary mb-0 small">Take a quick step-by-step tour to get the most out of Cenaris — ideal for new users and teams setting up compliance for the first time.</p>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-3 ms-md-4 flex-shrink-0">
+          <button onclick="if(window.CenarisWalkthrough) CenarisWalkthrough.start();" class="btn btn-primary fw-semibold px-4">Explore walkthroughs</button>
+          <button onclick="this.closest('#walkthroughPromoBanner').style.display='none'" class="btn btn-link text-body-secondary text-decoration-none px-0">Not now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- Stats Cards -->
   <div class="row mb-4">
-    <div class="col-md-6 col-lg-3 mb-3">
+    <div class="col-md-6 col-lg-6 mb-3">
       <div class="card border-0 shadow h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
@@ -81,7 +175,7 @@
       </div>
     </div>
 
-    <div class="col-md-6 col-lg-3 mb-3">
+    <div class="col-md-6 col-lg-6 mb-3">
       <div class="card border-0 shadow h-100">
         <div class="card-body">
           <div class="d-flex align-items-center">
@@ -102,232 +196,79 @@
       </div>
     </div>
 
-    <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card border-0 shadow h-100">
-        <div class="card-body">
-          <div class="d-flex align-items-center">
-            <div class="flex-shrink-0">
-              <div class="bg-info bg-opacity-10 rounded-3 p-3">
-                <i
-                  class="bi bi-shield-check text-info"
-                  style="font-size: 1.5rem"
-                ></i>
-              </div>
-            </div>
-            <div class="flex-grow-1 ms-3">
-              {% if not ml_enabled %}
-              <div class="fw-bold h4 mb-0">—</div>
-              <div class="mt-1"><span class="badge bg-body-tertiary text-body border">Coming soon</span></div>
-              {% elif skip_adls %}
-              <div class="placeholder-glow">
-                <span class="placeholder col-4"></span>
-              </div>
-              {% else %}
-              <div class="fw-bold h4 mb-0" id="mlComplianceRateValue">{{ ml_summary.avg_compliancy_rate }}%</div>
-              {% endif %}
-              <div class="text-body-secondary small">ML Compliance Rate</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+  </div>
 
-    <div class="col-md-6 col-lg-3 mb-3">
-      <div class="card border-0 shadow h-100">
-        <div class="card-body">
-          <div class="d-flex align-items-center">
-            <div class="flex-shrink-0">
-              <div class="bg-warning bg-opacity-10 rounded-3 p-3">
-                <i
-                  class="bi bi-files text-warning"
-                  style="font-size: 1.5rem"
-                ></i>
-              </div>
-            </div>
-            <div class="flex-grow-1 ms-3">
-              {% if not ml_enabled %}
-              <div class="fw-bold h4 mb-0">—</div>
-              <div class="mt-1"><span class="badge bg-body-tertiary text-body border">Coming soon</span></div>
-              {% elif skip_adls %}
-              <div class="placeholder-glow">
-                <span class="placeholder col-3"></span>
-              </div>
-              {% else %}
-              <div class="fw-bold h4 mb-0" id="mlTotalFilesValue">{{ ml_summary.total_files }}</div>
-              {% endif %}
-              <div class="text-body-secondary small">ML Analysis Files</div>
-            </div>
+  {% if can_manage_org %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body d-flex align-items-center justify-content-between">
+          <div>
+            <h5 class="mb-0">Organisation Audit Log</h5>
+            <div class="small text-body-secondary">View recent organisation-level audit events and changes.</div>
+          </div>
+          <div>
+            <a href="{{ url_for('main.system_logs') }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-journal-text me-1"></i>Open Audit Log
+            </a>
           </div>
         </div>
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- Compliance Readiness Dashboard -->
   <div class="row mb-4">
     <div class="col-12">
-      <div class="card border-0 shadow">
+      <div class="card border-0 shadow walkthrough-highlight-target" id="walkthrough-compliance-readiness">
         <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-shield-check me-2 text-primary"></i>Compliance Readiness
             </h5>
-            <a href="{{ url_for('main.gap_analysis') }}" class="btn btn-sm btn-outline-primary">
-              View Gap Analysis
-            </a>
+            <div class="d-flex gap-2">
+              <a href="{{ url_for('main.gap_analysis') }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-shield-check me-1"></i>Audit Readiness Centre
+              </a>
+              <a href="{{ url_for('main.ai_demo') }}" class="btn btn-sm btn-outline-primary">
+                AI Review
+              </a>
+            </div>
           </div>
         </div>
         <div class="card-body p-4">
           <!-- Overall Readiness Summary -->
           <div class="row mb-4">
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.1), rgba(var(--bs-success-rgb), 0.05));">
-                <div class="h2 fw-bold text-success mb-1">85%</div>
-                <div class="text-body-secondary small">Overall Readiness</div>
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-success-rgb), 0.1), rgba(var(--bs-success-rgb), 0.05));">
+                <div class="h2 fw-bold text-success mb-1">{{ (dashboard_summary.compliance_rate or 0)|round(0)|int }}%</div>
+                <div class="text-body-secondary small">Requirement Readiness</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), rgba(var(--bs-info-rgb), 0.05));">
-                <div class="h2 fw-bold text-info mb-1">{{ total_documents }}</div>
-                <div class="text-body-secondary small">Documents Uploaded</div>
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-info-rgb), 0.1), rgba(var(--bs-info-rgb), 0.05));">
+                <div class="h2 fw-bold text-info mb-1">{{ dashboard_summary.document_count or total_documents }}</div>
+                <div class="text-body-secondary small">Docs Uploaded</div>
+                <div class="small text-body-secondary" style="font-size: 0.78rem;">AI: {{ dashboard_reviewed_documents or 0 }}</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), rgba(var(--bs-warning-rgb), 0.05));">
-                <div class="h2 fw-bold text-warning mb-1">12</div>
-                <div class="text-body-secondary small">Gaps Identified</div>
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-warning-rgb), 0.1), rgba(var(--bs-warning-rgb), 0.05));">
+                <div class="h2 fw-bold text-warning mb-1">{{ dashboard_summary.gap_requirements or 0 }}</div>
+                <div class="text-body-secondary small">Requirement Gaps</div>
               </div>
             </div>
             <div class="col-md-3 col-6 mb-3">
-              <div class="text-center p-3 rounded" style="background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.1), rgba(var(--bs-danger-rgb), 0.05));">
-                <div class="h2 fw-bold text-danger mb-1">3</div>
+              <div class="text-center p-3 rounded h-100" style="background: linear-gradient(135deg, rgba(var(--bs-danger-rgb), 0.1), rgba(var(--bs-danger-rgb), 0.05));">
+                <div class="h2 fw-bold text-danger mb-1">{{ dashboard_deadlines|length }}</div>
                 <div class="text-body-secondary small">Upcoming Deadlines</div>
               </div>
             </div>
           </div>
 
-          <!-- Framework Compliance Tiles -->
-          <div class="row g-3 mb-4">
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">ISO 27001</h6>
-                      <small class="text-body-secondary">Information Security</small>
-                    </div>
-                    <span class="badge bg-success">92%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-success" style="width: 92%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>138/150</span>
-                    <span class="text-body-secondary">controls met</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">SOC 2 Type II</h6>
-                      <small class="text-body-secondary">Trust Services</small>
-                    </div>
-                    <span class="badge bg-info">88%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-info" style="width: 88%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-info"><i class="bi bi-check-circle-fill me-1"></i>67/76</span>
-                    <span class="text-body-secondary">criteria met</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">GDPR</h6>
-                      <small class="text-body-secondary">Data Protection</small>
-                    </div>
-                    <span class="badge bg-warning">75%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-warning" style="width: 75%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-warning"><i class="bi bi-check-circle-fill me-1"></i>36/48</span>
-                    <span class="text-body-secondary">articles covered</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">NIST CSF</h6>
-                      <small class="text-body-secondary">Cybersecurity Framework</small>
-                    </div>
-                    <span class="badge bg-success">90%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-success" style="width: 90%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>81/90</span>
-                    <span class="text-body-secondary">functions met</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">HIPAA</h6>
-                      <small class="text-body-secondary">Healthcare Privacy</small>
-                    </div>
-                    <span class="badge bg-warning">78%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-warning" style="width: 78%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-warning"><i class="bi bi-check-circle-fill me-1"></i>47/60</span>
-                    <span class="text-body-secondary">requirements met</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card border h-100">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h6 class="fw-bold mb-0">PCI DSS</h6>
-                      <small class="text-body-secondary">Payment Card Security</small>
-                    </div>
-                    <span class="badge bg-danger">65%</span>
-                  </div>
-                  <div class="progress mb-2" style="height: 8px;">
-                    <div class="progress-bar bg-danger" style="width: 65%"></div>
-                  </div>
-                  <div class="d-flex justify-content-between text-sm">
-                    <span class="text-danger"><i class="bi bi-exclamation-circle-fill me-1"></i>39/60</span>
-                    <span class="text-body-secondary">requirements met</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="alert alert-info small mb-4">
+            Dashboard readiness is based on <strong>requirement-level assessments</strong>, not just file uploads. AI Review auto-maps likely requirement links, but readiness updates after those mappings are verified and requirement assessments are confirmed.
           </div>
 
           <!-- Upcoming Deadlines -->
@@ -336,50 +277,35 @@
               <h6 class="fw-bold mb-3">
                 <i class="bi bi-calendar-event text-danger me-2"></i>Upcoming Compliance Deadlines
               </h6>
+              {% if dashboard_deadlines %}
               <div class="row g-2">
+                {% for item in dashboard_deadlines %}
                 <div class="col-md-4">
                   <div class="d-flex align-items-center p-2 rounded" style="background-color: var(--bs-body-bg);">
                     <div class="flex-shrink-0 me-3">
-                      <div class="bg-danger bg-opacity-10 rounded p-2">
-                        <i class="bi bi-calendar-x text-danger" style="font-size: 1.2rem;"></i>
+                      <div class="bg-{{ item.severity }} bg-opacity-10 rounded p-2">
+                        <i class="bi bi-calendar-event text-{{ item.severity }}" style="font-size: 1.2rem;"></i>
                       </div>
                     </div>
                     <div>
-                      <div class="fw-semibold small">ISO 27001 Audit</div>
-                      <div class="text-danger small">Due in 5 days</div>
+                      <div class="fw-semibold small">{{ item.title }}</div>
+                      <div class="text-{{ item.severity }} small">{{ item.due_label }}</div>
+                      {% if item.review_frequency %}
+                      <div class="text-body-secondary" style="font-size: 0.75rem;">Review frequency: {{ item.review_frequency }}</div>
+                      {% endif %}
                     </div>
                   </div>
                 </div>
-                <div class="col-md-4">
-                  <div class="d-flex align-items-center p-2 rounded" style="background-color: var(--bs-body-bg);">
-                    <div class="flex-shrink-0 me-3">
-                      <div class="bg-warning bg-opacity-10 rounded p-2">
-                        <i class="bi bi-calendar-check text-warning" style="font-size: 1.2rem;"></i>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="fw-semibold small">GDPR Review</div>
-                      <div class="text-warning small">Due in 15 days</div>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="d-flex align-items-center p-2 rounded" style="background-color: var(--bs-body-bg);">
-                    <div class="flex-shrink-0 me-3">
-                      <div class="bg-info bg-opacity-10 rounded p-2">
-                        <i class="bi bi-calendar text-info" style="font-size: 1.2rem;"></i>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="fw-semibold small">SOC 2 Assessment</div>
-                      <div class="text-info small">Due in 28 days</div>
-                    </div>
-                  </div>
-                </div>
+                {% endfor %}
               </div>
+              {% else %}
+              <div class="alert alert-info mb-0 small">
+                No configured review deadlines yet. Deadlines appear only when requirements have a review frequency, linked evidence, and at least one completed assessment.
+              </div>
+              {% endif %}
               <div class="text-center mt-3">
-                <a href="{{ url_for('main.gap_analysis') }}" class="btn btn-sm btn-outline-primary">
-                  <i class="bi bi-calendar-week me-1"></i>View All Deadlines
+                <a href="{{ url_for('main.ai_demo') }}" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-stars me-1"></i>Review in AI Workspace
                 </a>
               </div>
             </div>
@@ -393,7 +319,7 @@
   <div class="row">
     <!-- Upload Section -->
     <div class="col-lg-8 mb-4">
-      <div class="card border-0 shadow h-100" id="upload-documents">
+      <div class="card border-0 shadow h-100 walkthrough-highlight-target" id="upload-documents" data-walkthrough-target="upload-documents">
         <div class="card-header bg-body-tertiary border-bottom">
           <h5 class="card-title mb-0">
             <i class="bi bi-cloud-upload me-2 text-primary"></i>Upload Evidence
@@ -404,6 +330,9 @@
             <p class="text-body-secondary mb-4 text-center">
               Securely upload PDF, DOC, DOCX, and common image formats to your compliance repository.
             </p>
+            <div class="alert alert-light border small text-body-secondary mb-4" role="alert">
+              Upload first, then analyze the exact document you choose from the repository or its details page.
+            </div>
 
             <!-- Upload Form -->
             <form
@@ -462,7 +391,7 @@
 
     <!-- Recent Documents -->
     <div class="col-lg-4 mb-4">
-      <div class="card border-0 shadow h-100">
+      <div id="wt-dash-recent-docs" class="card border-0 shadow h-100">
         <div class="card-header bg-body-tertiary border-bottom">
           <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
@@ -509,9 +438,18 @@
                   >
                     {{ document.filename }}
                   </div>
+                  <div class="mt-1 d-flex flex-wrap gap-1">
+                    {% if document.ai_status %}
+                    <span class="badge {% if document.ai_status == 'Mature' %}bg-primary{% elif document.ai_status == 'OK' %}bg-success{% elif document.ai_status == 'High risk gap' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                      {{ document.ai_status }}
+                    </span>
+                    {% endif %}
+                    {% if document.ai_focus_area %}
+                    <span class="badge bg-body-tertiary text-body border">{{ document.ai_focus_area }}</span>
+                    {% endif %}
+                  </div>
                   <small class="text-body-secondary">
-                    {{ document.uploaded_at | datetime_format('%b %d, %Y at
-                    %I:%M %p') }} • {{ document.uploader.display_name() if document.uploader else 'Unknown' }}
+                    <span class="js-local-datetime" data-utc-datetime="{{ document.uploaded_at.strftime('%Y-%m-%dT%H:%M:%SZ') if document.uploaded_at else '' }}">{{ document.uploaded_at | datetime_format('%b %d, %Y at %I:%M %p') }}</span> • {{ document.uploader.display_name() if document.uploader else 'Unknown' }}
                   </small>
                 </div>
               </div>
@@ -535,163 +473,42 @@
     </div>
   </div>
 
-  <!-- ML Results Summary (progressive loading) -->
-  <div class="row mb-4" id="mlResultsSection">
-    <div class="col-12">
-      <div class="card border-0 shadow">
-        <div class="card-header bg-body-tertiary border-bottom">
-          <div class="d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">
-              <i class="bi bi-cpu me-2 text-primary"></i>ML Compliance Analysis
-            </h5>
-            {% if ml_enabled %}
-              <a href="{{ url_for('main.ml_results') }}" class="btn btn-sm btn-outline-primary">
-                View Details
-              </a>
-            {% else %}
-              <span class="badge bg-body-tertiary text-body border">Coming soon</span>
-            {% endif %}
-          </div>
+  <div class="row">
+    <div class="col-12 mb-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary border-bottom d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">
+            <i class="bi bi-clipboard-data me-2 text-primary"></i>Recent Evidence Reviews
+          </h5>
+          <a href="{{ url_for('main.evidence_repository') }}" class="btn btn-sm btn-outline-primary">Open Repository</a>
         </div>
-        <div class="card-body" id="mlResultsBody">
-          {% if not ml_enabled %}
-          <div class="text-center py-4">
-            <i class="bi bi-clock-history text-body-secondary" style="font-size: 2.25rem; opacity: 0.6"></i>
-            <p class="text-body-secondary mt-3 mb-0">ML compliance insights are coming soon</p>
-            <small class="text-body-secondary">This section will populate automatically once analysis is enabled.</small>
-          </div>
-          {% elif skip_adls %}
-          <div class="row">
-            <div class="col-lg-8">
-              <div class="row g-3">
-                {% for _ in range(4) %}
-                <div class="col-md-6">
-                  <div class="border rounded p-3 h-100 placeholder-glow">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                      <div class="flex-grow-1">
-                        <span class="placeholder col-6"></span>
-                        <div><span class="placeholder col-8"></span></div>
-                      </div>
-                      <span class="placeholder col-3"></span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <span class="placeholder col-3"></span>
-                      <span class="placeholder col-4"></span>
-                    </div>
-                    <div class="progress mb-2" style="height: 6px;">
-                      <div class="progress-bar" style="width: 50%"></div>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                      <span class="placeholder col-2"></span>
-                      <span class="placeholder col-2"></span>
-                      <span class="placeholder col-2"></span>
-                    </div>
+        <div class="card-body">
+          {% if recent_analysed_documents %}
+          <div class="row g-3">
+            {% for document in recent_analysed_documents %}
+            <div class="col-lg-6">
+              <div class="border rounded p-3 h-100 bg-body-tertiary">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                  <div>
+                    <div class="fw-semibold">{{ document.filename }}</div>
+                    <div class="small text-body-secondary">{{ document.ai_focus_area or 'General Compliance Evidence' }}</div>
+                  </div>
+                  <div class="text-end">
+                    <div class="badge {% if document.ai_status == 'Mature' %}bg-primary{% elif document.ai_status == 'OK' %}bg-success{% elif document.ai_status == 'High risk gap' %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ document.ai_status or 'Pending' }}</div>
+                    <div class="small text-body-secondary mt-1">{% if document.ai_confidence is not none %}{{ (document.ai_confidence * 100)|round(0)|int }}% confidence{% endif %}</div>
                   </div>
                 </div>
-                {% endfor %}
+                <div class="small text-body-secondary mb-2">
+                  Reviewed <span class="js-local-datetime" data-utc-datetime="{{ document.ai_analysis_at.strftime('%Y-%m-%dT%H:%M:%SZ') if document.ai_analysis_at else '' }}">{{ document.ai_analysis_at | datetime_format('%b %d, %Y at %I:%M %p') if document.ai_analysis_at else 'recently' }}</span>
+                </div>
+                <div class="small" style="white-space: pre-wrap;">{{ (document.ai_summary or 'Analysis summary not available yet.')[:420] }}{% if document.ai_summary and document.ai_summary|length > 420 %}...{% endif %}</div>
               </div>
             </div>
-            <div class="col-lg-4">
-              <div class="text-center placeholder-glow">
-                <div class="position-relative d-inline-block mb-3">
-                  <svg width="150" height="150">
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"/>
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"
-                            stroke-dasharray="188, 377" stroke-linecap="round" transform="rotate(-90 75 75)"/>
-                  </svg>
-                  <div class="position-absolute top-50 start-50 translate-middle text-center">
-                    <div class="h3 fw-bold mb-0 text-primary"><span class="placeholder col-4"></span></div>
-                    <small class="text-body-secondary">Overall</small>
-                  </div>
-                </div>
-                <div class="row g-2">
-                  <div class="col-4"><span class="placeholder col-6"></span></div>
-                  <div class="col-4"><span class="placeholder col-6"></span></div>
-                  <div class="col-4"><span class="placeholder col-6"></span></div>
-                </div>
-                <div class="mt-3 text-body-secondary small">Loading analysis…</div>
-              </div>
-            </div>
+            {% endfor %}
           </div>
           {% else %}
-          <div class="row">
-            <div class="col-lg-8">
-              <div class="row g-3">
-                {% for file_summary in ml_summary.file_summaries[:4] %}
-                <div class="col-md-6">
-                  <div class="border rounded p-3 h-100">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                      <div class="flex-grow-1">
-                        <h6 class="fw-bold mb-1">{{ file_summary.framework }}</h6>
-                        <small class="text-body-secondary">{{ file_summary.file_name[:30] }}...</small>
-                      </div>
-                      {% if file_summary.overall_status == 'Excellent' %}
-                        <span class="badge bg-success">{{ file_summary.overall_status }}</span>
-                      {% elif file_summary.overall_status == 'Good' %}
-                        <span class="badge bg-info">{{ file_summary.overall_status }}</span>
-                      {% elif file_summary.overall_status == 'Needs Attention' %}
-                        <span class="badge bg-warning">{{ file_summary.overall_status }}</span>
-                      {% else %}
-                        <span class="badge bg-danger">{{ file_summary.overall_status }}</span>
-                      {% endif %}
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <span class="fw-bold h5 mb-0">{{ file_summary.compliancy_rate }}%</span>
-                      <small class="text-body-secondary">{{ file_summary.total_requirements }} requirements</small>
-                    </div>
-                    <div class="progress mb-2" style="height: 6px;">
-                      {% if file_summary.compliancy_rate >= 90 %}
-                        <div class="progress-bar bg-success" style="width: {{ file_summary.compliancy_rate }}%"></div>
-                      {% elif file_summary.compliancy_rate >= 70 %}
-                        <div class="progress-bar bg-info" style="width: {{ file_summary.compliancy_rate }}%"></div>
-                      {% elif file_summary.compliancy_rate >= 50 %}
-                        <div class="progress-bar bg-warning" style="width: {{ file_summary.compliancy_rate }}%"></div>
-                      {% else %}
-                        <div class="progress-bar bg-danger" style="width: {{ file_summary.compliancy_rate }}%"></div>
-                      {% endif %}
-                    </div>
-                    <div class="d-flex justify-content-between">
-                      <small class="text-success">✓ {{ file_summary.complete_count }}</small>
-                      <small class="text-warning">⏳ {{ file_summary.needs_review_count }}</small>
-                      <small class="text-danger">✗ {{ file_summary.missing_count }}</small>
-                    </div>
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-            </div>
-            <div class="col-lg-4">
-              <div class="text-center">
-                <div class="position-relative d-inline-block mb-3">
-                  <svg width="150" height="150">
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#e9ecef" stroke-width="15"/>
-                    <circle cx="75" cy="75" r="60" fill="none" stroke="#28a745" stroke-width="15"
-                            stroke-dasharray="{{ (ml_summary.avg_compliancy_rate / 100 * 377)|round }}, 377"
-                            stroke-linecap="round" transform="rotate(-90 75 75)"/>
-                  </svg>
-                  <div class="position-absolute top-50 start-50 translate-middle text-center">
-                    <div class="h3 fw-bold mb-0 text-primary">{{ ml_summary.avg_compliancy_rate }}%</div>
-                    <small class="text-body-secondary">Overall</small>
-                  </div>
-                </div>
-                <div class="text-center">
-                  <div class="row g-2">
-                    <div class="col-4">
-                      <div class="fw-bold text-success">{{ ml_summary.total_complete }}</div>
-                      <small class="text-body-secondary d-block">Complete</small>
-                    </div>
-                    <div class="col-4">
-                      <div class="fw-bold text-warning">{{ ml_summary.total_needs_review }}</div>
-                      <small class="text-body-secondary d-block">Review</small>
-                    </div>
-                    <div class="col-4">
-                      <div class="fw-bold text-danger">{{ ml_summary.total_missing }}</div>
-                      <small class="text-body-secondary d-block">Missing</small>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="text-center py-3 text-body-secondary">
+            Upload a TXT, PDF, or DOCX evidence file to generate the first end-user compliance review.
           </div>
           {% endif %}
         </div>
@@ -700,7 +517,10 @@
   </div>
 
 </div>
-{% endblock %} {% block extra_js %}
+{% endblock %}
+
+{% block extra_js %}
+<script>window.WALKTHROUGH_PAGE_KEY = 'tour-dashboard';</script>
 <script>
   // Configuration
   const MAX_FILES = 5;
@@ -722,7 +542,38 @@
   const uploadBtn = document.getElementById("uploadBtn");
   const uploadCount = document.getElementById("uploadCount");
 
-  // If the user arrives from an "Upload New" link, guide them to open the picker.
+
+
+
+  (function localizeUtcDateTimes() {
+    const nodes = Array.from(document.querySelectorAll('.js-local-datetime'));
+    nodes.forEach((node) => {
+      const raw = (node.getAttribute('data-utc-datetime') || '').trim();
+      if (!raw) {
+        return;
+      }
+      const dt = new Date(raw);
+      if (Number.isNaN(dt.getTime())) {
+        return;
+      }
+      node.textContent = dt.toLocaleString([], {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    });
+  })();
+
+  // Initialize progress bar widths from data-progress-width attributes.
+  // This avoids putting Jinja2 expressions inside CSS style attributes (HTML linter error).
+  document.querySelectorAll('[data-progress-width]').forEach(function(el) {
+    var w = parseInt(el.getAttribute('data-progress-width') || '0', 10);
+    el.style.width = Math.max(0, Math.min(100, w)) + '%';
+  });
+
+
   (function promptUploadPicker() {
     try {
       const params = new URLSearchParams(window.location.search || '');
@@ -798,6 +649,8 @@
       fileInput.click();
     }
   });
+
+
 
   // Prevent default drag behaviors (but not click)
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -1074,61 +927,6 @@
       </div>
     `;
   }
-
-  // Progressive-load ML data on first paint
-  {% if skip_adls and ml_enabled %}
-  fetch('{{ url_for("main.api_ml_summary") }}')
-    .then((r) => r.json())
-    .then((data) => {
-      renderMlSummary(data);
-      window.__mlSummarySnapshot = {
-        total_files: Number(data.total_files || 0),
-        last_updated: data.last_updated || null,
-      };
-    })
-    .catch(() => {
-      const body = document.getElementById('mlResultsBody');
-      if (body) {
-        body.innerHTML = `
-          <div class="alert alert-warning mb-0">
-            Could not load ML analysis data right now.
-          </div>
-        `;
-      }
-    });
-  {% endif %}
-
-  // Auto-refresh ML data every 2 minutes (preserve existing behavior)
-  {% if ml_enabled %}
-  window.__mlSummarySnapshot = window.__mlSummarySnapshot || {
-    total_files: Number({{ ml_summary.total_files or 0 }}),
-    last_updated: {% if ml_summary.last_updated %}'{{ ml_summary.last_updated.isoformat() }}'{% else %}null{% endif %}
-  };
-
-  setInterval(() => {
-    fetch('{{ url_for("main.api_ml_summary") }}')
-      .then(response => response.json())
-      .then(data => {
-        const snapshot = window.__mlSummarySnapshot || { total_files: 0, last_updated: null };
-        const nextTotal = Number(data.total_files || 0);
-        const nextUpdated = data.last_updated || null;
-
-        // If we didn't have an initial snapshot (deferred), initialize it without reloading.
-        if (!snapshot.last_updated && nextUpdated) {
-          window.__mlSummarySnapshot = { total_files: nextTotal, last_updated: nextUpdated };
-          return;
-        }
-
-        if (snapshot.total_files !== nextTotal || (snapshot.last_updated && nextUpdated && snapshot.last_updated !== nextUpdated)) {
-          showToast('New ML analysis results available!', 'success');
-          setTimeout(() => {
-            window.location.reload();
-          }, 3000);
-        }
-      })
-      .catch(() => {});
-  }, 120000);
-  {% endif %}
 
   function showToast(message, type = 'info') {
     const toastDiv = document.createElement('div');

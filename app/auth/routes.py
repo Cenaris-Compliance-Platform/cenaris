@@ -13,6 +13,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.models import User, Organization, OrganizationMembership, LoginEvent, SuspiciousIP
 from app import db, oauth, mail, limiter
 from app.services.logging_service import log_security_event
+from app.services.billing_service import billing_service
+from app.services.email_service import email_service
 
 
 _RESEND_VERIFY_EMAIL_COOLDOWN_SECONDS = 60
@@ -37,6 +39,36 @@ def _password_reset_token_ttl_seconds() -> int:
 def _org_invite_token_ttl_seconds() -> int:
     # Default 24 hours so invited users have time to accept.
     return max(60, _safe_int_env('ORG_INVITE_TOKEN_TTL_SECONDS', 60 * 60 * 24))
+
+
+def _plan_user_limit(plan_code: str) -> int | None:
+    limit_map = {
+        'starter': _safe_int_env('STARTER_USER_LIMIT', 1),
+    }
+    limit = limit_map.get((plan_code or '').strip().lower())
+    if limit is None:
+        return None
+    return max(1, int(limit))
+
+
+def _org_can_add_member(org_id: int) -> tuple[bool, str | None]:
+    organization = db.session.get(Organization, int(org_id))
+    if not organization:
+        return False, 'Organization not found.'
+
+    plan_code = billing_service.normalize_plan_code(organization.billing_plan_code or organization.subscription_tier)
+    user_limit = _plan_user_limit(plan_code)
+    if user_limit is None:
+        return True, None
+
+    active_count = (
+        OrganizationMembership.query
+        .filter_by(organization_id=int(org_id), is_active=True)
+        .count()
+    )
+    if int(active_count) >= int(user_limit):
+        return False, f'This plan allows up to {int(user_limit)} active user(s).'
+    return True, None
 
 _LOGIN_LOCKOUT_THRESHOLD = 5
 _LOGIN_LOCKOUT_SECONDS = 60 * 15
@@ -90,44 +122,57 @@ def _get_pending_reset_email() -> str:
 
 
 def _after_login_redirect():
-    # Always verify the user has an active membership for their current org.
-    # If organization_id is set but there's no active membership, fix it.
-    org_id = getattr(current_user, 'organization_id', None)
-    
-    if org_id:
-        # Verify this org_id has an active membership
-        membership = (
-            OrganizationMembership.query
-            .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
-            .first()
-        )
-        if not membership:
-            # Current org_id is invalid, clear it and find a valid one
-            org_id = None
-    
-    # If no valid org_id, find the first active membership
-    if not org_id:
-        membership = (
-            OrganizationMembership.query
-            .filter_by(user_id=int(current_user.id), is_active=True)
-            .order_by(OrganizationMembership.created_at.asc())
-            .first()
-        )
-        if membership:
-            current_user.organization_id = int(membership.organization_id)
+    try:
+        # Always verify the user has an active membership for their current org.
+        # If organization_id is set but there's no active membership, fix it.
+        org_id = getattr(current_user, 'organization_id', None)
+
+        if org_id:
+            # Verify this org_id has an active membership
+            membership = (
+                OrganizationMembership.query
+                .filter_by(user_id=int(current_user.id), organization_id=int(org_id), is_active=True)
+                .first()
+            )
+            if not membership:
+                # Current org_id is invalid, clear it and find a valid one
+                org_id = None
+
+        # If no valid org_id, find the first active membership
+        if not org_id:
+            membership = (
+                OrganizationMembership.query
+                .filter_by(user_id=int(current_user.id), is_active=True)
+                .order_by(OrganizationMembership.created_at.asc())
+                .first()
+            )
+            if membership:
+                current_user.organization_id = int(membership.organization_id)
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                org_id = current_user.organization_id
+
+        # If still no org, redirect to onboarding
+        if not org_id:
+            return redirect(url_for('onboarding.organization'))
+
+        # User has an organization - go to dashboard
+        # (invited users should go to the org they were invited to, even if onboarding incomplete)
+        return redirect(url_for('main.dashboard'))
+    except Exception as e:
+        current_app.logger.exception('Post-login redirect failed')
+        if _looks_like_schema_mismatch(e):
             try:
-                db.session.commit()
+                logout_user()
+                session.clear()
             except Exception:
-                db.session.rollback()
-            org_id = current_user.organization_id
-
-    # If still no org, redirect to onboarding
-    if not org_id:
-        return redirect(url_for('onboarding.organization'))
-
-    # User has an organization - go to dashboard
-    # (invited users should go to the org they were invited to, even if onboarding incomplete)
-    return redirect(url_for('main.dashboard'))
+                pass
+            flash(_schema_upgrade_hint(), 'error')
+            return redirect(url_for('auth.login'))
+        # Fallback to dashboard for non-schema related issues.
+        return redirect(url_for('main.dashboard'))
 
 
 def _serializer() -> URLSafeTimedSerializer:
@@ -176,13 +221,22 @@ def _verify_reset_or_invite_token(token: str) -> dict | None:
 
 
 def _mail_configured() -> bool:
-    """Check if SMTP email is properly configured."""
+    """Check if email is properly configured (ACS, OAuth2, or SMTP)."""
+    # 1. Check Azure Communication Services
+    acs_conn = os.environ.get('ACS_CONNECTION_STRING') or current_app.config.get('ACS_CONNECTION_STRING')
+    acs_sender = os.environ.get('ACS_SENDER_EMAIL') or current_app.config.get('ACS_SENDER_EMAIL')
+    if acs_conn and acs_sender:
+        return True
+        
+    # 2. Check Microsoft OAuth2
+    if os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'):
+        return True
+
+    # 3. Check legacy SMTP settings
     has_server = bool(current_app.config.get('MAIL_SERVER'))
     has_sender = bool(current_app.config.get('MAIL_DEFAULT_SENDER'))
-    has_username = bool(current_app.config.get('MAIL_USERNAME'))
-    has_password = bool(current_app.config.get('MAIL_PASSWORD'))
     # All SMTP settings must be present
-    return has_sender and has_server and has_username and has_password
+    return has_sender and has_server
 
 
 def _email_verification_required() -> bool:
@@ -209,7 +263,7 @@ def _verify_email_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 7) -> 
 
 def _send_email_verification_email(user: User, verify_url: str) -> None:
     if not _mail_configured():
-        current_app.logger.warning('MAIL not configured; verify-email URL: %s', verify_url)
+        current_app.logger.warning('MAIL configuration not found (ACS/OAuth2/SMTP); verify-email URL: %s', verify_url)
         return
 
     subject = 'Verify your email - Cenaris'
@@ -242,17 +296,13 @@ def _send_email_verification_email(user: User, verify_url: str) -> None:
 
 
 def _send_email(to_email: str, subject: str, body: str) -> None:
-    """Send email via SMTP (Flask-Mail)."""
+    """Send email via centralized email service."""
     try:
-        msg = Message(
-            subject=subject,
-            recipients=[to_email],
-            body=body,
-        )
-        mail.send(msg)
-        current_app.logger.info('Email sent via SMTP to %s', to_email)
+        success = email_service.send_email(to_email, subject, body)
+        if not success:
+            current_app.logger.error('Failed to send email to %s via all providers', to_email)
     except Exception as e:
-        current_app.logger.error('Failed to send email to %s: %s', to_email, e)
+        current_app.logger.error('Exception sending email to %s: %s', to_email, e)
         raise
 
 
@@ -313,6 +363,45 @@ def _client_ip() -> str | None:
     return request.remote_addr
 
 
+def _active_membership_count_for_user(user_id: int) -> int:
+    try:
+        return int(
+            OrganizationMembership.query
+            .filter_by(user_id=int(user_id), is_active=True)
+            .count()
+        )
+    except Exception:
+        return 0
+
+
+def _release_inactive_email(email: str) -> bool:
+    """Free an email from an inactive account with no active memberships.
+
+    Returns True if a release happened, else False.
+    """
+    normalized = (email or '').strip().lower()
+    if not normalized:
+        return False
+
+    user = User.query.filter_by(email=normalized).first()
+    if not user or bool(getattr(user, 'is_active', False)):
+        return False
+
+    # Keep strict safety: only release users not active in any organisation.
+    if _active_membership_count_for_user(int(user.id)) > 0:
+        return False
+
+    tombstone_email = f"deleted+{int(user.id)}+{int(_now_ts())}@deleted.local"
+    user.email = tombstone_email
+    try:
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to release inactive email %s', normalized)
+        return False
+
+
 def _log_login_event(
     *,
     email: str | None,
@@ -342,14 +431,17 @@ def _ip_block_status(now: datetime) -> tuple[bool, datetime | None]:
     ip = _client_ip()
     if not ip:
         return False, None
-    rec = SuspiciousIP.query.filter_by(ip_address=ip).first()
-    if rec and rec.blocked_until:
-        blocked_until = rec.blocked_until
-        # SQLite often returns naive datetimes; normalize to UTC-aware.
-        if getattr(blocked_until, 'tzinfo', None) is None:
-            blocked_until = blocked_until.replace(tzinfo=timezone.utc)
-        if blocked_until > now:
-            return True, blocked_until
+    try:
+        rec = SuspiciousIP.query.filter_by(ip_address=ip).first()
+        if rec and rec.blocked_until:
+            blocked_until = rec.blocked_until
+            # SQLite often returns naive datetimes; normalize to UTC-aware.
+            if getattr(blocked_until, 'tzinfo', None) is None:
+                blocked_until = blocked_until.replace(tzinfo=timezone.utc)
+            if blocked_until > now:
+                return True, blocked_until
+    except Exception:
+        current_app.logger.exception('Suspicious IP lookup failed')
     return False, None
 
 
@@ -404,7 +496,7 @@ def _clear_ip_failures_on_success(now: datetime) -> None:
 def _send_password_reset_email(user: User, reset_url: str) -> None:
     # If mail isn't configured (common for local dev), we still provide the link via logs.
     if not _mail_configured():
-        current_app.logger.warning('MAIL not configured; password reset URL: %s', reset_url)
+        current_app.logger.warning('MAIL configuration not found (ACS/OAuth2/SMTP); password reset URL: %s', reset_url)
         return
 
     from flask import render_template
@@ -421,18 +513,13 @@ def _send_password_reset_email(user: User, reset_url: str) -> None:
 
 
 def _send_email_html(to_email: str, subject: str, body: str, html: str) -> None:
-    """Send HTML email via SMTP (Flask-Mail)."""
+    """Send HTML email via centralized email service."""
     try:
-        msg = Message(
-            subject=subject,
-            recipients=[to_email],
-            body=body,
-            html=html,
-        )
-        mail.send(msg)
-        current_app.logger.info('HTML email sent via SMTP to %s', to_email)
+        success = email_service.send_email(to_email, subject, body, html_body=html)
+        if not success:
+            current_app.logger.error('Failed to send HTML email to %s via all providers', to_email)
     except Exception as e:
-        current_app.logger.error('Failed to send HTML email to %s: %s', to_email, e)
+        current_app.logger.error('Exception sending HTML email to %s: %s', to_email, e)
         raise
 
 @bp.route('/login', methods=['GET', 'POST'])
@@ -592,6 +679,9 @@ def signup():
         time_zone = (form.time_zone.data or '').strip() or 'Australia/Sydney'
         email = form.email.data.lower().strip()
         password = form.password.data
+
+        # Allow re-registration when the old account exists but is inactive and detached.
+        _release_inactive_email(email)
         
         try:
             organization = Organization(
@@ -796,6 +886,10 @@ def reset_password(token):
                         .all()
                     )
                     for m in pending_memberships:
+                        ok, reason = _org_can_add_member(int(m.organization_id))
+                        if not ok:
+                            flash(reason or 'This plan cannot add more users.', 'warning')
+                            continue
                         m.invite_accepted_at = now
                         m.is_active = True  # Activate membership when user accepts invite
                 except Exception:
@@ -927,6 +1021,23 @@ def oauth_callback(provider):
         except Exception:
             pass
 
+    # Some providers may redirect back with explicit OAuth error query params.
+    # Handle this early and gracefully instead of falling through into token parsing.
+    provider_error = (request.args.get('error') or '').strip()
+    provider_error_desc = (request.args.get('error_description') or '').strip()
+    if provider_error:
+        current_app.logger.warning(
+            'OAuth callback returned provider error: provider=%s error=%s description=%s',
+            provider,
+            provider_error,
+            provider_error_desc,
+        )
+        if provider_error_desc:
+            flash(f'OAuth sign-in failed: {provider_error_desc}', 'error')
+        else:
+            flash(f'OAuth sign-in failed: {provider_error}', 'error')
+        return redirect(url_for('auth.login'))
+
     # Authlib raises specific exception types for common callback issues (state mismatch,
     # provider errors). Import them best-effort so we can show actionable guidance.
     try:  # pragma: no cover
@@ -989,6 +1100,19 @@ def oauth_callback(provider):
         else:
             flash('OAuth sign-in failed. Please try again.', 'error')
         return redirect(url_for('auth.login'))
+
+    # Defensive guard: Authlib should return a dict-like token payload.
+    # In edge cases (provider/network anomalies) it may be missing/invalid.
+    if not isinstance(token, dict):
+        current_app.logger.warning(
+            'OAuth token exchange returned unexpected payload type: provider=%s type=%s args=%s',
+            provider,
+            type(token).__name__,
+            dict(request.args),
+        )
+        flash('OAuth sign-in failed: invalid token response from provider.', 'error')
+        return redirect(url_for('auth.login'))
+
     # Authlib puts parsed userinfo into token['userinfo'] when an id_token is present.
     userinfo = token.get('userinfo')
     if not userinfo:
@@ -1013,6 +1137,12 @@ def oauth_callback(provider):
     picture_url = (userinfo.get('picture') if isinstance(userinfo, dict) else None) or None
 
     user = User.query.filter_by(email=email).first()
+    if user and not bool(getattr(user, 'is_active', False)):
+        # If this email belongs to an inactive, detached account, allow fresh OAuth signup.
+        released = _release_inactive_email(email)
+        if released:
+            user = None
+
     if not user:
         # For OAuth sign-ups, create a placeholder organization + membership,
         # then require email verification (same as password signup).
@@ -1222,6 +1352,10 @@ def oauth_callback(provider):
             .all()
         )
         for m in pending_memberships:
+            ok, reason = _org_can_add_member(int(m.organization_id))
+            if not ok:
+                flash(reason or 'This plan cannot add more users.', 'warning')
+                continue
             m.invite_accepted_at = now
             m.is_active = True  # Activate membership when OAuth user accepts invite
 
