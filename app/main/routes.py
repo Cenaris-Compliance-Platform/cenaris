@@ -2684,6 +2684,359 @@ def _split_document_ai_summary(summary_text: str | None) -> dict[str, str]:
     return sections
 
 
+def _status_summary_template(status: str) -> str:
+    value = (status or '').strip().lower()
+    if value == 'critical gap':
+        return 'This document needs significant work before it can demonstrate NDIS compliance.'
+    if value == 'high risk gap':
+        return 'This document has gaps that require attention to meet NDIS compliance standards.'
+    if value == 'ok':
+        return 'This document shows evidence of NDIS compliance but could be strengthened with more detail.'
+    if value == 'mature':
+        return 'This document demonstrates strong NDIS compliance with clear procedures and evidence.'
+    return 'This document needs more evidence to demonstrate NDIS compliance.'
+
+
+def _score_breakdown_from_diagnostics(*, diagnostics: dict, confidence_breakdown: dict, document_text: str) -> list[dict]:
+    doc_len = len((document_text or '').strip())
+    domain_hits = int(diagnostics.get('domain_anchor_hits') or 0)
+    looks_like_template = bool(diagnostics.get('looks_like_template'))
+
+    coverage = float(confidence_breakdown.get('coverage_confidence') or 0)
+    evidence = float(confidence_breakdown.get('evidence_confidence') or 0)
+    depth = min(doc_len / 2500.0, 1.0)
+    substance = min(domain_hits / 6.0, 1.0)
+    structure = 0.25 if looks_like_template else 0.8
+
+    def as_points(score: float, max_points: int) -> int:
+        return int(round(max_points * max(0.0, min(score, 1.0))))
+
+    return [
+        {
+            'label': 'Coverage',
+            'score': coverage,
+            'points': as_points(coverage, 25),
+            'max_points': 25,
+            'quick_fix': 'Add sections that address participant consent, safeguarding, and incident management.',
+        },
+        {
+            'label': 'Depth',
+            'score': depth,
+            'points': as_points(depth, 20),
+            'max_points': 20,
+            'quick_fix': 'Expand procedures with step-by-step instructions, owners, and timeframes.',
+        },
+        {
+            'label': 'Substance',
+            'score': substance,
+            'points': as_points(substance, 40),
+            'max_points': 40,
+            'quick_fix': 'Use must/shall/will language and define responsibilities and review cadence.',
+        },
+        {
+            'label': 'Structure',
+            'score': structure,
+            'points': as_points(structure, 10),
+            'max_points': 10,
+            'quick_fix': 'Complete placeholders and ensure headings and numbered steps are present.',
+        },
+        {
+            'label': 'Evidence Quality',
+            'score': evidence,
+            'points': as_points(evidence, 5),
+            'max_points': 5,
+            'quick_fix': 'Add concrete examples, records, or completed forms as evidence.',
+        },
+    ]
+
+
+def _priority_actions_from_warnings(
+    *,
+    warning_items: list[dict],
+    next_action: str,
+    diagnostics: dict,
+    confidence_breakdown: dict,
+) -> list[dict]:
+    def action_template(source: str, message: str) -> dict:
+        lower = message.lower()
+        template: dict = {
+            'priority': 'MEDIUM',
+            'title': message,
+            'what_is_wrong': message,
+            'impact': '',
+            'how_to_fix_steps': [],
+            'potential_gain': '',
+        }
+
+        if source in {'validation', 'extraction'}:
+            template['priority'] = 'CRITICAL'
+        elif source in {'scoring', 'consistency'}:
+            template['priority'] = 'HIGH'
+
+        if 'template' in lower or 'placeholder' in lower:
+            template.update(
+                {
+                    'title': 'Blank template detected',
+                    'what_is_wrong': 'The document appears to contain unfilled template markers or placeholder text.',
+                    'impact': 'Template markers reduce the structure score and cap confidence until completed.',
+                    'how_to_fix_steps': [
+                        'Fill every [PLACEHOLDER] field with real content.',
+                        'Replace blank lines (_____) with specific details.',
+                        'Remove instructional text intended for template authors.',
+                    ],
+                    'examples': [
+                        {
+                            'before': 'Policy owner: [NAME] | Review frequency: _______',
+                            'after': 'Policy owner: Sarah Chen, Compliance Manager | Review frequency: Quarterly',
+                        }
+                    ],
+                    'potential_gain': 'Potential gain: +15 to +35 points',
+                }
+            )
+        elif 'short' in lower or 'characters' in lower:
+            template.update(
+                {
+                    'title': 'Document too short',
+                    'what_is_wrong': 'The extracted document text is too short for a reliable assessment.',
+                    'impact': 'Depth and evidence signals are suppressed when the document is too brief.',
+                    'how_to_fix_steps': [
+                        'Expand each section with step-by-step procedures.',
+                        'Add responsibilities, timeframes, and record-keeping steps.',
+                        'Include real examples and completed records where relevant.',
+                    ],
+                    'examples': [
+                        {
+                            'before': 'Staff must complete training.',
+                            'after': 'All new staff must complete NDIS Code of Conduct training within 30 days, including modules on safeguarding and reporting.',
+                        }
+                    ],
+                    'potential_gain': 'Potential gain: +10 to +20 points',
+                }
+            )
+        elif source == 'extraction':
+            template.update(
+                {
+                    'title': 'Low text extraction quality',
+                    'what_is_wrong': 'The PDF appears to be scanned or image-based, so text extraction is limited.',
+                    'impact': 'Confidence is reduced to avoid over-scoring low-quality text.',
+                    'how_to_fix_steps': [
+                        'Re-scan at 300 DPI or higher.',
+                        'Use OCR to convert to a text-based PDF.',
+                        'Upload a DOCX version if available.',
+                    ],
+                    'potential_gain': 'Potential gain: confidence increase after re-analysis',
+                }
+            )
+        elif source == 'rag':
+            template.update(
+                {
+                    'title': 'Citation retrieval needs a rerun',
+                    'what_is_wrong': 'NDIS citations were limited or keyword-only retrieval was used.',
+                    'impact': 'Citation quality may be lower, which caps confidence.',
+                    'how_to_fix_steps': [
+                        'Re-run the analysis after embeddings finish warming up.',
+                        'Verify the document includes explicit NDIS terminology.',
+                    ],
+                    'potential_gain': 'Potential gain: stronger evidence confidence',
+                }
+            )
+        elif source in {'scoring', 'consistency'}:
+            template.update(
+                {
+                    'title': 'Scoring constraints applied',
+                    'what_is_wrong': message,
+                    'impact': 'The score was capped to avoid overconfidence.',
+                    'how_to_fix_steps': [
+                        'Add grounded evidence snippets for key requirements.',
+                        'Ensure each requirement has clear procedures and ownership.',
+                    ],
+                    'potential_gain': 'Potential gain: higher status when evidence is added',
+                }
+            )
+        return template
+
+    actions: list[dict] = []
+    for item in warning_items:
+        source = (item.get('source') or 'system').strip().lower()
+        message = (item.get('message') or '').strip()
+        if not message:
+            continue
+        actions.append(action_template(source, message))
+
+    if next_action:
+        actions.insert(0, {
+            'priority': 'CRITICAL',
+            'title': next_action,
+            'what_is_wrong': next_action,
+            'impact': 'This is the highest-impact next step to improve the score.',
+            'how_to_fix_steps': [next_action],
+            'examples': [],
+            'potential_gain': 'Potential gain: +10 to +30 points',
+        })
+
+    seen = set()
+    deduped = []
+    for action in actions:
+        key = (action.get('title') or '').strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(action)
+    return deduped[:5]
+
+
+def _build_ai_review_response(*, status: str, confidence: float, summary_text: str, warning_items: list[dict], diagnostics: dict, confidence_breakdown: dict, document_text: str, citations: list[dict], snippets: list[dict], filename: str, requirement_reasoning: list[dict] | None = None) -> dict:
+    summary_sections = _split_document_ai_summary(summary_text)
+    why_text = summary_sections.get('why') or ''
+    next_action = summary_sections.get('next_action') or ''
+    hero_summary = _status_summary_template(status)
+
+    score_breakdown = _score_breakdown_from_diagnostics(
+        diagnostics=diagnostics,
+        confidence_breakdown=confidence_breakdown,
+        document_text=document_text,
+    )
+
+    warnings_detailed = []
+    for item in warning_items:
+        source = (item.get('source') or 'system').strip().lower()
+        message = (item.get('message') or '').strip()
+        if not message:
+            continue
+        category = source.upper()
+        severity = 'MODERATE'
+        if source in {'validation', 'extraction'}:
+            severity = 'HIGH'
+        elif source in {'rag'}:
+            severity = 'MODERATE'
+        elif source in {'llm'}:
+            severity = 'LOW'
+        warnings_detailed.append(
+            {
+                'category': category,
+                'severity': severity,
+                'title': message,
+                'description': message,
+                'impact': 'Score confidence was reduced to avoid overconfidence.' if severity != 'LOW' else 'Informational notice only.',
+                'how_to_fix': [
+                    'Update the document to address the issue highlighted.',
+                    'Re-run the analysis after making updates.',
+                ],
+            }
+        )
+
+    reasoning_items = requirement_reasoning or []
+    strong_snippets = [item for item in snippets if float(item.get('score') or 0) >= 3]
+    partial_snippets = [item for item in snippets if 1 <= float(item.get('score') or 0) < 3]
+    missing_expected = []
+    for item in reasoning_items:
+        status_value = (item.get('status') or '').strip().lower()
+        if status_value in {'gap', 'partial'}:
+            label = (item.get('label') or item.get('requirement_id') or 'Requirement').strip()
+            missing_note = (item.get('missing_evidence') or '').strip()
+            expected_bits = [segment.strip() for segment in re.split(r'[;\n\|]+', missing_note) if segment.strip()]
+            missing_expected.append(
+                {
+                    'category': label,
+                    'expected_elements': expected_bits or ['Add step-by-step procedures, owners, and review cadence.'],
+                }
+            )
+    if not missing_expected:
+        missing_expected = [
+            {
+                'category': label,
+                'expected_elements': ['Add step-by-step procedures, owners, and review cadence.'],
+            }
+            for label in ((diagnostics.get('checklist_summary') or {}).get('gap') or [])
+        ]
+
+    quality_issues = []
+    if diagnostics.get('looks_like_template'):
+        quality_issues.append('Template markers detected; fill placeholders to enable full scoring.')
+    extraction_warns = ((diagnostics.get('extraction') or {}).get('warnings') or [])
+    for warn in extraction_warns:
+        quality_issues.append(str(warn))
+
+    matched_standards = []
+    top_requirements = [item for item in reasoning_items if (item.get('status') or '').strip().lower() in {'clear', 'partial', 'gap'}]
+    for idx, citation in enumerate(citations or [], start=1):
+        raw_score = float(citation.get('score') or 0)
+        relevance = raw_score * 100.0 if raw_score <= 1.0 else raw_score
+        req = top_requirements[idx - 1] if idx - 1 < len(top_requirements) else {}
+        requirement_label = (req.get('label') or req.get('requirement_id') or 'NDIS Practice Standard').strip()
+        gaps = []
+        if (req.get('status') or '').strip().lower() in {'gap', 'partial'}:
+            missing_note = (req.get('missing_evidence') or '').strip()
+            gaps = [segment.strip() for segment in re.split(r'[;\n\|]+', missing_note) if segment.strip()]
+        if not gaps:
+            gaps = ['Add more explicit procedures and responsibilities tied to this standard.']
+        matched_standards.append(
+            {
+                'citation_id': citation.get('chunk_id') or f'citation_{idx}',
+                'standard_code': citation.get('source_id') or 'NDIS',
+                'title': requirement_label,
+                'relevance_score': round(relevance, 1),
+                'standard_text': citation.get('text') or '',
+                'what_doc_addresses': [
+                    (req.get('reasoning_note') or '').strip()
+                ] if (req.get('reasoning_note') or '').strip() else [],
+                'gaps_identified': gaps,
+                'suggestion': 'Include step-by-step procedures and evidence aligned to this standard.',
+                'links': {},
+            }
+        )
+
+    missing_standards = [
+        {
+            'standard_code': '',
+            'title': item.get('category') or 'Additional NDIS requirement coverage needed.',
+            'required_content': item.get('expected_elements') or ['Add procedures, responsibilities, and review cadence for this area.'],
+        }
+        for item in missing_expected
+    ]
+
+    ndis_citations = {
+        'total_found': len(citations or []),
+        'target_for_mature': 5,
+        'status': 'MODERATE' if len(citations or []) < 5 else 'STRONG',
+        'matched_standards': matched_standards,
+        'missing_standards': missing_standards,
+        'impact_of_adding': {
+            'potential_points': 10 + (5 * min(len(missing_standards), 3)),
+            'new_citation_count': len(citations or []) + len(missing_standards),
+        },
+    }
+
+    return {
+        'hero': {
+            'document_name': filename or 'Untitled document',
+            'status': status,
+            'confidence': confidence,
+            'summary': hero_summary,
+            'why': why_text,
+            'priority_action': next_action,
+        },
+        'score_breakdown': score_breakdown,
+        'priority_actions': _priority_actions_from_warnings(
+            warning_items=warning_items,
+            next_action=next_action,
+            diagnostics=diagnostics,
+            confidence_breakdown=confidence_breakdown,
+        ),
+        'citations': citations,
+        'ndis_citations': ndis_citations,
+        'evidence': {
+            'snippets': snippets,
+            'strong_snippets': strong_snippets,
+            'partial_snippets': partial_snippets,
+            'expected_but_missing': missing_expected,
+            'quality_issues': quality_issues,
+        },
+        'warnings': warning_items,
+        'warnings_detailed': warnings_detailed,
+    }
+
+
 def _analyze_and_persist_document(document: Document, *, org_id: int, user_id: int) -> tuple[bool, str | None, int]:
     """Analyze one stored document and persist review/mapping fields."""
     from app.services.azure_storage import AzureBlobStorageService
@@ -5299,6 +5652,7 @@ def _azure_openai_demo_summary(*, status: str, question: str, snippets: list[dic
         '2) Missing evidence\n'
         '3) Recommended next action\n'
         'End with the line END_SUMMARY\n\n'
+        'In "Why this status", open with a single plain-language summary sentence.\n\n'
         f'Proposed status: {status}\n'
         f'Assessment question: {question}\n\n'
         f'Document content (first 1500 chars):\n{evidence_points}\n\n'
@@ -5384,6 +5738,7 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
         '2) Missing evidence\n'
         '3) Recommended next action\n'
         'End with the line END_SUMMARY\n\n'
+        'In "Why this status", open with a single plain-language summary sentence.\n\n'
         f'Proposed status: {status}\n'
         f'Question: {question}\n\n'
         f'Document evidence snippets:\n{evidence_points}\n\n'
@@ -6588,6 +6943,20 @@ def ai_demo_analyze_api():
                 'focus_area': document.ai_focus_area or 'General compliance coverage',
             }
         )
+        confidence_breakdown = ((document.ai_confidence or 0), {})
+        response_payload = _build_ai_review_response(
+            status=document.ai_status,
+            confidence=float(document.ai_confidence or 0),
+            summary_text=document.ai_summary,
+            warning_items=[{'source': 'cache', 'message': reused_warning}],
+            diagnostics={},
+            confidence_breakdown={},
+            document_text=document.extracted_text or '',
+            citations=[],
+            snippets=[],
+            filename=source_filename,
+            requirement_reasoning=[],
+        )
         return jsonify(
             {
                 'success': True,
@@ -6599,6 +6968,7 @@ def ai_demo_analyze_api():
                 'citations': [],
                 'warnings': [reused_warning],
                 'warning_items': [{'source': 'cache', 'message': reused_warning}],
+                'response': response_payload,
                 'meta': {
                     'provider': (document.ai_provider or 'cached').strip() or 'cached',
                     'model': (document.ai_model or 'cached').strip() or 'cached',
@@ -6812,6 +7182,19 @@ def ai_demo_analyze_api():
     )
 
     warnings = [w.get('message', '') for w in warning_items if (w.get('message') or '').strip()]
+    response_payload = _build_ai_review_response(
+        status=status,
+        confidence=confidence,
+        summary_text=ai_summary,
+        warning_items=warning_items,
+        diagnostics=scoring_diagnostics,
+        confidence_breakdown=confidence_breakdown,
+        document_text=doc_text,
+        citations=rag_citations,
+        snippets=snippets,
+        filename=source_filename,
+        requirement_reasoning=reasoned_requirements,
+    )
     return jsonify(
         {
             'success': True,
@@ -6824,6 +7207,7 @@ def ai_demo_analyze_api():
             'scoring_diagnostics': scoring_diagnostics,
             'warnings': warnings,
             'warning_items': warning_items,
+            'response': response_payload,
             'meta': {
                 'provider': provider_label,
                 'model': model_label,

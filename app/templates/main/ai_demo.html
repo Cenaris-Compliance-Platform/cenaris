@@ -2,6 +2,20 @@
 
 {% block extra_css %}
 <style>
+  @import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:opsz,wght@8..144,400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+  .ai-review-scope {
+    font-family: "Space Grotesk", "Work Sans", sans-serif;
+  }
+
+  .ai-review-scope h1,
+  .ai-review-scope h2,
+  .ai-review-scope h3,
+  .ai-review-scope .ai-display {
+    font-family: "Instrument Serif", "Fraunces", serif;
+    letter-spacing: 0.2px;
+  }
+
   .ai-review-title-wrap {
     display: flex;
     align-items: center;
@@ -17,11 +31,194 @@
   .ai-options-toggle {
     font-size: 0.9rem;
   }
+
+  .ai-review-shell {
+    position: relative;
+    border-radius: 1.1rem;
+    overflow: hidden;
+  }
+
+  .ai-review-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(800px 320px at 8% -10%, rgba(0, 102, 204, 0.12), transparent 60%),
+      radial-gradient(520px 380px at 90% 0%, rgba(16, 185, 129, 0.14), transparent 60%),
+      linear-gradient(135deg, rgba(245, 244, 238, 0.85), rgba(240, 247, 255, 0.88), rgba(250, 242, 245, 0.88));
+    opacity: 0.95;
+    pointer-events: none;
+  }
+
+  .ai-review-shell > * {
+    position: relative;
+  }
+
+  .ai-hero {
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-left-width: 6px;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+  }
+
+  .ai-hero.ai-status-critical {
+    border-left-color: #dc2626;
+    background: linear-gradient(135deg, rgba(254, 226, 226, 0.9), rgba(255, 255, 255, 0.88));
+  }
+
+  .ai-hero.ai-status-high {
+    border-left-color: #f97316;
+    background: linear-gradient(135deg, rgba(254, 215, 170, 0.9), rgba(255, 255, 255, 0.88));
+  }
+
+  .ai-hero.ai-status-ok {
+    border-left-color: #eab308;
+    background: linear-gradient(135deg, rgba(254, 243, 199, 0.92), rgba(255, 255, 255, 0.88));
+  }
+
+  .ai-hero.ai-status-mature {
+    border-left-color: #10b981;
+    background: linear-gradient(135deg, rgba(209, 250, 229, 0.92), rgba(255, 255, 255, 0.88));
+  }
+
+  .ai-status-badge {
+    font-size: 0.95rem;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .ai-hero-stat {
+    font-size: 2.2rem;
+    font-weight: 600;
+  }
+
+  .ai-hero-meta {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(15, 23, 42, 0.6);
+  }
+
+  .ai-section {
+    background: rgba(255, 255, 255, 0.86);
+    border-radius: 0.9rem;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    padding: 1.2rem;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .ai-section summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .ai-section summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .ai-section-title {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .ai-pill {
+    border-radius: 999px;
+    padding: 0.2rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: rgba(15, 23, 42, 0.08);
+  }
+
+  .ai-progress {
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+  }
+
+  .ai-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.6s ease;
+  }
+
+  .ai-score-row {
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 0.75rem;
+    padding: 0.9rem 1rem;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .ai-action-card {
+    border-radius: 0.85rem;
+    border: 2px solid rgba(15, 23, 42, 0.12);
+    padding: 1rem 1.1rem;
+    background: rgba(255, 255, 255, 0.96);
+  }
+
+  .ai-action-card[data-priority="CRITICAL"] {
+    border-color: rgba(220, 38, 38, 0.5);
+    box-shadow: 0 14px 28px rgba(220, 38, 38, 0.14);
+  }
+
+  .ai-action-card[data-priority="HIGH"] {
+    border-color: rgba(249, 115, 22, 0.5);
+    box-shadow: 0 14px 28px rgba(249, 115, 22, 0.12);
+  }
+
+  .ai-action-card[data-priority="MEDIUM"] {
+    border-color: rgba(234, 179, 8, 0.45);
+  }
+
+  .ai-evidence-card {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    padding: 0.85rem;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .ai-warning-banner {
+    border-radius: 0.9rem;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    background: rgba(255, 251, 235, 0.95);
+    padding: 0.9rem 1rem;
+  }
+
+  .ai-stagger > * {
+    animation: riseIn 0.6s ease both;
+  }
+
+  .ai-stagger > *:nth-child(2) { animation-delay: 0.05s; }
+  .ai-stagger > *:nth-child(3) { animation-delay: 0.1s; }
+  .ai-stagger > *:nth-child(4) { animation-delay: 0.15s; }
+
+  .cursor-pointer {
+    cursor: pointer;
+  }
+
+  @keyframes riseIn {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="fade-in">
+<div class="fade-in ai-review-scope">
   <div class="row mb-4">
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-start mb-2">
@@ -214,110 +411,148 @@
       <h5 class="fw-semibold">Ready for Analysis</h5>
       <p class="mb-0 small">Select a document and run the AI analysis to see your compliance score and gaps here.</p>
     </div>
-    <div id="demoResultCard" class="card border-0 shadow-sm d-none">
-      <div class="card-body">
-      <div class="mb-3">
-        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
-          <h5 class="card-title mb-0">Analysis Result</h5>
+    <div id="demoResultCard" class="card border-0 shadow-sm d-none ai-review-shell">
+      <div class="card-body ai-stagger">
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
+          <div>
+            <div class="ai-hero-meta">AI review result</div>
+            <div class="ai-display h4 mb-0">Status, reasons, and next steps</div>
+          </div>
           <a id="downloadDocxBtn" class="btn btn-sm btn-outline-primary d-none" href="#">
             <i class="bi bi-file-earmark-word me-1"></i>Download DOCX
           </a>
         </div>
+
+        <div id="resultHeroCard" class="ai-hero ai-status-ok mb-3">
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+              <div class="small text-body-secondary">Document</div>
+              <div id="resultHeroDocName" class="fw-semibold">-</div>
+            </div>
+            <div class="text-end">
+              <div id="resultStatusBadge" class="ai-status-badge badge bg-secondary">-</div>
+            </div>
+          </div>
+          <div class="row g-3 mt-2 align-items-center">
+            <div class="col-md-4">
+              <div class="small text-body-secondary">Confidence</div>
+              <div id="resultConfidence" class="ai-hero-stat">-</div>
+              <div id="resultConfidenceBreakdown" class="small text-body-secondary"></div>
+            </div>
+            <div class="col-md-8">
+              <div id="resultHeroSummary" class="fw-semibold"></div>
+              <div id="resultHeroAction" class="mt-2 text-primary fw-semibold"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="resultWarnings" class="d-flex flex-column gap-2 mb-3"></div>
         <div class="small text-body-secondary mb-3" id="resultSourceMeta"></div>
-        <div class="row g-2 align-items-stretch">
-          <div class="col-md-6">
-            <div class="border rounded p-3 h-100 bg-body-tertiary">
-              <div class="text-body-secondary small mb-1">Proposed Status</div>
-              <div id="resultStatusBadge" class="badge bg-secondary fs-5 px-3 py-2">-</div>
+
+        <details class="ai-section mb-3" open>
+          <summary class="ai-section-title">
+            <span>Tier 2: Why this score</span>
+            <span class="ai-pill">Score breakdown</span>
+          </summary>
+          <div class="mt-3">
+            <div class="small text-body-secondary mb-2" id="resultDiagnostics"></div>
+            <div class="border rounded p-2 bg-body-tertiary small mb-3" id="scoreWhyPanel">
+              <div class="fw-semibold mb-1">Blockers and key signals</div>
+              <ul class="mb-0" id="scoreWhyList"></ul>
+            </div>
+            <div id="scoreBreakdownList" class="d-flex flex-column gap-2"></div>
+            <div class="mt-3">
+              <div class="fw-semibold mb-2">Analysis Summary</div>
+              <div id="resultSummaryText" class="small text-body-secondary border rounded p-3 bg-body-tertiary"></div>
+            </div>
+            <div class="mt-3">
+              <div class="fw-semibold mb-2">Checklist Summary</div>
+              <div class="table-responsive mb-3">
+                <table class="table table-sm align-middle">
+                  <thead>
+                    <tr>
+                      <th style="min-width: 220px;">Requirement / Area</th>
+                      <th style="min-width: 120px;">Status</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody id="demoChecklistTable"></tbody>
+                </table>
+              </div>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <div class="border rounded p-3 bg-body-tertiary h-100">
+                    <div class="fw-semibold mb-2">Clear</div>
+                    <ul id="demoChecklistClear" class="small text-body-secondary mb-0"></ul>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 bg-body-tertiary h-100">
+                    <div class="fw-semibold mb-2">Partial</div>
+                    <ul id="demoChecklistPartial" class="small text-body-secondary mb-0"></ul>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 bg-body-tertiary h-100">
+                    <div class="fw-semibold mb-2">Gap</div>
+                    <ul id="demoChecklistGap" class="small text-body-secondary mb-0"></ul>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="col-md-6">
-            <div class="border rounded p-3 h-100 bg-body-tertiary">
-              <div class="text-body-secondary small mb-1">Confidence</div>
-              <div id="resultConfidence" class="fw-semibold fs-4">-</div>
-              <div id="resultConfidenceBreakdown" class="small text-body-secondary mt-1"></div>
+        </details>
+
+        <details class="ai-section mb-3" open>
+          <summary class="ai-section-title">
+            <span>Tier 3: Priority actions</span>
+            <span class="ai-pill">What to fix</span>
+          </summary>
+          <div class="mt-3">
+            <div id="priorityActionsList" class="d-flex flex-column gap-2"></div>
+            <div class="d-flex gap-2 mt-3 flex-wrap">
+              <button type="button" class="btn btn-outline-danger btn-sm" id="feedbackFalsePositiveBtn">Mark False Positive</button>
+              <button type="button" class="btn btn-outline-warning btn-sm" id="feedbackFalseNegativeBtn">Mark False Negative</button>
+              <button type="button" class="btn btn-outline-success btn-sm" id="feedbackCorrectBtn">Mark Correct</button>
+            </div>
+            <div class="mt-3 d-none" id="improvementGuideWrap">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="showImprovementGuideBtn">How can I improve this document?</button>
+              <div class="border rounded p-3 bg-body-tertiary mt-2 d-none" id="improvementGuidePanel">
+                <div class="fw-semibold mb-2">Improvement Guidance</div>
+                <ul class="small text-body-secondary mb-0" id="improvementGuideList"></ul>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </details>
 
-      <div class="small text-body-secondary mb-2" id="resultDiagnostics"></div>
-      <div class="border rounded p-2 bg-body-tertiary small mb-3" id="scoreWhyPanel">
-        <div class="fw-semibold mb-1">Why this score (and what blocks a higher score)</div>
-        <ul class="mb-0" id="scoreWhyList"></ul>
-      </div>
+        <details class="ai-section mb-3">
+          <summary class="ai-section-title">
+            <span>Tier 4: NDIS citations</span>
+            <span class="ai-pill" id="citationsCountPill">0 citations</span>
+          </summary>
+          <div id="resultCitations" class="d-flex flex-column gap-2 mt-3"></div>
+        </details>
 
-      <div class="d-flex gap-2 mb-3">
-        <button type="button" class="btn btn-outline-danger btn-sm" id="feedbackFalsePositiveBtn">Mark False Positive</button>
-        <button type="button" class="btn btn-outline-warning btn-sm" id="feedbackFalseNegativeBtn">Mark False Negative</button>
-        <button type="button" class="btn btn-outline-success btn-sm" id="feedbackCorrectBtn">Mark Correct</button>
-      </div>
-
-      <div class="mb-3">
-        <h6 class="fw-semibold mb-2">Analysis Summary</h6>
-        <div id="resultSummaryText" class="small text-body-secondary border rounded p-3 bg-body-tertiary"></div>
-      </div>
-
-      <div id="resultWarnings" class="d-flex flex-column gap-2 mb-3"></div>
-
-      <div class="mb-3">
-        <h6 class="fw-semibold mb-2">Checklist Summary</h6>
-        <div class="table-responsive mb-3">
-          <table class="table table-sm align-middle">
-            <thead>
-              <tr>
-                <th style="min-width: 220px;">Requirement / Area</th>
-                <th style="min-width: 120px;">Status</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody id="demoChecklistTable"></tbody>
-          </table>
-        </div>
-
-        <div class="row g-3">
-          <div class="col-md-4">
-            <div class="border rounded p-3 bg-body-tertiary h-100">
-              <div class="fw-semibold mb-2">Clear</div>
-              <ul id="demoChecklistClear" class="small text-body-secondary mb-0"></ul>
+        <details class="ai-section mb-3">
+          <summary class="ai-section-title">
+            <span>Tier 5: Document evidence</span>
+            <span class="ai-pill">Snippets and gaps</span>
+          </summary>
+          <div class="row g-3 mt-1">
+            <div class="col-lg-4">
+              <div class="fw-semibold mb-2">Strong evidence</div>
+              <div id="evidenceStrongList" class="d-flex flex-column gap-2"></div>
+            </div>
+            <div class="col-lg-4">
+              <div class="fw-semibold mb-2">Partial evidence</div>
+              <div id="evidencePartialList" class="d-flex flex-column gap-2"></div>
+            </div>
+            <div class="col-lg-4">
+              <div class="fw-semibold mb-2">Expected but missing</div>
+              <ul id="evidenceMissingList" class="small text-body-secondary mb-0"></ul>
             </div>
           </div>
-          <div class="col-md-4">
-            <div class="border rounded p-3 bg-body-tertiary h-100">
-              <div class="fw-semibold mb-2">Partial</div>
-              <ul id="demoChecklistPartial" class="small text-body-secondary mb-0"></ul>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="border rounded p-3 bg-body-tertiary h-100">
-              <div class="fw-semibold mb-2">Gap</div>
-              <ul id="demoChecklistGap" class="small text-body-secondary mb-0"></ul>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-3 d-none" id="improvementGuideWrap">
-          <button type="button" class="btn btn-outline-primary btn-sm" id="showImprovementGuideBtn">How can I improve this document?</button>
-          <div class="border rounded p-3 bg-body-tertiary mt-2 d-none" id="improvementGuidePanel">
-            <div class="fw-semibold mb-2">Improvement Guidance</div>
-            <ul class="small text-body-secondary mb-0" id="improvementGuideList"></ul>
-          </div>
-        </div>
-      </div>
-
-      <div class="row g-3">
-        <div class="col-md-6">
-          <details class="border rounded p-3 bg-body-tertiary">
-            <summary class="fw-semibold">Document Evidence Highlights</summary>
-            <div id="resultSnippets" class="d-flex flex-column gap-2 mt-3"></div>
-          </details>
-        </div>
-        <div class="col-md-6">
-          <details class="border rounded p-3 bg-body-tertiary">
-            <summary class="fw-semibold">NDIS Citations (RAG)</summary>
-            <div id="resultCitations" class="d-flex flex-column gap-2 mt-3"></div>
-          </details>
-        </div>
+        </details>
       </div>
     </div>
   </div>
@@ -369,11 +604,20 @@
     const questionChips = document.querySelectorAll('.demo-question-chip');
     const resultCard = document.getElementById('demoResultCard');
     const statusBadge = document.getElementById('resultStatusBadge');
+    const heroCard = document.getElementById('resultHeroCard');
+    const heroDocName = document.getElementById('resultHeroDocName');
+    const heroSummaryEl = document.getElementById('resultHeroSummary');
+    const heroActionEl = document.getElementById('resultHeroAction');
     const confidenceEl = document.getElementById('resultConfidence');
     const confidenceBreakdownEl = document.getElementById('resultConfidenceBreakdown');
     const warningsEl = document.getElementById('resultWarnings');
-    const snippetsEl = document.getElementById('resultSnippets');
     const citationsEl = document.getElementById('resultCitations');
+    const scoreBreakdownList = document.getElementById('scoreBreakdownList');
+    const priorityActionsList = document.getElementById('priorityActionsList');
+    const citationsCountPill = document.getElementById('citationsCountPill');
+    const evidenceStrongList = document.getElementById('evidenceStrongList');
+    const evidencePartialList = document.getElementById('evidencePartialList');
+    const evidenceMissingList = document.getElementById('evidenceMissingList');
     const checklistTable = document.getElementById('demoChecklistTable');
     const checklistClear = document.getElementById('demoChecklistClear');
     const checklistPartial = document.getElementById('demoChecklistPartial');
@@ -415,6 +659,18 @@
     if (!form) {
       return;
     }
+
+    const collapseSectionsOnMobile = () => {
+      const isMobile = window.matchMedia('(max-width: 767px)').matches;
+      if (!isMobile) {
+        return;
+      }
+      document.querySelectorAll('details.ai-section').forEach(function (el) {
+        el.removeAttribute('open');
+      });
+    };
+
+    collapseSectionsOnMobile();
 
     if (storedDocSelect) {
       if (ACTIVE_DOC_ID && String(ACTIVE_DOC_ID).trim()) {
@@ -482,17 +738,43 @@
       document.getElementById('demoResultPlaceholder').classList.remove('d-none');
       resultCard.classList.add('d-none');
       warningsEl.innerHTML = '';
-      snippetsEl.innerHTML = '';
       citationsEl.innerHTML = '';
       checklistTable.innerHTML = '';
       checklistClear.innerHTML = '';
       checklistPartial.innerHTML = '';
       checklistGap.innerHTML = '';
+      if (scoreBreakdownList) {
+        scoreBreakdownList.innerHTML = '';
+      }
+      if (priorityActionsList) {
+        priorityActionsList.innerHTML = '';
+      }
+      if (citationsCountPill) {
+        citationsCountPill.textContent = '0 citations';
+      }
+      if (evidenceStrongList) {
+        evidenceStrongList.innerHTML = '';
+      }
+      if (evidencePartialList) {
+        evidencePartialList.innerHTML = '';
+      }
+      if (evidenceMissingList) {
+        evidenceMissingList.innerHTML = '';
+      }
       if (resultSummaryEl) {
         resultSummaryEl.textContent = '';
       }
       if (resultDiagnosticsEl) {
         resultDiagnosticsEl.textContent = '';
+      }
+      if (heroDocName) {
+        heroDocName.textContent = '';
+      }
+      if (heroSummaryEl) {
+        heroSummaryEl.textContent = '';
+      }
+      if (heroActionEl) {
+        heroActionEl.textContent = '';
       }
       if (scoreWhyList) {
         scoreWhyList.innerHTML = '';
@@ -603,13 +885,58 @@
       }, 450);
     };
 
-    const renderBadge = (status) => {
-      statusBadge.className = 'badge';
-      const normalized = (status || '').toLowerCase();
+    const statusSummaryText = (status) => {
+      const normalized = String(status || '').toLowerCase();
+      if (normalized === 'critical gap') {
+        return 'This document needs significant work before it can demonstrate NDIS compliance.';
+      }
+      if (normalized === 'high risk gap') {
+        return 'This document has gaps that require attention to meet NDIS compliance standards.';
+      }
+      if (normalized === 'ok') {
+        return 'This document shows evidence of NDIS compliance but could be strengthened with more detail.';
+      }
       if (normalized === 'mature') {
-        statusBadge.classList.add('bg-primary');
-      } else if (normalized === 'ok') {
+        return 'This document demonstrates strong NDIS compliance with clear procedures and evidence.';
+      }
+      return 'This document needs more evidence to demonstrate NDIS compliance.';
+    };
+
+    const scoreColor = (score) => {
+      const value = Number(score || 0);
+      if (value <= 0.25) return '#dc2626';
+      if (value <= 0.5) return '#f97316';
+      if (value <= 0.75) return '#eab308';
+      return '#10b981';
+    };
+
+    const scoreMeasureCopy = (label) => {
+      const key = String(label || '').toLowerCase();
+      if (key.includes('coverage')) {
+        return 'Measures NDIS terminology coverage across practice standards.';
+      }
+      if (key.includes('depth')) {
+        return 'Measures how detailed and procedural the document is.';
+      }
+      if (key.includes('substance')) {
+        return 'Measures action language, responsibilities, and timeframes.';
+      }
+      if (key.includes('structure')) {
+        return 'Measures organization, headings, and step-by-step structure.';
+      }
+      if (key.includes('evidence')) {
+        return 'Measures strength of evidence snippets and examples.';
+      }
+      return 'Measures compliance-related signal strength.';
+    };
+
+    const renderBadge = (status) => {
+      const normalized = (status || '').toLowerCase();
+      statusBadge.className = 'ai-status-badge badge';
+      if (normalized === 'mature') {
         statusBadge.classList.add('bg-success');
+      } else if (normalized === 'ok') {
+        statusBadge.classList.add('bg-warning', 'text-dark');
       } else if (normalized === 'high risk gap') {
         statusBadge.classList.add('bg-warning', 'text-dark');
       } else if (normalized === 'critical gap') {
@@ -618,11 +945,24 @@
         statusBadge.classList.add('bg-secondary');
       }
       statusBadge.textContent = status || 'Unknown';
+
+      if (heroCard) {
+        heroCard.classList.remove('ai-status-critical', 'ai-status-high', 'ai-status-ok', 'ai-status-mature');
+        if (normalized === 'critical gap') {
+          heroCard.classList.add('ai-status-critical');
+        } else if (normalized === 'high risk gap') {
+          heroCard.classList.add('ai-status-high');
+        } else if (normalized === 'ok') {
+          heroCard.classList.add('ai-status-ok');
+        } else if (normalized === 'mature') {
+          heroCard.classList.add('ai-status-mature');
+        }
+      }
     };
 
     const asCard = (text, options) => {
       const div = document.createElement('div');
-      div.className = 'border rounded p-2';
+      div.className = 'ai-evidence-card';
 
       const topRow = document.createElement('div');
       topRow.className = 'd-flex justify-content-between align-items-start gap-2';
@@ -700,19 +1040,53 @@
     };
 
     const renderPayload = (payload) => {
+      const response = payload.response || {};
+      const hero = response.hero || {};
+      const scoreBreakdown = response.score_breakdown || payload.score_breakdown || [];
+      const priorityActions = response.priority_actions || payload.priority_actions || [];
+      const warningItems = response.warnings_detailed || response.warnings || payload.warning_items || [];
+      const citations = response.citations || payload.citations || [];
+      const citationDetail = response.ndis_citations || null;
+      const evidenceBundle = response.evidence || {};
+      const snippets = evidenceBundle.snippets || payload.snippets || [];
+
+      const heroStatus = hero.status || payload.status;
+      const heroConfidence = Number(hero.confidence || payload.confidence || 0);
+
       lastResultMeta = {
         stored_doc_id: Number(((payload.meta || {}).stored_doc_id) || (storedDocSelect && storedDocSelect.value) || 0),
-        status: String(payload.status || ''),
-        confidence: Number(payload.confidence || 0),
+        status: String(heroStatus || ''),
+        confidence: Number(heroConfidence || 0),
       };
-      renderBadge(payload.status);
-      confidenceEl.textContent = `${(Number(payload.confidence || 0) * 100).toFixed(0)}%`;
+
+      renderBadge(heroStatus);
+      confidenceEl.textContent = `${(heroConfidence * 100).toFixed(0)}%`;
+
       const confidenceBreakdown = ((payload.meta || {}).confidence_breakdown) || ((payload.scoring_diagnostics || {}).confidence_breakdown) || {};
       const coverageConf = Number(confidenceBreakdown.coverage_confidence || 0);
       const evidenceConf = Number(confidenceBreakdown.evidence_confidence || 0);
       if (confidenceBreakdownEl) {
         confidenceBreakdownEl.textContent = `Coverage ${(coverageConf * 100).toFixed(0)}% | Evidence ${(evidenceConf * 100).toFixed(0)}%`;
       }
+
+      if (heroDocName) {
+        heroDocName.textContent = hero.document_name || ((payload.meta || {}).filename) || 'Untitled document';
+      }
+      if (heroSummaryEl) {
+        heroSummaryEl.textContent = hero.summary || statusSummaryText(heroStatus);
+      }
+      if (heroActionEl) {
+        const nextAction = hero.priority_action || (priorityActions[0] || {}).title || '';
+        heroActionEl.textContent = nextAction ? `Priority: ${nextAction}` : '';
+        if (nextAction && priorityActionsList) {
+          heroActionEl.classList.add('cursor-pointer');
+          heroActionEl.setAttribute('role', 'button');
+          heroActionEl.onclick = function () {
+            priorityActionsList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          };
+        }
+      }
+
       const provider = ((payload.meta || {}).provider) || 'deterministic';
       const model = ((payload.meta || {}).model) || '-';
       const source = ((payload.meta || {}).source) || 'repository';
@@ -724,6 +1098,7 @@
       const extractionMeta = (payload.meta || {}).extraction_diagnostics || {};
       const extractionQuality = String(extractionMeta.quality || '').trim();
       resultDiagnosticsEl.textContent = `Engine: ${provider} | Model: ${model}${rubricLabel ? ` | Rubric: ${rubricLabel}` : ''}${extractionQuality ? ` | Extraction: ${extractionQuality}` : ''}${cachedResult ? ' | Reused previous analysis' : ''}${analyzedAtText ? ` | Updated: ${analyzedAtText}` : ''}`;
+
       const diagnostics = payload.scoring_diagnostics || {};
       const whyLines = [];
       if (typeof diagnostics.domain_anchor_hits !== 'undefined') {
@@ -768,17 +1143,81 @@
           scoreWhyList.appendChild(li);
         });
       }
+
       if (resultSourceMetaEl) {
         resultSourceMetaEl.textContent = `Source: ${source === 'repository' ? 'Repository document' : 'Workspace document'} | Document: ${filename}${usedQuestion ? ` | Question: ${usedQuestion}` : ''}`;
       }
+
       if (downloadDocxBtn && storedDocSelect && (storedDocSelect.value || '').trim()) {
         const href = `{{ url_for('main.download_ai_summary_docx', doc_id=0) }}`.replace('/0/download-ai-summary-docx', `/${storedDocSelect.value}/download-ai-summary-docx`);
         downloadDocxBtn.setAttribute('href', href);
         downloadDocxBtn.classList.remove('d-none');
       }
+
       if (resultSummaryEl) {
-        const summaryText = String(payload.summary || '').trim();
+        const pieces = [];
+        if ((hero.why || '').trim()) {
+          pieces.push(String(hero.why).trim());
+        }
+        if ((payload.summary || '').trim()) {
+          pieces.push(String(payload.summary).trim());
+        }
+        const summaryText = pieces.join(' ');
         resultSummaryEl.textContent = summaryText || 'No summary available.';
+      }
+
+      if (scoreBreakdownList) {
+        scoreBreakdownList.innerHTML = '';
+        if (!scoreBreakdown.length) {
+          const empty = document.createElement('div');
+          empty.className = 'text-body-secondary small';
+          empty.textContent = 'Score breakdown not available for this result.';
+          scoreBreakdownList.appendChild(empty);
+        }
+        scoreBreakdown.forEach(function (item) {
+          const row = document.createElement('div');
+          row.className = 'ai-score-row';
+
+          const header = document.createElement('div');
+          header.className = 'd-flex justify-content-between align-items-center gap-2 mb-2';
+
+          const label = document.createElement('div');
+          label.className = 'fw-semibold';
+          label.textContent = item.label || 'Score';
+          header.appendChild(label);
+
+          const points = document.createElement('div');
+          points.className = 'small text-body-secondary';
+          const earned = typeof item.points !== 'undefined' ? item.points : Math.round(Number(item.score || 0) * (item.max_points || 100));
+          const maxPts = item.max_points || 100;
+          points.textContent = `${earned} of ${maxPts} points`;
+          header.appendChild(points);
+          row.appendChild(header);
+
+          const progress = document.createElement('div');
+          progress.className = 'ai-progress mb-2';
+          const fill = document.createElement('div');
+          fill.className = 'ai-progress-fill';
+          const percent = Math.round(Number(item.score || 0) * 100);
+          fill.style.width = `${percent}%`;
+          fill.style.backgroundColor = scoreColor(item.score);
+          progress.appendChild(fill);
+          row.appendChild(progress);
+
+          const detail = document.createElement('div');
+          detail.className = 'small text-body-secondary';
+          detail.textContent = scoreMeasureCopy(item.label);
+          row.appendChild(detail);
+
+          if (item.quick_fix) {
+            const quickFix = document.createElement('div');
+            quickFix.className = 'small mt-2';
+            quickFix.innerHTML = `<strong>Quick fix:</strong> ${item.quick_fix}`;
+            row.appendChild(quickFix);
+          }
+
+          scoreBreakdownList.appendChild(row);
+        });
       }
 
       const checklist = (payload.checklist || {});
@@ -816,37 +1255,320 @@
       appendListItems(checklistPartial, (checklist.summary || {}).partial || []);
       appendListItems(checklistGap, (checklist.summary || {}).gap || []);
 
-      const warningItems = payload.warning_items || [];
-      if (warningItems.length > 0) {
-        warningItems.forEach(function (item) {
-          const warning = document.createElement('div');
-          warning.className = 'alert alert-warning py-2 px-3 mb-0 small';
-          const sourceLabel = ((item && item.source) || 'system').toUpperCase();
-          const message = (item && item.message) || '';
-          warning.textContent = `[${sourceLabel}] ${message}`;
-          warningsEl.appendChild(warning);
-        });
-      } else {
+      if (warningsEl) {
         warningsEl.innerHTML = '';
+        if (warningItems.length > 0) {
+          warningItems.forEach(function (item) {
+            const warning = document.createElement('div');
+            warning.className = 'ai-warning-banner small';
+            const category = (item.category || item.source || 'system').toUpperCase();
+            const title = item.title || item.message || '';
+            const impact = item.impact || '';
+            const fixes = Array.isArray(item.how_to_fix) ? item.how_to_fix : [];
+            warning.innerHTML = `<strong>[${category}]</strong> ${title}${impact ? `<div class="mt-1">${impact}</div>` : ''}`;
+            if (fixes.length) {
+              const list = document.createElement('ul');
+              list.className = 'mt-2 mb-0';
+              fixes.forEach(function (fix) {
+                const li = document.createElement('li');
+                li.textContent = fix;
+                list.appendChild(li);
+              });
+              warning.appendChild(list);
+            }
+            warningsEl.appendChild(warning);
+          });
+        }
       }
 
-      const snippets = payload.snippets || [];
-      if (snippets.length === 0) {
-        snippetsEl.appendChild(asCard('No strong evidence snippets found in this file.', { score: 0 }));
-      } else {
-        snippets.forEach(function (item) {
-          snippetsEl.appendChild(asCard(item.text, { score: item.score }));
-        });
+      if (priorityActionsList) {
+        priorityActionsList.innerHTML = '';
+        const actions = Array.isArray(priorityActions) ? priorityActions : [];
+        if (!actions.length) {
+          const empty = document.createElement('div');
+          empty.className = 'text-body-secondary small';
+          empty.textContent = 'No priority actions available.';
+          priorityActionsList.appendChild(empty);
+        } else {
+          actions.forEach(function (action, index) {
+            const card = document.createElement('div');
+            card.className = 'ai-action-card';
+            const priority = String(action.priority || 'MEDIUM').toUpperCase();
+            card.setAttribute('data-priority', priority);
+
+            const header = document.createElement('div');
+            header.className = 'd-flex justify-content-between align-items-center mb-2';
+            const label = document.createElement('div');
+            label.className = 'fw-semibold';
+            label.textContent = `${priority} #${index + 1}`;
+            const impact = document.createElement('span');
+            impact.className = 'badge text-bg-light border';
+            impact.textContent = priority === 'CRITICAL' ? 'Highest impact' : (priority === 'HIGH' ? 'High impact' : 'Recommended');
+            header.appendChild(label);
+            header.appendChild(impact);
+            card.appendChild(header);
+
+            const title = document.createElement('div');
+            title.className = 'fw-semibold mb-2';
+            title.textContent = action.title || 'Review this item.';
+            card.appendChild(title);
+
+            if (action.what_is_wrong) {
+              const wrong = document.createElement('div');
+              wrong.className = 'small mb-2';
+              wrong.innerHTML = `<strong>What\'s wrong:</strong> ${action.what_is_wrong}`;
+              card.appendChild(wrong);
+            }
+
+            if (action.impact) {
+              const impact = document.createElement('div');
+              impact.className = 'small mb-2';
+              impact.innerHTML = `<strong>Impact:</strong> ${action.impact}`;
+              card.appendChild(impact);
+            }
+
+            const steps = Array.isArray(action.how_to_fix_steps) ? action.how_to_fix_steps : [];
+            const fixText = action.how_to_fix || '';
+            if (steps.length || fixText) {
+              const fix = document.createElement('div');
+              fix.className = 'small text-body-secondary';
+              fix.innerHTML = '<strong>How to fix:</strong>';
+              if (steps.length) {
+                const list = document.createElement('ol');
+                list.className = 'mt-1';
+                steps.forEach(function (step) {
+                  const li = document.createElement('li');
+                  li.textContent = step;
+                  list.appendChild(li);
+                });
+                fix.appendChild(list);
+              } else {
+                const text = document.createElement('div');
+                text.textContent = fixText || 'Review the document and address the issue.';
+                fix.appendChild(text);
+              }
+              card.appendChild(fix);
+            }
+
+            if (Array.isArray(action.examples) && action.examples.length) {
+              action.examples.forEach(function (example) {
+                const wrap = document.createElement('div');
+                wrap.className = 'small mt-2';
+                if (example.before) {
+                  const before = document.createElement('div');
+                  before.className = 'p-2 rounded mb-2';
+                  before.style.background = '#fee2e2';
+                  before.style.borderLeft = '4px solid #dc2626';
+                  before.textContent = `Before: ${example.before}`;
+                  wrap.appendChild(before);
+                }
+                if (example.after) {
+                  const after = document.createElement('div');
+                  after.className = 'p-2 rounded';
+                  after.style.background = '#d1fae5';
+                  after.style.borderLeft = '4px solid #10b981';
+                  after.textContent = `After: ${example.after}`;
+                  wrap.appendChild(after);
+                }
+                card.appendChild(wrap);
+              });
+            }
+
+            if (action.potential_gain) {
+              const gain = document.createElement('div');
+              gain.className = 'small mt-2 fw-semibold text-primary';
+              gain.textContent = action.potential_gain;
+              card.appendChild(gain);
+            }
+
+            priorityActionsList.appendChild(card);
+          });
+        }
       }
 
-      const citations = payload.citations || [];
-      if (citations.length === 0) {
-        citationsEl.appendChild(asCard('No NDIS citations retrieved.', { score: 0 }));
-      } else {
-        citations.forEach(function (item) {
-          const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'}`;
-          citationsEl.appendChild(asCard(item.text, { score: item.score || 0, meta: meta }));
-        });
+      if (citationsEl) {
+        citationsEl.innerHTML = '';
+        const matched = citationDetail ? (citationDetail.matched_standards || []) : [];
+        if (citationsCountPill) {
+          const count = citationDetail ? citationDetail.total_found : citations.length;
+          citationsCountPill.textContent = `${count} citations`;
+        }
+        if (matched.length > 0) {
+          matched.forEach(function (item) {
+            const card = document.createElement('div');
+            card.className = 'ai-evidence-card';
+
+            const title = document.createElement('div');
+            title.className = 'fw-semibold mb-1';
+            title.textContent = `${item.standard_code || 'NDIS'} ${item.title || ''}`.trim();
+            card.appendChild(title);
+
+            const scoreRow = document.createElement('div');
+            scoreRow.className = 'small text-body-secondary mb-2';
+            scoreRow.textContent = `Relevance: ${item.relevance_score || 0}%`;
+            card.appendChild(scoreRow);
+
+            if (item.standard_text) {
+              const text = document.createElement('div');
+              text.className = 'small';
+              text.textContent = item.standard_text;
+              card.appendChild(text);
+            }
+
+            if (Array.isArray(item.gaps_identified) && item.gaps_identified.length) {
+              const gaps = document.createElement('ul');
+              gaps.className = 'small mt-2 mb-0';
+              item.gaps_identified.forEach(function (gap) {
+                const li = document.createElement('li');
+                li.textContent = gap;
+                gaps.appendChild(li);
+              });
+              card.appendChild(gaps);
+            }
+
+            if (Array.isArray(item.what_doc_addresses) && item.what_doc_addresses.length) {
+              const addresses = document.createElement('ul');
+              addresses.className = 'small mt-2 mb-0 text-body-secondary';
+              item.what_doc_addresses.forEach(function (note) {
+                if (!note) {
+                  return;
+                }
+                const li = document.createElement('li');
+                li.textContent = note;
+                addresses.appendChild(li);
+              });
+              card.appendChild(addresses);
+            }
+
+            if (item.suggestion) {
+              const suggestion = document.createElement('div');
+              suggestion.className = 'small mt-2 text-body-secondary';
+              suggestion.innerHTML = `<strong>Suggestion:</strong> ${item.suggestion}`;
+              card.appendChild(suggestion);
+            }
+            citationsEl.appendChild(card);
+          });
+
+          const missing = citationDetail ? (citationDetail.missing_standards || []) : [];
+          if (missing.length) {
+            const missingWrap = document.createElement('div');
+            missingWrap.className = 'mt-3';
+            const heading = document.createElement('div');
+            heading.className = 'fw-semibold mb-2';
+            heading.textContent = 'Missing standards to address';
+            missingWrap.appendChild(heading);
+            const list = document.createElement('ul');
+            list.className = 'small text-body-secondary mb-0';
+            missing.forEach(function (item) {
+              const li = document.createElement('li');
+              const base = item.title || 'Additional NDIS requirement coverage needed.';
+              li.textContent = base;
+              const required = Array.isArray(item.required_content) ? item.required_content : [];
+              if (required.length) {
+                const sub = document.createElement('ul');
+                required.forEach(function (req) {
+                  const subLi = document.createElement('li');
+                  subLi.textContent = req;
+                  sub.appendChild(subLi);
+                });
+                li.appendChild(sub);
+              }
+              list.appendChild(li);
+            });
+            missingWrap.appendChild(list);
+            citationsEl.appendChild(missingWrap);
+          }
+        } else if (citations.length === 0) {
+          citationsEl.appendChild(asCard('No NDIS citations retrieved.', { score: 0 }));
+        } else {
+          citations.forEach(function (item) {
+            const meta = `${item.source_id || 'ndis'} | page ${item.page_number || '?'}`;
+            citationsEl.appendChild(asCard(item.text, { score: item.score || 0, meta: meta }));
+          });
+        }
+      }
+
+      if (evidenceStrongList && evidencePartialList) {
+        evidenceStrongList.innerHTML = '';
+        evidencePartialList.innerHTML = '';
+        let strong = evidenceBundle.strong_snippets || [];
+        let partial = evidenceBundle.partial_snippets || [];
+        if ((!strong.length && !partial.length) && snippets.length) {
+          strong = [];
+          partial = [];
+          snippets.forEach(function (item) {
+            const score = Number(item.score || 0);
+            if (score >= 3) {
+              strong.push(item);
+            } else if (score >= 1) {
+              partial.push(item);
+            }
+          });
+        }
+        if (!strong.length) {
+          const empty = document.createElement('div');
+          empty.className = 'ai-evidence-card small text-body-secondary';
+          empty.textContent = 'No strong evidence snippets found.';
+          evidenceStrongList.appendChild(empty);
+        } else {
+          strong.forEach(function (item) {
+            const card = document.createElement('div');
+            card.className = 'ai-evidence-card small';
+            card.textContent = item.text || '-';
+            evidenceStrongList.appendChild(card);
+          });
+        }
+
+        if (!partial.length) {
+          const empty = document.createElement('div');
+          empty.className = 'ai-evidence-card small text-body-secondary';
+          empty.textContent = 'No partial evidence snippets found.';
+          evidencePartialList.appendChild(empty);
+        } else {
+          partial.forEach(function (item) {
+            const card = document.createElement('div');
+            card.className = 'ai-evidence-card small';
+            card.textContent = item.text || '-';
+            evidencePartialList.appendChild(card);
+          });
+        }
+      }
+
+      if (evidenceMissingList) {
+        evidenceMissingList.innerHTML = '';
+        const gaps = evidenceBundle.expected_but_missing || ((payload.checklist || {}).summary || {}).gap || [];
+        if (Array.isArray(gaps) && gaps.length && typeof gaps[0] === 'object') {
+          gaps.forEach(function (item) {
+            const li = document.createElement('li');
+            const label = item.category || 'Missing evidence';
+            li.textContent = label;
+            const expected = Array.isArray(item.expected_elements) ? item.expected_elements : [];
+            if (expected.length) {
+              const sub = document.createElement('ul');
+              expected.forEach(function (expectation) {
+                const subLi = document.createElement('li');
+                subLi.textContent = expectation;
+                sub.appendChild(subLi);
+              });
+              li.appendChild(sub);
+            }
+            evidenceMissingList.appendChild(li);
+          });
+        } else {
+          appendListItems(evidenceMissingList, gaps);
+        }
+        const qualityIssues = evidenceBundle.quality_issues || [];
+        if (Array.isArray(qualityIssues) && qualityIssues.length) {
+          const divider = document.createElement('li');
+          divider.textContent = 'Quality issues:';
+          divider.className = 'fw-semibold mt-2';
+          evidenceMissingList.appendChild(divider);
+          qualityIssues.forEach(function (issue) {
+            const li = document.createElement('li');
+            li.textContent = issue;
+            evidenceMissingList.appendChild(li);
+          });
+        }
       }
 
       renderImprovementGuide(payload);
