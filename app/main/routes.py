@@ -2684,6 +2684,144 @@ def _split_document_ai_summary(summary_text: str | None) -> dict[str, str]:
     return sections
 
 
+def _status_summary_template(status: str) -> str:
+    value = (status or '').strip().lower()
+    if value == 'critical gap':
+        return 'This document needs significant work before it can demonstrate NDIS compliance.'
+    if value == 'high risk gap':
+        return 'This document has gaps that require attention to meet NDIS compliance standards.'
+    if value == 'ok':
+        return 'This document shows evidence of NDIS compliance but could be strengthened with more detail.'
+    if value == 'mature':
+        return 'This document demonstrates strong NDIS compliance with clear procedures and evidence.'
+    return 'This document needs more evidence to demonstrate NDIS compliance.'
+
+
+def _score_breakdown_from_diagnostics(*, diagnostics: dict, confidence_breakdown: dict, document_text: str) -> list[dict]:
+    doc_len = len((document_text or '').strip())
+    domain_hits = int(diagnostics.get('domain_anchor_hits') or 0)
+    looks_like_template = bool(diagnostics.get('looks_like_template'))
+
+    coverage = float(confidence_breakdown.get('coverage_confidence') or 0)
+    evidence = float(confidence_breakdown.get('evidence_confidence') or 0)
+    depth = min(doc_len / 2500.0, 1.0)
+    substance = min(domain_hits / 6.0, 1.0)
+    structure = 0.25 if looks_like_template else 0.8
+
+    def as_points(score: float, max_points: int) -> int:
+        return int(round(max_points * max(0.0, min(score, 1.0))))
+
+    return [
+        {
+            'label': 'Coverage',
+            'score': coverage,
+            'points': as_points(coverage, 25),
+            'max_points': 25,
+            'quick_fix': 'Add sections that address participant consent, safeguarding, and incident management.',
+        },
+        {
+            'label': 'Depth',
+            'score': depth,
+            'points': as_points(depth, 20),
+            'max_points': 20,
+            'quick_fix': 'Expand procedures with step-by-step instructions, owners, and timeframes.',
+        },
+        {
+            'label': 'Substance',
+            'score': substance,
+            'points': as_points(substance, 40),
+            'max_points': 40,
+            'quick_fix': 'Use must/shall/will language and define responsibilities and review cadence.',
+        },
+        {
+            'label': 'Structure',
+            'score': structure,
+            'points': as_points(structure, 10),
+            'max_points': 10,
+            'quick_fix': 'Complete placeholders and ensure headings and numbered steps are present.',
+        },
+        {
+            'label': 'Evidence Quality',
+            'score': evidence,
+            'points': as_points(evidence, 5),
+            'max_points': 5,
+            'quick_fix': 'Add concrete examples, records, or completed forms as evidence.',
+        },
+    ]
+
+
+def _priority_actions_from_warnings(*, warning_items: list[dict], next_action: str) -> list[dict]:
+    actions: list[dict] = []
+    for item in warning_items:
+        source = (item.get('source') or 'system').strip().lower()
+        message = (item.get('message') or '').strip()
+        if not message:
+            continue
+        priority = 'MEDIUM'
+        if source in {'validation', 'extraction'}:
+            priority = 'CRITICAL'
+        elif source in {'scoring', 'consistency'}:
+            priority = 'HIGH'
+        actions.append(
+            {
+                'priority': priority,
+                'title': message,
+                'how_to_fix': 'Review the document and address the issue noted above.',
+            }
+        )
+
+    if next_action:
+        actions.insert(0, {
+            'priority': 'CRITICAL',
+            'title': next_action,
+            'how_to_fix': next_action,
+        })
+
+    seen = set()
+    deduped = []
+    for action in actions:
+        key = (action.get('title') or '').strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(action)
+    return deduped[:5]
+
+
+def _build_ai_review_response(*, status: str, confidence: float, summary_text: str, warning_items: list[dict], diagnostics: dict, confidence_breakdown: dict, document_text: str, citations: list[dict], snippets: list[dict], filename: str) -> dict:
+    summary_sections = _split_document_ai_summary(summary_text)
+    why_text = summary_sections.get('why') or ''
+    next_action = summary_sections.get('next_action') or ''
+    hero_summary = _status_summary_template(status)
+
+    score_breakdown = _score_breakdown_from_diagnostics(
+        diagnostics=diagnostics,
+        confidence_breakdown=confidence_breakdown,
+        document_text=document_text,
+    )
+
+    return {
+        'hero': {
+            'document_name': filename or 'Untitled document',
+            'status': status,
+            'confidence': confidence,
+            'summary': hero_summary,
+            'why': why_text,
+            'priority_action': next_action,
+        },
+        'score_breakdown': score_breakdown,
+        'priority_actions': _priority_actions_from_warnings(
+            warning_items=warning_items,
+            next_action=next_action,
+        ),
+        'citations': citations,
+        'evidence': {
+            'snippets': snippets,
+        },
+        'warnings': warning_items,
+    }
+
+
 def _analyze_and_persist_document(document: Document, *, org_id: int, user_id: int) -> tuple[bool, str | None, int]:
     """Analyze one stored document and persist review/mapping fields."""
     from app.services.azure_storage import AzureBlobStorageService
@@ -5299,6 +5437,7 @@ def _azure_openai_demo_summary(*, status: str, question: str, snippets: list[dic
         '2) Missing evidence\n'
         '3) Recommended next action\n'
         'End with the line END_SUMMARY\n\n'
+        'In "Why this status", open with a single plain-language summary sentence.\n\n'
         f'Proposed status: {status}\n'
         f'Assessment question: {question}\n\n'
         f'Document content (first 1500 chars):\n{evidence_points}\n\n'
@@ -5384,6 +5523,7 @@ def _openrouter_demo_summary(*, status: str, question: str, snippets: list[dict]
         '2) Missing evidence\n'
         '3) Recommended next action\n'
         'End with the line END_SUMMARY\n\n'
+        'In "Why this status", open with a single plain-language summary sentence.\n\n'
         f'Proposed status: {status}\n'
         f'Question: {question}\n\n'
         f'Document evidence snippets:\n{evidence_points}\n\n'
@@ -6588,6 +6728,19 @@ def ai_demo_analyze_api():
                 'focus_area': document.ai_focus_area or 'General compliance coverage',
             }
         )
+        confidence_breakdown = ((document.ai_confidence or 0), {})
+        response_payload = _build_ai_review_response(
+            status=document.ai_status,
+            confidence=float(document.ai_confidence or 0),
+            summary_text=document.ai_summary,
+            warning_items=[{'source': 'cache', 'message': reused_warning}],
+            diagnostics={},
+            confidence_breakdown={},
+            document_text=document.extracted_text or '',
+            citations=[],
+            snippets=[],
+            filename=source_filename,
+        )
         return jsonify(
             {
                 'success': True,
@@ -6599,6 +6752,7 @@ def ai_demo_analyze_api():
                 'citations': [],
                 'warnings': [reused_warning],
                 'warning_items': [{'source': 'cache', 'message': reused_warning}],
+                'response': response_payload,
                 'meta': {
                     'provider': (document.ai_provider or 'cached').strip() or 'cached',
                     'model': (document.ai_model or 'cached').strip() or 'cached',
@@ -6812,6 +6966,18 @@ def ai_demo_analyze_api():
     )
 
     warnings = [w.get('message', '') for w in warning_items if (w.get('message') or '').strip()]
+    response_payload = _build_ai_review_response(
+        status=status,
+        confidence=confidence,
+        summary_text=ai_summary,
+        warning_items=warning_items,
+        diagnostics=scoring_diagnostics,
+        confidence_breakdown=confidence_breakdown,
+        document_text=doc_text,
+        citations=rag_citations,
+        snippets=snippets,
+        filename=source_filename,
+    )
     return jsonify(
         {
             'success': True,
@@ -6824,6 +6990,7 @@ def ai_demo_analyze_api():
             'scoring_diagnostics': scoring_diagnostics,
             'warnings': warnings,
             'warning_items': warning_items,
+            'response': response_payload,
             'meta': {
                 'provider': provider_label,
                 'model': model_label,
