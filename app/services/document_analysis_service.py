@@ -219,6 +219,149 @@ class DocumentAnalysisService:
             'warnings': reasons,
         }
 
+    def validate_document_before_scoring(self, *, text: str, filename: str, raw_bytes: bytes) -> dict:
+        value = (text or '').strip()
+        if len(value) < 100:
+            return {
+                'valid': False,
+                'reason': 'DOCUMENT_TOO_SHORT',
+                'confidence': 0.12,
+                'status': 'Critical gap',
+                'message': 'Document contains fewer than 100 characters.',
+            }
+
+        bracket_placeholders = len(re.findall(r'\[[^\]]{0,30}\]', value))
+        underscores = len(re.findall(r'_{4,}', value))
+        dots = len(re.findall(r'\.{4,}', value))
+        form_labels = len(re.findall(r'(?:name|date|signature|signed):\s*[_\.]{2,}', value, re.IGNORECASE))
+        total_markers = bracket_placeholders + underscores + dots + form_labels
+
+        text_no_markers = value
+        for pattern in [r'\[[^\]]{0,30}\]', r'_{4,}', r'\.{4,}']:
+            text_no_markers = re.sub(pattern, '', text_no_markers)
+
+        fill_ratio = len(text_no_markers.strip()) / max(len(value), 1)
+        word_count = len(re.findall(r'\b\w+\b', value))
+
+        if (total_markers >= 10 and fill_ratio < 0.40) or (total_markers >= 6 and word_count < 300):
+            return {
+                'valid': False,
+                'reason': 'BLANK_TEMPLATE',
+                'confidence': 0.15,
+                'status': 'Critical gap',
+                'message': f'Blank template with {total_markers} unfilled sections.',
+            }
+
+        if total_markers >= 4 and fill_ratio < 0.65:
+            return {
+                'valid': True,
+                'reason': 'PARTIAL_TEMPLATE',
+                'confidence_cap': 0.42,
+                'penalty_multiplier': 0.50,
+                'message': f'Partially incomplete document ({total_markers} unfilled sections).',
+            }
+
+        text_lower = value.lower()
+        marketing_keywords = [
+            'call us now',
+            'visit our website',
+            'book now',
+            'limited time',
+            'free consultation',
+            'marketing',
+            'marketing management',
+            'promotion',
+            'advertising',
+            'pricing',
+            'distribution',
+            'market research',
+            'branding',
+        ]
+        marketing_hits = sum(1 for keyword in marketing_keywords if keyword in text_lower)
+        if marketing_hits >= 2:
+            return {
+                'valid': False,
+                'reason': 'INVALID_TYPE_MARKETING',
+                'confidence': 0.18,
+                'status': 'Critical gap',
+                'message': 'Document appears to be marketing content, not a compliance policy.',
+            }
+
+        has_ndis = 'ndis' in text_lower
+        has_ndis_context = any(
+            marker in text_lower
+            for marker in (
+                'practice standard',
+                'quality indicator',
+                'ndis commission',
+                'quality and safeguards commission',
+            )
+        )
+        ndis_markers = has_ndis and has_ndis_context
+        policy_markers = any(
+            term in text_lower
+            for term in ('policy', 'procedure', 'governance', 'incident', 'complaint', 'consent')
+        )
+        if not ndis_markers or not policy_markers:
+            invalid_types = {
+                'email': ['from:', 'to:', 'subject:', 'sent:', 'dear', 'regards,'],
+                'resume': ['curriculum vitae', 'work experience', 'education:'],
+                'invoice': ['invoice number', 'total due', 'payment terms'],
+                'marketing': ['call us now', 'visit our website', 'book now'],
+            }
+            email_hits = sum(1 for keyword in invalid_types['email'] if keyword in text_lower)
+            if ('from:' in text_lower and 'to:' in text_lower) or ('subject:' in text_lower and email_hits >= 2):
+                return {
+                    'valid': False,
+                    'reason': 'INVALID_TYPE_EMAIL',
+                    'confidence': 0.18,
+                    'status': 'Critical gap',
+                    'message': 'Document appears to be a email, not a compliance policy.',
+                }
+
+            for doc_type, keywords in invalid_types.items():
+                if doc_type == 'email':
+                    continue
+                matches = sum(1 for keyword in keywords if keyword in text_lower)
+                if matches >= 2:
+                    return {
+                        'valid': False,
+                        'reason': f'INVALID_TYPE_{doc_type.upper()}',
+                        'confidence': 0.18,
+                        'status': 'Critical gap',
+                        'message': f'Document appears to be a {doc_type}, not a compliance policy.',
+                    }
+
+            return {
+                'valid': False,
+                'reason': 'NON_NDIS_POLICY',
+                'confidence': 0.2,
+                'status': 'Critical gap',
+                'message': 'Document does not appear to be an NDIS-related policy or procedure.',
+            }
+
+        if (filename or '').lower().endswith('.pdf') and raw_bytes:
+            file_size_kb = len(raw_bytes) / 1024.0
+            chars_per_kb = len(value) / max(file_size_kb, 0.1)
+            if chars_per_kb < 150:
+                return {
+                    'valid': False,
+                    'reason': 'IMAGE_PDF',
+                    'confidence': 0.14,
+                    'status': 'Critical gap',
+                    'message': 'Scanned or image-only PDF with minimal text extraction.',
+                }
+            if chars_per_kb < 500:
+                return {
+                    'valid': True,
+                    'reason': 'LOW_QUALITY_SCAN',
+                    'confidence_cap': 0.38,
+                    'penalty_multiplier': 0.62,
+                    'message': 'Low text extraction quality detected for this PDF.',
+                }
+
+        return {'valid': True, 'reason': 'OK'}
+
     def analyze_document_bytes(self, *, filename: str, raw_bytes: bytes, organization_id: int | None = None) -> dict:
         text, extraction_error = self.extract_text_from_bytes(filename, raw_bytes)
         if extraction_error:
@@ -232,6 +375,40 @@ class DocumentAnalysisService:
             raw_bytes=raw_bytes,
             extracted_text=text,
         )
+
+        validation = self.validate_document_before_scoring(
+            text=text,
+            filename=filename,
+            raw_bytes=raw_bytes,
+        )
+        if not validation.get('valid'):
+            message = validation.get('message') or 'Document failed validation.'
+            warning_items = [{'source': 'validation', 'message': message}]
+            return {
+                'success': True,
+                'focus_area': 'Document Validation',
+                'question': 'Is the uploaded document valid for compliance analysis?',
+                'matched_requirements': [],
+                'status': validation.get('status', 'Critical gap'),
+                'confidence': float(validation.get('confidence', 0.2)),
+                'summary': message,
+                'snippets': [],
+                'citations': [],
+                'provider': 'deterministic',
+                'model_used': 'deterministic',
+                'retrieval_mode': 'validation',
+                'extracted_text': text,
+                'warning_items': warning_items,
+                'scoring_diagnostics': {
+                    'validation_reason': validation.get('reason', 'UNKNOWN'),
+                    'warnings': [message],
+                },
+                'extraction_diagnostics': extraction_diagnostics,
+            }
+
+        validation_penalty = float(validation.get('penalty_multiplier', 1.0))
+        confidence_cap = float(validation.get('confidence_cap', 1.0))
+        validation_warning = validation.get('message')
 
         matched_requirements = self._match_requirements(text=text, filename=filename, organization_id=organization_id)
         if matched_requirements:
@@ -255,9 +432,14 @@ class DocumentAnalysisService:
         corpus_path = current_app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl'
         corpus_abs = os.path.abspath(os.path.join(current_app.root_path, os.pardir, corpus_path))
         try:
-            rag_result = rag_query_service.query(corpus_path=corpus_abs, query_text=rag_query_text, requirement_id=primary_requirement_id, top_k=3)
+            rag_result = rag_query_service.query(
+                corpus_path=corpus_abs,
+                query_text=rag_query_text,
+                requirement_id=primary_requirement_id,
+                top_k=15,
+            )
             retrieval_mode = getattr(rag_result, 'retrieval_mode', 'lexical')
-            citations = [
+            raw_citations = [
                 {
                     'chunk_id': item.chunk_id,
                     'source_id': item.source_id,
@@ -267,6 +449,7 @@ class DocumentAnalysisService:
                 }
                 for item in rag_result.citations
             ]
+            citations = self._filter_quality_citations(raw_citations, text)
             if retrieval_mode == 'lexical' and citations:
                 warning_items.append({'source': 'rag', 'message': 'Semantic embeddings are still warming up, so this result used keyword-heavy retrieval.'})
         except FileNotFoundError:
@@ -295,6 +478,15 @@ class DocumentAnalysisService:
                     'message': 'Low extraction quality detected; status was conservatively reduced to avoid overconfidence.',
                 }
             )
+
+        if validation_penalty < 1.0:
+            if status in {'Mature', 'OK'} and validation_penalty <= 0.60:
+                status = self._downgrade_status(status)
+            confidence = round(float(confidence) * validation_penalty, 3)
+        if confidence_cap < 1.0:
+            confidence = round(min(float(confidence), confidence_cap), 3)
+        if validation_warning:
+            warning_items.append({'source': 'validation', 'message': validation_warning})
 
         scoring_diagnostics = self._build_scoring_diagnostics(
             document_text=text,
@@ -720,11 +912,9 @@ class DocumentAnalysisService:
         query_terms = self._tokenize(query_text)
         if not query_terms:
             query_terms = self._tokenize('compliance evidence policy process review monitoring')
-        # Use PRESENCE of topic terms (not just count) for a semantic-like check
-        hits = sum(1 for term in query_terms if term in lower_text)
-        coverage_ratio = float(hits) / float(len(query_terms)) if query_terms else 0.0
-        # Square root transformation: presence of most terms matters more than covering ALL of them
-        coverage_pts = (coverage_ratio ** 0.6) * 25.0
+        coverage_result = self._calculate_coverage_with_depth(document_text, query_terms)
+        coverage_pts = coverage_result['score']
+        coverage_ratio = coverage_result['breadth']
 
         domain_anchor_hits = self._domain_anchor_hit_count(lower_text)
         is_likely_irrelevant = self._looks_like_irrelevant_document(lower_text)
@@ -739,9 +929,6 @@ class DocumentAnalysisService:
         # ── Signal 4: Structure (10 pts) ────────────────────────────────────────
         # Is this an implemented document or just a blank template?
         structure_pts = 10.0
-        is_template = self._looks_like_template(document_text)
-        if is_template:
-            structure_pts *= 0.3  # 70% penalty for template docs
         # Bonus: clear section headings or numbered lists suggest real structure
         has_headings = bool(re.search(r'\n\s*\d+\.\s+[A-Z]|\n[A-Z][^\n]{5,50}\n', document_text or ''))
         if has_headings:
@@ -782,6 +969,48 @@ class DocumentAnalysisService:
             return 'High risk gap', round(confidence, 3)
         return 'Critical gap', round(confidence, 3)
 
+    def _calculate_coverage_with_depth(self, document_text: str, required_terms: list[str]) -> dict:
+        term_scores = {}
+        lower = (document_text or '').lower()
+        for term in required_terms:
+            count = lower.count(term.lower())
+            has_procedure = self._check_procedural_context(document_text, term)
+
+            if count == 0:
+                depth = 0.0
+            elif count == 1 and not has_procedure:
+                depth = 0.3
+            elif count <= 2 and has_procedure:
+                depth = 0.6
+            elif count <= 4 and has_procedure:
+                depth = 0.8
+            else:
+                depth = 1.0
+
+            term_scores[term] = depth
+
+        covered = sum(1 for score in term_scores.values() if score > 0)
+        breadth = covered / max(len(required_terms), 1)
+        avg_depth = sum(term_scores.values()) / max(len(required_terms), 1)
+        score = ((breadth ** 0.6) * 0.6 + avg_depth * 0.4) * 25.0
+
+        return {
+            'score': score,
+            'breadth': breadth,
+            'depth': avg_depth,
+        }
+
+    def _check_procedural_context(self, text: str, term: str) -> bool:
+        action_words = ['must', 'shall', 'will', 'ensure', 'procedure', 'process']
+        pattern = re.compile(rf'\b{re.escape(term)}\b', re.IGNORECASE)
+        for match in pattern.finditer(text or ''):
+            start = max(0, match.start() - 60)
+            end = min(len(text or ''), match.end() + 60)
+            context = (text or '')[start:end].lower()
+            if any(word in context for word in action_words):
+                return True
+        return False
+
     def _calibrate_status(
         self,
         *,
@@ -819,16 +1048,6 @@ class DocumentAnalysisService:
         if calibrated_status == 'Mature' and citation_count < 2:
             calibrated_status = 'OK'
             calibrated_confidence = min(calibrated_confidence, 0.74)
-
-        # Template penalty: blank templates should never be Mature or OK
-        looks_like_template = self._looks_like_template(document_text)
-        if looks_like_template:
-            if calibrated_status == 'Mature':
-                calibrated_status = 'High risk gap'
-                calibrated_confidence = min(calibrated_confidence, 0.52)
-            elif calibrated_status == 'OK' and citation_count < 2:
-                calibrated_status = 'High risk gap'
-                calibrated_confidence = min(calibrated_confidence, 0.50)
 
         # Lexical-only retrieval uncertainty (embeddings not loaded)
         if retrieval_mode == 'lexical' and calibrated_status == 'Mature':
@@ -912,41 +1131,109 @@ class DocumentAnalysisService:
             'warnings': warnings,
         }
 
-    def _build_rag_query(self, question_text: str, document_text: str, matched_requirements: list[dict] | None = None) -> str:
-        lower = f'{question_text or ""} {(document_text or "")[:2500]}'.lower()
-        expansions = []
-        topic_bundles = [
-            ({'complaint', 'complaints', 'feedback', 'grievance'}, 'complaints management resolution participant feedback'),
-            ({'consent', 'privacy', 'dignity', 'confidential', 'confidentiality'}, 'participant rights privacy dignity information management consent'),
-            ({'service agreement', 'agreement', 'service terms', 'supports'}, 'service agreements with participants provision of supports responsive support provision'),
-            ({'support plan', 'care plan', 'assessment', 'planning', 'goals'}, 'support planning participant needs preferences goals risk assessments'),
-            ({'culture', 'cultural', 'diversity', 'inclusive', 'inclusion', 'beliefs', 'values'}, 'person centred supports individual values beliefs participant rights cultural inclusion'),
-            ({'risk', 'governance', 'quality', 'incident', 'information management'}, 'governance operational management risk management quality management information management'),
-        ]
+    def _identify_present_topics(self, document_text: str) -> list[str]:
+        topic_keywords = {
+            'Participant Rights': ['rights', 'dignity', 'respect', 'choice'],
+            'Consent': ['consent', 'informed consent', 'permission'],
+            'Safeguarding': ['safeguard', 'protection', 'abuse', 'neglect'],
+            'Incident Management': ['incident', 'reportable', 'notification'],
+            'Complaints': ['complaint', 'grievance', 'resolution'],
+            'Risk Management': ['risk', 'hazard', 'mitigation'],
+            'Governance': ['governance', 'oversight', 'accountability'],
+            'Privacy': ['privacy', 'confidential', 'personal information'],
+            'Workforce': ['staff', 'training', 'qualification'],
+        }
 
-        for keywords, expansion in topic_bundles:
-            if any(keyword in lower for keyword in keywords):
-                expansions.append(expansion)
+        lower = (document_text or '').lower()
+        present = []
+        for topic, keywords in topic_keywords.items():
+            matches = sum(1 for keyword in keywords if keyword in lower)
+            if matches >= 2:
+                present.append(topic)
+        return present
+
+    def _identify_missing_topics(self, document_text: str) -> list[str]:
+        critical_topics = {
+            'participant consent procedures': ['consent', 'informed consent'],
+            'safeguarding procedures': ['safeguard', 'abuse prevention'],
+            'incident reporting': ['incident', 'reportable'],
+            'complaints handling': ['complaint', 'grievance'],
+            'risk assessment': ['risk assessment', 'risk management'],
+            'privacy procedures': ['privacy', 'confidential'],
+            'restrictive practice': ['restrictive practice', 'restraint'],
+        }
+
+        lower = (document_text or '').lower()
+        missing = []
+        for topic, keywords in critical_topics.items():
+            found = any(keyword in lower for keyword in keywords)
+            if not found:
+                missing.append(topic)
+        return missing
+
+    def _build_rag_query(self, question_text: str, document_text: str, matched_requirements: list[dict] | None = None) -> str:
+        present = self._identify_present_topics(document_text)
+        missing = self._identify_missing_topics(document_text)
+
+        doc_header = (document_text or '').lower()[:500]
+        if 'policy' in doc_header:
+            doc_type = 'policy'
+        elif 'procedure' in doc_header:
+            doc_type = 'procedure'
+        else:
+            doc_type = 'document'
+
+        parts = [f'NDIS compliance requirements for {doc_type} documents']
+        if present:
+            parts.append(f"addressing {', '.join(present[:3])}")
+        if missing:
+            parts.append(f"Requirements for {', '.join(missing[:5])}")
 
         if matched_requirements:
             lead = matched_requirements[0]
-            requirement_expansion = ' '.join(
-                part for part in [
-                    str(lead.get('requirement_id') or '').strip(),
-                    str(lead.get('label') or '').strip(),
-                    str(lead.get('module_name') or '').strip(),
-                    str(lead.get('standard_name') or '').strip(),
-                    str(lead.get('outcome_code') or '').strip(),
-                    str(lead.get('quality_indicator_code') or '').strip(),
-                ]
-                if part
-            ).strip()
-            if requirement_expansion:
-                expansions.append(requirement_expansion)
+            req_name = (lead.get('label') or lead.get('requirement_id') or '').strip()
+            if req_name:
+                parts.append(f'Standards for {req_name}')
 
-        if not expansions:
-            return question_text
-        return ' '.join([question_text.strip()] + expansions).strip()
+        return '. '.join(part.strip() for part in parts if part).strip() + '.'
+
+    def _filter_quality_citations(self, citations: list[dict], document_text: str, min_score: float = 0.65) -> list[dict]:
+        action_words = {
+            'must', 'shall', 'will', 'ensure', 'required',
+            'responsible', 'documented', 'procedure', 'process',
+        }
+        doc_words = set(re.findall(r'\b\w{5,}\b', (document_text or '').lower()))
+
+        ranked: list[tuple[float, dict]] = []
+        for citation in citations:
+            score = float(citation.get('score', 0) or 0)
+            if score < min_score:
+                continue
+
+            citation_text = (citation.get('text') or '').strip()
+            if len(citation_text) < 80:
+                continue
+
+            citation_lower = citation_text.lower()
+            if not any(word in citation_lower for word in action_words):
+                continue
+
+            citation_words = set(re.findall(r'\b\w{5,}\b', citation_lower))
+            if doc_words and citation_words:
+                overlap = len(doc_words & citation_words) / len(doc_words | citation_words)
+            else:
+                overlap = 0.0
+            if overlap < 0.05:
+                continue
+
+            adjusted_score = score * (1.0 + overlap)
+            ranked.append((adjusted_score, citation))
+
+        if not ranked:
+            return citations[:5]
+
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return [item[1] for item in ranked[:7]]
 
     def _openrouter_summary(self, *, status: str, question: str, focus_area: str, snippets: list[dict], citations: list[dict]) -> tuple[str | None, str | None, str | None]:
         api_key = (current_app.config.get('OPENROUTER_API_KEY') or '').strip()

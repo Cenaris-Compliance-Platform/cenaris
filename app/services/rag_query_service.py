@@ -51,7 +51,8 @@ class RagQueryService:
     transparently to pure-lexical scoring (same behaviour as before).
     """
 
-    EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
+    EMBEDDING_MODEL = 'BAAI/bge-large-en-v1.5'
+    BGE_QUERY_PREFIX = 'Represent this sentence for searching relevant passages: '
     # Weights must sum to 1.0
     SEMANTIC_WEIGHT: float = 0.60
     LEXICAL_WEIGHT: float  = 0.40
@@ -103,6 +104,30 @@ class RagQueryService:
                 self._model = None
             return self._model
 
+    def _encode_query(self, query_text: str) -> np.ndarray | None:
+        model = self._get_model()
+        if model is None:
+            return None
+        text = self.BGE_QUERY_PREFIX + (query_text or '').strip()
+        return model.encode(
+            [text],
+            convert_to_numpy=True,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+        )[0].astype(np.float32)
+
+    def _encode_document(self, texts: list[str]) -> np.ndarray | None:
+        model = self._get_model()
+        if model is None:
+            return None
+        return model.encode(
+            texts,
+            convert_to_numpy=True,
+            show_progress_bar=False,
+            batch_size=32,
+            normalize_embeddings=True,
+        ).astype(np.float32)
+
     @staticmethod
     def _embedding_cache_paths(corpus_path: str) -> tuple[str, str]:
         base = os.path.splitext(corpus_path)[0]
@@ -138,6 +163,8 @@ class RagQueryService:
                     if (
                         abs(float(meta.get('corpus_mtime', 0)) - corpus_mtime) < 1.0
                         and int(meta.get('chunk_count', 0)) == len(rows)
+                        and str(meta.get('model') or '') == self.EMBEDDING_MODEL
+                        and bool(meta.get('normalized', False)) is True
                     ):
                         matrix = np.load(npy_path).astype(np.float32)
                         self._emb_path = corpus_path
@@ -152,16 +179,21 @@ class RagQueryService:
             try:
                 logger.info('RAG: computing embeddings for %d chunks (first run or corpus changed)…', len(rows))
                 texts = [str(r.get('text') or '') for r in rows]
-                matrix = model.encode(
-                    texts,
-                    convert_to_numpy=True,
-                    show_progress_bar=False,
-                    batch_size=32,
-                ).astype(np.float32)
+                matrix = self._encode_document(texts)
+                if matrix is None:
+                    raise RuntimeError('Embedding model unavailable')
                 # Persist to disk
                 np.save(npy_path, matrix)
                 with open(meta_path, 'w', encoding='utf-8') as fh:
-                    json.dump({'corpus_mtime': corpus_mtime, 'chunk_count': len(rows)}, fh)
+                    json.dump(
+                        {
+                            'corpus_mtime': corpus_mtime,
+                            'chunk_count': len(rows),
+                            'model': self.EMBEDDING_MODEL,
+                            'normalized': True,
+                        },
+                        fh,
+                    )
                 self._emb_path = corpus_path
                 self._emb_mtime = corpus_mtime
                 self._emb_matrix = matrix
@@ -312,11 +344,9 @@ class RagQueryService:
             model = self._get_model()
             if model is not None:
                 try:
-                    q_vec = model.encode(
-                        [search_text],
-                        convert_to_numpy=True,
-                        show_progress_bar=False,
-                    )[0].astype(np.float32)
+                    q_vec = self._encode_query(search_text)
+                    if q_vec is None:
+                        raise RuntimeError('Embedding model unavailable')
                     sims = self._cosine_sim(emb_matrix, q_vec)  # in [-1, 1]
                     sem_norm = ((sims + 1.0) / 2.0).tolist()    # shift to [0, 1]
                     retrieval_mode = 'hybrid'
