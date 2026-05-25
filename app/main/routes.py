@@ -6902,31 +6902,20 @@ def billing_webhook():
 @limiter.limit('8 per minute', key_func=_ai_rate_limit_key)
 def ai_demo_analyze_api():
     """Analyze a stored repository document in the AI workspace."""
-<<<<<<< HEAD
     current_app.logger.info('AI demo analyze started')
     maybe = _require_active_org()
     if maybe is not None:
         current_app.logger.warning('AI demo analyze blocked: no active organization')
-=======
-    maybe = _require_active_org()
-    if maybe is not None:
->>>>>>> origin/Preview
         return jsonify({'success': False, 'error': 'No active organization'}), 400
 
     maybe_plan = _require_plan_feature('ai_tagging')
     if maybe_plan is not None:
-<<<<<<< HEAD
         current_app.logger.warning('AI demo analyze blocked: ai_tagging feature unavailable for current plan')
-=======
->>>>>>> origin/Preview
         return jsonify({'success': False, 'error': 'This action requires Scale plan or above.'}), 403
 
     org_id = _active_org_id()
     if not current_user.has_permission('documents.view', org_id=int(org_id)):
-<<<<<<< HEAD
         current_app.logger.warning('AI demo analyze blocked: user %s lacks documents.view for org %s', current_user.id, org_id)
-=======
->>>>>>> origin/Preview
         return jsonify({'success': False, 'error': 'Forbidden'}), 403
 
     stored_doc_id = (request.form.get('stored_doc_id') or '').strip()
@@ -6951,7 +6940,6 @@ def ai_demo_analyze_api():
 
     document = _authorized_org_document_or_404(int(stored_doc_id))
     source_filename = (document.filename or '').strip()
-<<<<<<< HEAD
     current_app.logger.info(
         'AI demo analyze document resolved: stored_doc_id=%s filename=%s blob_name=%s org_id=%s reuse_last=%s doc_type=%s',
         stored_doc_id,
@@ -6961,8 +6949,6 @@ def ai_demo_analyze_api():
         reuse_last,
         doc_type,
     )
-=======
->>>>>>> origin/Preview
     has_previous_analysis = bool(
         getattr(document, 'ai_analysis_at', None)
         and (
@@ -7034,7 +7020,6 @@ def ai_demo_analyze_api():
             }
         )
 
-<<<<<<< HEAD
     cached_doc_text = (document.extracted_text or '').strip()
     if cached_doc_text:
         current_app.logger.info(
@@ -7078,23 +7063,6 @@ def ai_demo_analyze_api():
             raw_bytes=result.get('data') or b'',
             extracted_text=doc_text,
         )
-=======
-    from app.services.azure_storage import AzureBlobStorageService
-
-    storage_service = AzureBlobStorageService()
-    result = storage_service.download_file(document.blob_name)
-    if not result.get('success') or not result.get('data'):
-        return jsonify({'success': False, 'error': 'Could not load stored document for AI review.'}), 400
-
-    doc_text, extraction_error = document_analysis_service.extract_text_from_bytes(source_filename, result.get('data') or b'')
-    if extraction_error:
-        return jsonify({'success': False, 'error': extraction_error}), 400
-    extraction_diagnostics = document_analysis_service.build_extraction_diagnostics(
-        filename=source_filename,
-        raw_bytes=result.get('data') or b'',
-        extracted_text=doc_text,
-    )
->>>>>>> origin/Preview
 
     matched_requirements = document_analysis_service._match_requirements(
         text=doc_text,
@@ -7139,10 +7107,7 @@ def ai_demo_analyze_api():
         rag_warning = 'NDIS corpus is not built yet; showing document-only analysis.'
         warning_items.append({'source': 'rag', 'message': rag_warning})
     except Exception:
-<<<<<<< HEAD
         current_app.logger.exception('AI demo analyze failed during RAG retrieval: corpus=%s', corpus_abs)
-=======
->>>>>>> origin/Preview
         rag_warning = 'Could not retrieve NDIS citations; showing document-only analysis.'
         warning_items.append({'source': 'rag', 'message': rag_warning})
 
@@ -7337,7 +7302,6 @@ def ai_demo_analyze_api():
     )
 
 
-<<<<<<< HEAD
 @bp.errorhandler(Exception)
 def _log_ai_demo_unhandled_error(error):
     # Keep the existing global error handling behavior, but record the exception context here too.
@@ -7345,8 +7309,6 @@ def _log_ai_demo_unhandled_error(error):
     raise error
 
 
-=======
->>>>>>> origin/Preview
 @bp.route('/api/ai/demo/scoring-profile', methods=['GET', 'POST'])
 @login_required
 def ai_demo_scoring_profile_api():
