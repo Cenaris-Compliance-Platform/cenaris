@@ -493,6 +493,29 @@ def create_app(config_name=None):
 
     from app.api import bp as api_v1_bp
     app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
+
+    def _resolve_rag_corpus_path() -> str:
+        raw_path = (app.config.get('NDIS_RAG_CORPUS_PATH') or 'data/rag/ndis/ndis_chunks.jsonl').strip()
+        if os.path.isabs(raw_path):
+            return raw_path
+        return os.path.abspath(os.path.join(app.root_path, '..', raw_path))
+
+    def _should_warm_rag() -> bool:
+        if app.config.get('TESTING') or is_flask_db_cli:
+            return False
+        flag = (os.environ.get('RAG_WARMUP') or ('0' if app.debug else '1')).strip().lower()
+        return flag in {'1', 'true', 'yes', 'on'}
+
+    if _should_warm_rag():
+        def _warm_rag_cache() -> None:
+            try:
+                from app.services.rag_query_service import rag_query_service
+                corpus_path = _resolve_rag_corpus_path()
+                rag_query_service.warmup(corpus_path=corpus_path)
+            except Exception as exc:
+                logger.warning('RAG warmup failed (%s)', exc)
+
+        threading.Thread(target=_warm_rag_cache, name='rag-warmup', daemon=True).start()
     
     # Add CSP header for production
     if not app.debug:
