@@ -133,6 +133,26 @@ class RagQueryService:
         base = os.path.splitext(corpus_path)[0]
         return base + '_embeddings.npy', base + '_embeddings_meta.json'
 
+    @staticmethod
+    def _resolve_cache_dir(corpus_path: str) -> str:
+        env_dir = (os.environ.get('RAG_EMBED_CACHE_DIR') or '').strip()
+        if env_dir:
+            return env_dir
+        if os.name != 'nt' and os.path.isdir('/home'):
+            if os.path.isdir('/home/site/wwwroot'):
+                return os.path.join('/home/site/wwwroot', '.rag_cache')
+            return os.path.join('/home', '.rag_cache')
+        return os.path.dirname(corpus_path) or '.'
+
+    def _embedding_cache_paths_for_dir(self, corpus_path: str) -> tuple[str, str]:
+        cache_dir = self._resolve_cache_dir(corpus_path)
+        base_name = os.path.splitext(os.path.basename(corpus_path))[0]
+        os.makedirs(cache_dir, exist_ok=True)
+        return (
+            os.path.join(cache_dir, f'{base_name}_embeddings.npy'),
+            os.path.join(cache_dir, f'{base_name}_embeddings_meta.json'),
+        )
+
     def _load_embed_matrix(self, corpus_path: str, rows: list[dict]) -> np.ndarray | None:
         """
         Return an (N, D) float32 embedding matrix for *rows*.
@@ -143,7 +163,7 @@ class RagQueryService:
             return None
 
         corpus_mtime = os.path.getmtime(corpus_path)
-        npy_path, meta_path = self._embedding_cache_paths(corpus_path)
+        npy_path, meta_path = self._embedding_cache_paths_for_dir(corpus_path)
 
         with self._emb_lock:
             # 1. In-memory hit
@@ -400,6 +420,15 @@ class RagQueryService:
             answer = 'No relevant NDIS passages were retrieved. Refine the query or include requirement ID.'
 
         return RagQueryResult(answer=answer, citations=citations, retrieval_mode=retrieval_mode)
+
+    def warmup(self, *, corpus_path: str) -> None:
+        if not corpus_path:
+            return
+        try:
+            rows = self._load_rows(corpus_path)
+            self._load_embed_matrix(corpus_path, rows)
+        except Exception as exc:
+            logger.warning('RAG: warmup skipped (%s)', exc)
 
 
 rag_query_service = RagQueryService()

@@ -2898,6 +2898,10 @@ def _build_ai_review_response(*, status: str, confidence: float, summary_text: s
     )
 
     warnings_detailed = []
+    extraction_meta = diagnostics.get('extraction') or {}
+    extraction_quality = (extraction_meta.get('quality') or '').strip().lower()
+    looks_irrelevant = bool(diagnostics.get('looks_like_irrelevant'))
+    suppress_citations = extraction_quality == 'low' or looks_irrelevant
     for item in warning_items:
         source = (item.get('source') or 'system').strip().lower()
         message = (item.get('message') or '').strip()
@@ -2924,6 +2928,22 @@ def _build_ai_review_response(*, status: str, confidence: float, summary_text: s
                 ],
             }
         )
+
+    if suppress_citations:
+        warnings_detailed.append(
+            {
+                'category': 'RAG',
+                'severity': 'MODERATE',
+                'title': 'Citations hidden due to low extraction quality or irrelevant content.',
+                'description': 'The document text was not reliable enough to show NDIS citations.',
+                'impact': 'Citations are suppressed to avoid misleading matches.',
+                'how_to_fix': [
+                    'Upload a text-based PDF or DOCX (not scanned images).',
+                    'Re-run the analysis after improving document quality.',
+                ],
+            }
+        )
+        citations = []
 
     reasoning_items = requirement_reasoning or []
     strong_snippets = [item for item in snippets if float(item.get('score') or 0) >= 3]
