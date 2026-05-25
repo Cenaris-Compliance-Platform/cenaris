@@ -163,7 +163,9 @@ class RagQueryService:
             return None
 
         corpus_mtime = os.path.getmtime(corpus_path)
+        corpus_size = os.path.getsize(corpus_path)
         npy_path, meta_path = self._embedding_cache_paths_for_dir(corpus_path)
+        strict_mtime = (os.environ.get('RAG_EMBED_CACHE_STRICT_MTIME') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
         with self._emb_lock:
             # 1. In-memory hit
@@ -180,8 +182,12 @@ class RagQueryService:
                 try:
                     with open(meta_path, 'r', encoding='utf-8') as fh:
                         meta = json.load(fh)
+                    meta_mtime = float(meta.get('corpus_mtime', 0))
+                    meta_size = int(meta.get('corpus_size', 0))
+                    size_ok = meta_size == int(corpus_size)
+                    mtime_ok = abs(meta_mtime - corpus_mtime) < 1.0
                     if (
-                        abs(float(meta.get('corpus_mtime', 0)) - corpus_mtime) < 1.0
+                        (mtime_ok if strict_mtime else size_ok)
                         and int(meta.get('chunk_count', 0)) == len(rows)
                         and str(meta.get('model') or '') == self.EMBEDDING_MODEL
                         and bool(meta.get('normalized', False)) is True
@@ -208,6 +214,7 @@ class RagQueryService:
                     json.dump(
                         {
                             'corpus_mtime': corpus_mtime,
+                            'corpus_size': corpus_size,
                             'chunk_count': len(rows),
                             'model': self.EMBEDDING_MODEL,
                             'normalized': True,
