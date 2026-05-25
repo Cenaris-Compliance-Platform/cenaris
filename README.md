@@ -7,7 +7,6 @@ CCM is a Flask web app for compliance document management with:
 - Azure Storage (Blob/ADLS Gen2) for uploads
 - Optional: SMTP email (forgot-password) + Google/Microsoft OAuth
 
-<<<<<<< HEAD
 ## Documentation
 
 - Deployment and environment setup: [docs/product-knowledge-base/deployment.md](docs/product-knowledge-base/deployment.md)
@@ -21,23 +20,6 @@ This README focuses on **how to run and work with the repo**.
 
 ### 1) Create & activate venv
 
-=======
-## Link: https://cenaris-preview.onrender.com/dashboard
-
-## Documentation
-
-- Deployment and environment setup: [docs/product-knowledge-base/deployment.md](docs/product-knowledge-base/deployment.md)
-- Public API guide (auth, versioning, tenant isolation, security): [docs/PUBLIC_API.md](docs/PUBLIC_API.md)
-- Postman collection for `/api/v1`: [docs/Cenaris-Public-API.postman_collection.json](docs/Cenaris-Public-API.postman_collection.json)
-- Product knowledge base for the architecture, current work, RAG, and security: [docs/product-knowledge-base/index.md](docs/product-knowledge-base/index.md)
-
-This README focuses on **how to run and work with the repo**.
-
-## Quick Start (Windows)
-
-### 1) Create & activate venv
-
->>>>>>> origin/Preview
 ```bat
 python -m venv venv
 venv\Scripts\activate
