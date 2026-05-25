@@ -70,3 +70,13 @@ pylint-report.txt
 
 # Local evaluation assets
 policies/
+
+# RAG / embedding cache artifacts
+data/rag/cache/
+data/rag/hf_cache/
+data/rag/**/_embeddings.npy
+data/rag/**/_embeddings_meta.json
+data/rag/test_*.jsonl
+tests/tmp_import.py
+tests/run_rag_warmup.py
+scripts/run_rag_warmup_test.py
