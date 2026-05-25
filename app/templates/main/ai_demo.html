@@ -418,9 +418,14 @@
             <div class="ai-hero-meta">AI review result</div>
             <div class="ai-display h4 mb-0">Status, reasons, and next steps</div>
           </div>
-          <a id="downloadDocxBtn" class="btn btn-sm btn-outline-primary d-none" href="#">
-            <i class="bi bi-file-earmark-word me-1"></i>Download DOCX
-          </a>
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="collapseAllDetailsBtn">Compact view</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="expandAllDetailsBtn">Show full details</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="downloadHtmlBtn">Download report (HTML)</button>
+            <a id="downloadDocxBtn" class="btn btn-sm btn-outline-primary d-none" href="#">
+              <i class="bi bi-file-earmark-word me-1"></i>Download DOCX
+            </a>
+          </div>
         </div>
 
         <div id="resultHeroCard" class="ai-hero ai-status-ok mb-3">
@@ -503,13 +508,14 @@
           </div>
         </details>
 
-        <details class="ai-section mb-3" open>
+        <details class="ai-section mb-3">
           <summary class="ai-section-title">
             <span>Tier 3: Priority actions</span>
             <span class="ai-pill">What to fix</span>
           </summary>
           <div class="mt-3">
             <div id="priorityActionsList" class="d-flex flex-column gap-2"></div>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2 d-none" id="toggleAllActionsBtn">Show all actions</button>
             <div class="d-flex gap-2 mt-3 flex-wrap">
               <button type="button" class="btn btn-outline-danger btn-sm" id="feedbackFalsePositiveBtn">Mark False Positive</button>
               <button type="button" class="btn btn-outline-warning btn-sm" id="feedbackFalseNegativeBtn">Mark False Negative</button>
@@ -614,6 +620,10 @@
     const citationsEl = document.getElementById('resultCitations');
     const scoreBreakdownList = document.getElementById('scoreBreakdownList');
     const priorityActionsList = document.getElementById('priorityActionsList');
+    const toggleAllActionsBtn = document.getElementById('toggleAllActionsBtn');
+    const expandAllDetailsBtn = document.getElementById('expandAllDetailsBtn');
+    const collapseAllDetailsBtn = document.getElementById('collapseAllDetailsBtn');
+    const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
     const citationsCountPill = document.getElementById('citationsCountPill');
     const evidenceStrongList = document.getElementById('evidenceStrongList');
     const evidencePartialList = document.getElementById('evidencePartialList');
@@ -655,6 +665,9 @@
     let requestInFlight = false;
     let requestWatchdogTimer = null;
     let lastResultMeta = null;
+    let lastPayload = null;
+    let showAllActions = false;
+    let detailsViewMode = 'compact';
 
     if (!form) {
       return;
@@ -671,6 +684,206 @@
     };
 
     collapseSectionsOnMobile();
+
+    const setDetailsOpenState = (mode) => {
+      const sections = document.querySelectorAll('details.ai-section');
+      if (!sections.length) {
+        return;
+      }
+      sections.forEach(function (section, index) {
+        if (mode === 'compact') {
+          if (index === 0) {
+            section.setAttribute('open', 'open');
+          } else {
+            section.removeAttribute('open');
+          }
+        } else {
+          section.setAttribute('open', 'open');
+        }
+      });
+    };
+
+    if (expandAllDetailsBtn) {
+      expandAllDetailsBtn.addEventListener('click', function () {
+        detailsViewMode = 'full';
+        setDetailsOpenState(detailsViewMode);
+      });
+    }
+
+    if (collapseAllDetailsBtn) {
+      collapseAllDetailsBtn.addEventListener('click', function () {
+        detailsViewMode = 'compact';
+        setDetailsOpenState(detailsViewMode);
+      });
+    }
+
+    const escapeHtml = (value) => {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    };
+
+    const buildHtmlReport = (payload) => {
+      if (!payload) {
+        return '';
+      }
+      const response = payload.response || {};
+      const hero = response.hero || {};
+      const scoreBreakdown = response.score_breakdown || [];
+      const priorityActions = response.priority_actions || [];
+      const citations = (response.ndis_citations || {}).matched_standards || [];
+      const evidence = response.evidence || {};
+      const warnings = response.warnings_detailed || response.warnings || [];
+
+      const scoreRows = scoreBreakdown.map((item) => {
+        const pct = Math.round(Number(item.score || 0) * 100);
+        return `
+          <div class="row">
+            <div class="row-head"><strong>${escapeHtml(item.label || 'Score')}</strong> <span>${escapeHtml(item.points || 0)} of ${escapeHtml(item.max_points || 0)} pts</span></div>
+            <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
+            <div class="note">${escapeHtml(item.quick_fix || '')}</div>
+          </div>
+        `;
+      }).join('');
+
+      const actionRows = priorityActions.map((action, index) => {
+        const steps = Array.isArray(action.how_to_fix_steps) ? action.how_to_fix_steps : [];
+        const examples = Array.isArray(action.examples) ? action.examples : [];
+        return `
+          <div class="card">
+            <div class="row-head"><strong>${escapeHtml(action.priority || 'MEDIUM')} #${index + 1}</strong></div>
+            <div class="title">${escapeHtml(action.title || '')}</div>
+            <div class="note"><strong>What's wrong:</strong> ${escapeHtml(action.what_is_wrong || '')}</div>
+            <div class="note"><strong>Impact:</strong> ${escapeHtml(action.impact || '')}</div>
+            <div class="note"><strong>How to fix:</strong>
+              <ol>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}</ol>
+            </div>
+            ${examples.map((example) => `
+              <div class="example">
+                ${example.before ? `<div class="before">Before: ${escapeHtml(example.before)}</div>` : ''}
+                ${example.after ? `<div class="after">After: ${escapeHtml(example.after)}</div>` : ''}
+              </div>
+            `).join('')}
+            <div class="note"><strong>${escapeHtml(action.potential_gain || '')}</strong></div>
+          </div>
+        `;
+      }).join('');
+
+      const citationRows = citations.map((item) => `
+        <div class="card">
+          <div class="row-head"><strong>${escapeHtml(item.standard_code || 'NDIS')} ${escapeHtml(item.title || '')}</strong> <span>${escapeHtml(item.relevance_score || 0)}%</span></div>
+          <div class="note">${escapeHtml(item.standard_text || '')}</div>
+          <div class="note"><strong>Suggestion:</strong> ${escapeHtml(item.suggestion || '')}</div>
+        </div>
+      `).join('');
+
+      const evidenceStrong = (evidence.strong_snippets || []).map((item) => `<li>${escapeHtml(item.text || '')}</li>`).join('');
+      const evidencePartial = (evidence.partial_snippets || []).map((item) => `<li>${escapeHtml(item.text || '')}</li>`).join('');
+      const evidenceMissing = (evidence.expected_but_missing || []).map((item) => {
+        const list = (item.expected_elements || []).map((e) => `<li>${escapeHtml(e)}</li>`).join('');
+        return `<li><strong>${escapeHtml(item.category || '')}</strong><ul>${list}</ul></li>`;
+      }).join('');
+
+      const warningRows = warnings.map((warning) => `
+        <div class="card">
+          <div class="row-head"><strong>[${escapeHtml(warning.category || 'SYSTEM')}]</strong> ${escapeHtml(warning.title || '')}</div>
+          <div class="note">${escapeHtml(warning.description || '')}</div>
+          <div class="note"><strong>Impact:</strong> ${escapeHtml(warning.impact || '')}</div>
+          <ul>${(warning.how_to_fix || []).map((fix) => `<li>${escapeHtml(fix)}</li>`).join('')}</ul>
+        </div>
+      `).join('');
+
+      return `
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>AI Review Report</title>
+            <style>
+              body { font-family: Arial, sans-serif; color: #111827; padding: 24px; }
+              h1, h2 { margin: 0 0 12px; }
+              .section { margin: 24px 0; }
+              .hero { padding: 16px; border: 2px solid #e5e7eb; border-radius: 12px; background: #f9fafb; }
+              .row { margin: 12px 0; }
+              .row-head { display: flex; justify-content: space-between; gap: 12px; }
+              .bar { height: 10px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin: 6px 0; }
+              .fill { height: 100%; background: #2563eb; }
+              .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin: 12px 0; }
+              .note { font-size: 13px; color: #374151; margin-top: 6px; }
+              .title { font-weight: 600; margin-top: 6px; }
+              .example { margin-top: 8px; }
+              .before { background: #fee2e2; padding: 8px; border-left: 4px solid #dc2626; }
+              .after { background: #d1fae5; padding: 8px; border-left: 4px solid #10b981; }
+            </style>
+          </head>
+          <body>
+            <h1>AI Review Report</h1>
+            <div class="hero">
+              <div><strong>Document:</strong> ${escapeHtml(hero.document_name || '')}</div>
+              <div><strong>Status:</strong> ${escapeHtml(hero.status || '')}</div>
+              <div><strong>Confidence:</strong> ${Math.round(Number(hero.confidence || 0) * 100)}%</div>
+              <div>${escapeHtml(hero.summary || '')}</div>
+              <div><strong>Priority:</strong> ${escapeHtml(hero.priority_action || '')}</div>
+            </div>
+
+            <div class="section">
+              <h2>Score breakdown</h2>
+              ${scoreRows}
+            </div>
+
+            <div class="section">
+              <h2>Priority actions</h2>
+              ${actionRows}
+            </div>
+
+            <div class="section">
+              <h2>NDIS citations</h2>
+              ${citationRows || '<div class="note">No citations available.</div>'}
+            </div>
+
+            <div class="section">
+              <h2>Evidence</h2>
+              <h3>Strong evidence</h3>
+              <ul>${evidenceStrong || '<li>None</li>'}</ul>
+              <h3>Partial evidence</h3>
+              <ul>${evidencePartial || '<li>None</li>'}</ul>
+              <h3>Expected but missing</h3>
+              <ul>${evidenceMissing || '<li>None</li>'}</ul>
+            </div>
+
+            <div class="section">
+              <h2>Warnings</h2>
+              ${warningRows || '<div class="note">No warnings.</div>'}
+            </div>
+          </body>
+        </html>
+      `;
+    };
+
+    if (downloadHtmlBtn) {
+      downloadHtmlBtn.addEventListener('click', function () {
+        if (!lastPayload) {
+          statusText.classList.remove('d-none');
+          statusText.textContent = 'Run analysis first, then export.';
+          return;
+        }
+        const html = buildHtmlReport(lastPayload);
+        if (!html) {
+          return;
+        }
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'ai-review-report.html';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      });
+    }
 
     if (storedDocSelect) {
       if (ACTIVE_DOC_ID && String(ACTIVE_DOC_ID).trim()) {
@@ -749,6 +962,7 @@
       if (priorityActionsList) {
         priorityActionsList.innerHTML = '';
       }
+      showAllActions = false;
       if (citationsCountPill) {
         citationsCountPill.textContent = '0 citations';
       }
@@ -1040,6 +1254,7 @@
     };
 
     const renderPayload = (payload) => {
+      lastPayload = payload;
       const response = payload.response || {};
       const hero = response.hero || {};
       const scoreBreakdown = response.score_breakdown || payload.score_breakdown || [];
@@ -1289,8 +1504,16 @@
           empty.className = 'text-body-secondary small';
           empty.textContent = 'No priority actions available.';
           priorityActionsList.appendChild(empty);
+          if (toggleAllActionsBtn) {
+            toggleAllActionsBtn.classList.add('d-none');
+          }
         } else {
-          actions.forEach(function (action, index) {
+          const visibleActions = showAllActions ? actions : actions.slice(0, 3);
+          if (toggleAllActionsBtn) {
+            toggleAllActionsBtn.classList.toggle('d-none', actions.length <= 3);
+            toggleAllActionsBtn.textContent = showAllActions ? `Show top 3 actions` : `Show all actions (${actions.length})`;
+          }
+          visibleActions.forEach(function (action, index) {
             const card = document.createElement('div');
             card.className = 'ai-action-card';
             const priority = String(action.priority || 'MEDIUM').toUpperCase();
@@ -1572,6 +1795,11 @@
       }
 
       renderImprovementGuide(payload);
+      if (window.matchMedia('(max-width: 767px)').matches) {
+        collapseSectionsOnMobile();
+      } else {
+        setDetailsOpenState(detailsViewMode);
+      }
       document.getElementById('demoResultPlaceholder').classList.add('d-none');
       resultCard.classList.remove('d-none');
     };
@@ -1896,6 +2124,15 @@
     if (feedbackCorrectBtn) {
       feedbackCorrectBtn.addEventListener('click', function () {
         openFeedbackDialog('correct');
+      });
+    }
+
+    if (toggleAllActionsBtn) {
+      toggleAllActionsBtn.addEventListener('click', function () {
+        showAllActions = !showAllActions;
+        if (lastPayload) {
+          renderPayload(lastPayload);
+        }
       });
     }
 
