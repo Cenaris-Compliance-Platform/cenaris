@@ -70,6 +70,7 @@ pylint-report.txt
 
 # Local evaluation assets
 policies/
+<<<<<<< HEAD
 
 # RAG / embedding cache artifacts
 data/rag/cache/
@@ -80,3 +81,5 @@ data/rag/test_*.jsonl
 tests/tmp_import.py
 tests/run_rag_warmup.py
 scripts/run_rag_warmup_test.py
+=======
+>>>>>>> origin/Preview

@@ -5,7 +5,10 @@ import logging
 import os
 import re
 import threading
+<<<<<<< HEAD
 import gc
+=======
+>>>>>>> origin/Preview
 from collections import Counter
 from dataclasses import dataclass
 
@@ -52,12 +55,16 @@ class RagQueryService:
     transparently to pure-lexical scoring (same behaviour as before).
     """
 
+<<<<<<< HEAD
     # Prefer configurable model via env; default to a small, fast model in development
     _env_model = os.environ.get('RAG_EMBEDDING_MODEL') or os.environ.get('RAG_EMBEDDING_MODEL'.upper())
     if not _env_model:
         flask_config = (os.environ.get('FLASK_CONFIG') or 'development').strip().lower()
         _env_model = 'sentence-transformers/all-MiniLM-L6-v2' if flask_config == 'development' else 'BAAI/bge-large-en-v1.5'
     EMBEDDING_MODEL = _env_model
+=======
+    EMBEDDING_MODEL = 'BAAI/bge-large-en-v1.5'
+>>>>>>> origin/Preview
     BGE_QUERY_PREFIX = 'Represent this sentence for searching relevant passages: '
     # Weights must sum to 1.0
     SEMANTIC_WEIGHT: float = 0.60
@@ -102,6 +109,7 @@ class RagQueryService:
                 return self._model
             self._model_checked = True
             try:
+<<<<<<< HEAD
                 # Honor HF cache and token env vars to speed and stabilise downloads
                 hf_home = os.environ.get('HF_HOME')
                 if hf_home:
@@ -115,6 +123,8 @@ class RagQueryService:
                     os.environ['HUGGINGFACE_HUB_TOKEN'] = hf_token
                     os.environ['HF_TOKEN'] = hf_token
 
+=======
+>>>>>>> origin/Preview
                 from sentence_transformers import SentenceTransformer  # type: ignore
                 self._model = SentenceTransformer(self.EMBEDDING_MODEL)
                 logger.info('RAG: loaded embedding model %s', self.EMBEDDING_MODEL)
@@ -123,6 +133,7 @@ class RagQueryService:
                 self._model = None
             return self._model
 
+<<<<<<< HEAD
     def warmup(self, corpus_path: str | None = None) -> None:
         """Background warmup: load model and precompute/load embeddings for a given corpus_path.
 
@@ -143,6 +154,8 @@ class RagQueryService:
         except Exception:
             logger.exception('RAG: warmup failed')
 
+=======
+>>>>>>> origin/Preview
     def _encode_query(self, query_text: str) -> np.ndarray | None:
         model = self._get_model()
         if model is None:
@@ -159,6 +172,7 @@ class RagQueryService:
         model = self._get_model()
         if model is None:
             return None
+<<<<<<< HEAD
 
         batch_size = max(1, int(os.environ.get('RAG_BATCH_SIZE') or 10))
         total = len(texts)
@@ -209,6 +223,42 @@ class RagQueryService:
         return npy, meta
 
     def _load_embed_matrix(self, corpus_path: str, rows: list[dict], *, allow_compute: bool = True) -> np.ndarray | None:
+=======
+        return model.encode(
+            texts,
+            convert_to_numpy=True,
+            show_progress_bar=False,
+            batch_size=32,
+            normalize_embeddings=True,
+        ).astype(np.float32)
+
+    @staticmethod
+    def _embedding_cache_paths(corpus_path: str) -> tuple[str, str]:
+        base = os.path.splitext(corpus_path)[0]
+        return base + '_embeddings.npy', base + '_embeddings_meta.json'
+
+    @staticmethod
+    def _resolve_cache_dir(corpus_path: str) -> str:
+        env_dir = (os.environ.get('RAG_EMBED_CACHE_DIR') or '').strip()
+        if env_dir:
+            return env_dir
+        if os.name != 'nt' and os.path.isdir('/home'):
+            if os.path.isdir('/home/site/wwwroot'):
+                return os.path.join('/home/site/wwwroot', '.rag_cache')
+            return os.path.join('/home', '.rag_cache')
+        return os.path.dirname(corpus_path) or '.'
+
+    def _embedding_cache_paths_for_dir(self, corpus_path: str) -> tuple[str, str]:
+        cache_dir = self._resolve_cache_dir(corpus_path)
+        base_name = os.path.splitext(os.path.basename(corpus_path))[0]
+        os.makedirs(cache_dir, exist_ok=True)
+        return (
+            os.path.join(cache_dir, f'{base_name}_embeddings.npy'),
+            os.path.join(cache_dir, f'{base_name}_embeddings_meta.json'),
+        )
+
+    def _load_embed_matrix(self, corpus_path: str, rows: list[dict]) -> np.ndarray | None:
+>>>>>>> origin/Preview
         """
         Return an (N, D) float32 embedding matrix for *rows*.
         Loads from disk cache when valid, otherwise encodes and saves.
@@ -219,6 +269,7 @@ class RagQueryService:
 
         corpus_mtime = os.path.getmtime(corpus_path)
         corpus_size = os.path.getsize(corpus_path)
+<<<<<<< HEAD
         npy_path, meta_path = self._embedding_cache_paths(corpus_path)
 
         acquired = False
@@ -232,6 +283,12 @@ class RagQueryService:
                 return None
 
         try:
+=======
+        npy_path, meta_path = self._embedding_cache_paths_for_dir(corpus_path)
+        strict_mtime = (os.environ.get('RAG_EMBED_CACHE_STRICT_MTIME') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+        with self._emb_lock:
+>>>>>>> origin/Preview
             # 1. In-memory hit
             if (
                 self._emb_path == corpus_path
@@ -246,6 +303,7 @@ class RagQueryService:
                 try:
                     with open(meta_path, 'r', encoding='utf-8') as fh:
                         meta = json.load(fh)
+<<<<<<< HEAD
                     # Validate by corpus size by default (mtime may change on ephemeral deploys).
                     strict_mtime = (os.environ.get('RAG_EMBED_CACHE_STRICT_MTIME') or '0').strip().lower() in {'1', 'true', 'yes', 'on'}
                     meta_corpus_size = int(meta.get('corpus_size', 0))
@@ -259,6 +317,17 @@ class RagQueryService:
                         and meta_chunk_count == len(rows)
                         and meta_model == self.EMBEDDING_MODEL
                         and meta_normalized
+=======
+                    meta_mtime = float(meta.get('corpus_mtime', 0))
+                    meta_size = int(meta.get('corpus_size', 0))
+                    size_ok = meta_size == int(corpus_size)
+                    mtime_ok = abs(meta_mtime - corpus_mtime) < 1.0
+                    if (
+                        (mtime_ok if strict_mtime else size_ok)
+                        and int(meta.get('chunk_count', 0)) == len(rows)
+                        and str(meta.get('model') or '') == self.EMBEDDING_MODEL
+                        and bool(meta.get('normalized', False)) is True
+>>>>>>> origin/Preview
                     ):
                         matrix = np.load(npy_path).astype(np.float32)
                         self._emb_path = corpus_path
@@ -269,9 +338,12 @@ class RagQueryService:
                 except Exception as exc:
                     logger.warning('RAG: embedding cache corrupt, will recompute (%s)', exc)
 
+<<<<<<< HEAD
             if not allow_compute:
                 return None
 
+=======
+>>>>>>> origin/Preview
             # 3. Compute embeddings
             try:
                 logger.info('RAG: computing embeddings for %d chunks (first run or corpus changed)…', len(rows))
@@ -280,6 +352,7 @@ class RagQueryService:
                 if matrix is None:
                     raise RuntimeError('Embedding model unavailable')
                 # Persist to disk
+<<<<<<< HEAD
                 try:
                     np.save(npy_path, matrix)
                     with open(meta_path, 'w', encoding='utf-8') as fh:
@@ -295,6 +368,20 @@ class RagQueryService:
                         )
                 except Exception:
                     logger.exception('RAG: failed to persist embedding cache to disk; continuing in-memory only')
+=======
+                np.save(npy_path, matrix)
+                with open(meta_path, 'w', encoding='utf-8') as fh:
+                    json.dump(
+                        {
+                            'corpus_mtime': corpus_mtime,
+                            'corpus_size': corpus_size,
+                            'chunk_count': len(rows),
+                            'model': self.EMBEDDING_MODEL,
+                            'normalized': True,
+                        },
+                        fh,
+                    )
+>>>>>>> origin/Preview
                 self._emb_path = corpus_path
                 self._emb_mtime = corpus_mtime
                 self._emb_matrix = matrix
@@ -303,9 +390,12 @@ class RagQueryService:
             except Exception as exc:
                 logger.exception('RAG: failed to compute embeddings (%s); using lexical-only.', exc)
                 return None
+<<<<<<< HEAD
         finally:
             if acquired:
                 self._emb_lock.release()
+=======
+>>>>>>> origin/Preview
 
     @staticmethod
     def _cosine_sim(matrix: np.ndarray, query_vec: np.ndarray) -> np.ndarray:
@@ -403,7 +493,10 @@ class RagQueryService:
         query_text: str,
         requirement_id: str | None = None,
         top_k: int = 3,
+<<<<<<< HEAD
         allow_compute_embeddings: bool = False,
+=======
+>>>>>>> origin/Preview
     ) -> RagQueryResult:
         query_text = (query_text or '').strip()
         requirement_id = (requirement_id or '').strip()
@@ -444,7 +537,11 @@ class RagQueryService:
         # ---- Semantic scores (hybrid) -------------------------------
         sem_norm: list[float] | None = None
         retrieval_mode = 'lexical'
+<<<<<<< HEAD
         emb_matrix = self._load_embed_matrix(corpus_path, rows, allow_compute=allow_compute_embeddings)
+=======
+        emb_matrix = self._load_embed_matrix(corpus_path, rows)
+>>>>>>> origin/Preview
         if emb_matrix is not None and len(emb_matrix) == len(rows):
             model = self._get_model()
             if model is not None:
@@ -506,5 +603,17 @@ class RagQueryService:
 
         return RagQueryResult(answer=answer, citations=citations, retrieval_mode=retrieval_mode)
 
+<<<<<<< HEAD
+=======
+    def warmup(self, *, corpus_path: str) -> None:
+        if not corpus_path:
+            return
+        try:
+            rows = self._load_rows(corpus_path)
+            self._load_embed_matrix(corpus_path, rows)
+        except Exception as exc:
+            logger.warning('RAG: warmup skipped (%s)', exc)
+
+>>>>>>> origin/Preview
 
 rag_query_service = RagQueryService()
