@@ -48,24 +48,43 @@ class EmailService:
         """
         Send an email using the best available provider.
         """
+        # Allow forcing provider via env var for safe cutover testing: 'auto'|'acs'|'oauth2'|'smtp'
+        provider_pref = (os.environ.get('EMAIL_PROVIDER') or 'auto').strip().lower()
+        if provider_pref not in {'auto', 'acs', 'oauth2', 'smtp'}:
+            provider_pref = 'auto'
         # 1. Try Azure Communication Services (ACS)
-        acs = self._get_acs_service()
-        if acs:
-            logger.info(f"Attempting to send email to {to_email} via ACS")
-            if acs.send_email(to_email, subject, body, body_html=html_body):
-                return True
-            logger.warning("ACS email failed, falling back...")
+        if provider_pref in {'auto', 'acs'}:
+            acs = self._get_acs_service()
+            if acs:
+                logger.info(f"Attempting to send email to {to_email} via ACS")
+                if acs.send_email(to_email, subject, body, body_html=html_body):
+                    return True
+                logger.warning("ACS email failed")
+            else:
+                logger.info("ACS not configured or unavailable")
+            if provider_pref == 'acs':
+                logger.info("EMAIL_PROVIDER=acs specified; not falling back")
+                return False
 
         # 2. Try Microsoft OAuth2
-        oauth2 = self._get_oauth2_service()
-        if oauth2:
-            logger.info(f"Attempting to send email to {to_email} via Microsoft OAuth2")
-            if oauth2.send_email(to_email, subject, body, body_html=html_body):
-                return True
-            logger.warning("Microsoft OAuth2 email failed, falling back to SMTP...")
+        if provider_pref in {'auto', 'oauth2'}:
+            oauth2 = self._get_oauth2_service()
+            if oauth2:
+                logger.info(f"Attempting to send email to {to_email} via Microsoft OAuth2")
+                if oauth2.send_email(to_email, subject, body, body_html=html_body):
+                    return True
+                logger.warning("Microsoft OAuth2 email failed")
+            else:
+                logger.info("Microsoft OAuth2 not configured or unavailable")
+            if provider_pref == 'oauth2':
+                logger.info("EMAIL_PROVIDER=oauth2 specified; not falling back")
+                return False
 
         # 3. Fallback to Flask-Mail (SMTP)
-        return self._send_via_smtp(to_email, subject, body, html_body)
+        if provider_pref in {'auto', 'smtp'}:
+            return self._send_via_smtp(to_email, subject, body, html_body)
+        logger.info("EMAIL_PROVIDER configured to skip SMTP fallback; email not sent")
+        return False
 
     def _send_via_smtp(self, to_email: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
         """Fallback SMTP sender using Flask-Mail."""

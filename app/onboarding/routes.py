@@ -20,7 +20,22 @@ def _require_verified():
 
 
 def _mail_configured() -> bool:
-    return bool(current_app.config.get('MAIL_SERVER') and current_app.config.get('MAIL_DEFAULT_SENDER'))
+    """Check if email is properly configured (ACS, OAuth2, or SMTP).
+
+    Align with `app.auth.routes` so welcome emails are sent when ACS or OAuth2
+    are available even if legacy SMTP is not configured.
+    """
+    acs_conn = os.environ.get('ACS_CONNECTION_STRING') or current_app.config.get('ACS_CONNECTION_STRING')
+    acs_sender = os.environ.get('ACS_SENDER_EMAIL') or current_app.config.get('ACS_SENDER_EMAIL')
+    if acs_conn and acs_sender:
+        return True
+
+    if os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'):
+        return True
+
+    has_server = bool(current_app.config.get('MAIL_SERVER'))
+    has_sender = bool(current_app.config.get('MAIL_DEFAULT_SENDER'))
+    return has_sender and has_server
 
 
 def _send_welcome_email(user: User, dashboard_url: str) -> bool:

@@ -77,12 +77,10 @@ def main() -> int:
             return u
 
         def send_generic() -> None:
-            msg = Message(
-                subject="Cenaris test email",
-                recipients=[args.to],
-                body=f"This is a test email from Cenaris. Base URL: {base}",
-            )
-            mail.send(msg)
+            from app.services.email_service import email_service
+            ok = email_service.send_email(args.to, "Cenaris test email", f"This is a test email from Cenaris. Base URL: {base}")
+            if not ok:
+                raise RuntimeError('email_service.send_email returned False')
 
         def send_verify() -> None:
             u = require_user()
