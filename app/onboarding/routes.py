@@ -3,11 +3,10 @@ from datetime import datetime, timezone
 from flask import render_template, redirect, url_for, flash, request, make_response, abort, current_app
 from flask_login import login_required, current_user
 
-from flask_mail import Message
 
 from app.onboarding import bp
 from app.onboarding.forms import OnboardingOrganizationForm, OnboardingBillingForm, OnboardingLogoForm, OnboardingThemeForm
-from app import db, mail
+from app import db
 from app.models import Organization, User, OrganizationMembership
 
 

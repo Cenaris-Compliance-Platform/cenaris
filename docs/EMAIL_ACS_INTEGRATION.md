@@ -54,6 +54,24 @@ MAIL_USERNAME=adam@cenaris.com.au
 MAIL_PASSWORD=<app-password>
 ```
 
+## 6. Staged Cutover / Provider Selection
+
+Use the `EMAIL_PROVIDER` environment variable to control provider behavior during migration and testing:
+
+- `EMAIL_PROVIDER=auto` (default): automatic selection with fallback ACS -> OAuth2 -> SMTP
+- `EMAIL_PROVIDER=acs`: force ACS only (no fallback)
+- `EMAIL_PROVIDER=oauth2`: force Microsoft OAuth2 only
+- `EMAIL_PROVIDER=smtp`: force SMTP (Flask-Mail) only
+
+Recommended staged approach:
+
+1. Deploy these changes to staging with `EMAIL_PROVIDER=auto` and verify normal email flows.
+2. Set `EMAIL_PROVIDER=acs` in staging and run `scripts/email_smoke_test.py` for each email type.
+3. After 24–48 hours of monitoring, set `EMAIL_PROVIDER=acs` in production and test.
+4. When confident, remove fallback providers and `Flask-Mail` dependency.
+
+Always monitor App Service logs for `Email provider selection` and `Attempting to send email via ACS` messages during testing.
+
 ## 5. Testing & Verification
 To verify the email system via the command line:
 ```powershell

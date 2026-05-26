@@ -4,7 +4,6 @@ import json
 from datetime import datetime, timezone
 
 from flask import current_app, render_template, url_for
-from flask_mail import Message
 
 from app import db
 from app.models import AdminNotification, Organization, OrganizationMembership, User

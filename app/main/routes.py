@@ -14,7 +14,7 @@ from app.models import (
     RequirementEvidenceLink,
     User,
 )
-from app import db, mail, limiter, invalidate_org_switcher_context_cache
+from app import db, limiter, invalidate_org_switcher_context_cache
 from app.services.azure_data_service import azure_data_service
 from app.services.analytics_service import analytics_service
 from app.services.azure_openai_policy_service import azure_openai_policy_service
@@ -30,7 +30,6 @@ import threading
 import time
 from datetime import datetime, timezone, timedelta
 
-from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
 from werkzeug.exceptions import NotFound
 

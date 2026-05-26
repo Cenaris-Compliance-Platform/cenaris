@@ -62,8 +62,7 @@ def main() -> int:
         from app.auth.routes import _email_verify_token, _send_email_verification_email, _password_reset_token, _send_password_reset_email
         from app.main.routes import _send_invite_email
         from app.onboarding.routes import _send_welcome_email
-        from flask_mail import Message
-        from app import mail
+        # Use centralized email service; no direct Flask-Mail usage here.
 
         base = _base_url(args)
 

@@ -4,14 +4,13 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import requests
 import os
 
-from flask_mail import Message
 from app.auth import bp
 from app.auth.forms import LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import User, Organization, OrganizationMembership, LoginEvent, SuspiciousIP
-from app import db, oauth, mail, limiter
+from app import db, oauth, limiter
 from app.services.logging_service import log_security_event
 from app.services.billing_service import billing_service
 from app.services.email_service import email_service

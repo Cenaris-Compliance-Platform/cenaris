@@ -264,6 +264,33 @@ def create_app(config_name=None):
     oauth.init_app(app)
     mail.init_app(app)
 
+    # Log effective email provider selection to aid staged cutover diagnostics.
+    try:
+        provider_pref = (os.environ.get('EMAIL_PROVIDER') or 'auto').strip().lower()
+        acs_conn = os.environ.get('ACS_CONNECTION_STRING') or app.config.get('ACS_CONNECTION_STRING')
+        acs_sender = os.environ.get('ACS_SENDER_EMAIL') or app.config.get('ACS_SENDER_EMAIL')
+        acs_ok = bool(acs_conn and acs_sender)
+        oauth_ok = bool(os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'))
+        smtp_ok = bool(app.config.get('MAIL_SERVER') and app.config.get('MAIL_DEFAULT_SENDER'))
+
+        if provider_pref in {'acs', 'oauth2', 'smtp'}:
+            effective = provider_pref
+        else:
+            if acs_ok:
+                effective = 'acs'
+            elif oauth_ok:
+                effective = 'oauth2'
+            elif smtp_ok:
+                effective = 'smtp'
+            else:
+                effective = 'none'
+
+        logger.info(
+            f"Email provider selection: desired={provider_pref} effective={effective} (ACS={acs_ok}, OAuth2={oauth_ok}, SMTP={smtp_ok})"
+        )
+    except Exception:
+        pass
+
     # Initialize rate limiter
     limiter.init_app(app)
 
