@@ -484,7 +484,25 @@ def _serializer() -> URLSafeTimedSerializer:
 
 
 def _mail_configured() -> bool:
-    return bool(current_app.config.get('MAIL_SERVER') and current_app.config.get('MAIL_DEFAULT_SENDER'))
+    """Check if email is properly configured (ACS, OAuth2, or SMTP).
+
+    Matches the checks used in `app.auth.routes` so invite paths don't
+    short-circuit when ACS or OAuth2 are available but SMTP is not.
+    """
+    # 1. Check Azure Communication Services
+    acs_conn = os.environ.get('ACS_CONNECTION_STRING') or current_app.config.get('ACS_CONNECTION_STRING')
+    acs_sender = os.environ.get('ACS_SENDER_EMAIL') or current_app.config.get('ACS_SENDER_EMAIL')
+    if acs_conn and acs_sender:
+        return True
+
+    # 2. Check Microsoft OAuth2
+    if os.environ.get('MICROSOFT_CLIENT_ID') and os.environ.get('MICROSOFT_CLIENT_SECRET'):
+        return True
+
+    # 3. Check legacy SMTP settings
+    has_server = bool(current_app.config.get('MAIL_SERVER'))
+    has_sender = bool(current_app.config.get('MAIL_DEFAULT_SENDER'))
+    return has_sender and has_server
 
 
 def _password_reset_token(user: User) -> str:
